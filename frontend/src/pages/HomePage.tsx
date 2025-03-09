@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled, { keyframes, createGlobalStyle } from 'styled-components';
 import { submitSpotifyLink } from '../services/api';
+// Import icons
+import { CgProfile } from 'react-icons/cg';
+import { IoSettingsOutline } from 'react-icons/io5';
+import { MdOutlineWorkspacePremium } from 'react-icons/md';
+import { FiLogOut, FiUser } from 'react-icons/fi';
+import { BiChevronDown } from 'react-icons/bi';
 
 // Global styles to ensure full-screen coverage
 const GlobalStyle = createGlobalStyle`
@@ -63,6 +69,7 @@ const ContentWrapper = styled.div`
   padding: 2rem;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(10px);
+  position: relative;
 `;
 
 const Card = styled.div`
@@ -221,10 +228,114 @@ const LoadingSpinner = styled.div`
   }
 `;
 
+// Menu Button and Dropdown Styles
+const MenuContainer = styled.div`
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 100;
+
+  @media (max-width: 768px) {
+    top: 15px;
+    right: 15px;
+  }
+`;
+
+const MenuButton = styled.button`
+  background: rgba(0, 0, 0, 0.7);
+  border: none;
+  border-radius: 23px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  
+  &:hover {
+    background: #282828;
+  }
+  
+  &:focus {
+    outline: none;
+  }
+`;
+
+const UserIconContainer = styled.div`
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #b3b3b3;
+  font-size: 16px;
+`;
+
+const DropdownArrow = styled.div`
+  color: #b3b3b3;
+  display: flex;
+  align-items: center;
+  font-size: 18px;
+`;
+
+const DropdownMenu = styled.div<{ isOpen: boolean }>`
+  position: absolute;
+  top: 40px;
+  right: 0;
+  background: #282828;
+  border-radius: 4px;
+  width: 196px;
+  box-shadow: 0 16px 24px rgba(0, 0, 0, 0.3), 0 6px 8px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  opacity: ${props => props.isOpen ? 1 : 0};
+  transform: ${props => props.isOpen ? 'translateY(0)' : 'translateY(-10px)'};
+  pointer-events: ${props => props.isOpen ? 'all' : 'none'};
+  z-index: 101;
+  padding: 4px 0;
+`;
+
+const MenuItem = styled.div`
+  padding: 12px 16px;
+  color: #b3b3b3;
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  
+  &:hover {
+    background: #333333;
+    color: #ffffff;
+  }
+`;
+
+const MenuDivider = styled.div`
+  height: 1px;
+  background-color: #3e3e3e;
+  margin: 4px 0;
+`;
+
+const MenuIcon = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  width: 20px;
+  color: #b3b3b3;
+`;
+
 const HomePage: React.FC = () => {
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -249,11 +360,85 @@ const HomePage: React.FC = () => {
     }
   };
 
+  const toggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen);
+  };
+
+  const handleMenuItemClick = (action: string) => {
+    // Close the menu
+    setIsMenuOpen(false);
+    
+    // Handle different menu actions
+    switch (action) {
+      case 'profile':
+        // Navigate to profile page
+        navigate('/profile');
+        break;
+      case 'settings':
+        // Navigate to settings page or show settings modal
+        console.log('Settings clicked');
+        break;
+      case 'member':
+        // Navigate to member page or show member info
+        console.log('Member clicked');
+        break;
+      case 'logout':
+        // Handle logout logic
+        console.log('Logout clicked');
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Close menu when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (isMenuOpen && !target.closest('.menu-container')) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
+
   return (
     <>
       <GlobalStyle />
       <HomeContainer>
         <ContentWrapper>
+          {/* Menu Button and Dropdown */}
+          <MenuContainer className="menu-container">
+            <MenuButton onClick={toggleMenu}>
+              <UserIconContainer>
+                {FiUser({})}
+              </UserIconContainer>
+              <DropdownArrow>
+                {BiChevronDown({})}
+              </DropdownArrow>
+            </MenuButton>
+            <DropdownMenu isOpen={isMenuOpen}>
+              <MenuItem onClick={() => handleMenuItemClick('profile')}>
+                <MenuIcon>{CgProfile({})}</MenuIcon> Profile
+              </MenuItem>
+              <MenuItem onClick={() => handleMenuItemClick('settings')}>
+                <MenuIcon>{IoSettingsOutline({})}</MenuIcon> Settings
+              </MenuItem>
+              <MenuDivider />
+              <MenuItem onClick={() => handleMenuItemClick('member')}>
+                <MenuIcon>{MdOutlineWorkspacePremium({})}</MenuIcon> Member
+              </MenuItem>
+              <MenuDivider />
+              <MenuItem onClick={() => handleMenuItemClick('logout')}>
+                <MenuIcon>{FiLogOut({})}</MenuIcon> Log Out
+              </MenuItem>
+            </DropdownMenu>
+          </MenuContainer>
+
           <Card>
             <Title>Lyric Video Generator</Title>
             <Subtitle>

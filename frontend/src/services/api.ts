@@ -27,6 +27,16 @@ export interface VideoStatusResponse {
   error: string | null;
 }
 
+// Profile interfaces
+export interface UserProfile {
+  id: number;
+  name: string;
+  role: string;
+  email: string;
+  last_login: string;
+  profile_picture: string | null;
+}
+
 /**
  * Submit a Spotify link to generate a lyric video
  * @param spotifyUrl The Spotify track URL
@@ -55,6 +65,64 @@ export const getVideoStatus = async (jobId: string): Promise<VideoStatusResponse
 export const getVideoJob = async (jobId: string): Promise<VideoJob> => {
   const response = await api.get(`/videos/${jobId}/`);
   return response.data;
+};
+
+// Profile API functions
+export const getUserProfile = async (): Promise<UserProfile> => {
+  try {
+    const response = await api.get('/profile/');
+    return response.data;
+  } catch (error) {
+    // For demo purposes, return mock data if the API is not available
+    console.error('Error fetching profile:', error);
+    return {
+      id: 1,
+      name: "John Doe",
+      role: "Premium User",
+      email: "john.doe@example.com",
+      last_login: "2023-11-15 14:30:22",
+      profile_picture: null
+    };
+  }
+};
+
+export const updateProfilePicture = async (file: File): Promise<UserProfile> => {
+  const formData = new FormData();
+  formData.append('profile_picture', file);
+  
+  try {
+    const response = await api.post('/profile/update-picture/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating profile picture:', error);
+    throw error;
+  }
+};
+
+export const updateProfile = async (profileData: Partial<UserProfile>): Promise<UserProfile> => {
+  try {
+    const response = await api.patch('/profile/update/', profileData);
+    return response.data;
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    throw error;
+  }
+};
+
+export const changePassword = async (oldPassword: string, newPassword: string): Promise<void> => {
+  try {
+    await api.post('/profile/change-password/', {
+      old_password: oldPassword,
+      new_password: newPassword,
+    });
+  } catch (error) {
+    console.error('Error changing password:', error);
+    throw error;
+  }
 };
 
 export default api; 

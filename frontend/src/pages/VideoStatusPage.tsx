@@ -341,7 +341,11 @@ const VideoStatusPage: React.FC = () => {
                   )}
                   
                   {status.status === 'completed' && status.video_url && (
-                    <Button href={status.video_url} download>
+                    <Button 
+                      href={status.video_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
                       Download Video
                     </Button>
                   )}

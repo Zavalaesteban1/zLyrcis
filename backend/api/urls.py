@@ -1,11 +1,23 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import VideoJobViewSet, UserProfileViewSet
+from .views import (
+    VideoJobViewSet, 
+    UserProfileViewSet,
+    user_login,
+    user_signup,
+    user_logout,
+    get_user_info
+)
 
 router = DefaultRouter()
 router.register(r'videos', VideoJobViewSet)
-router.register(r'profile', UserProfileViewSet)
+router.register(r'profile', UserProfileViewSet, basename='profile')
 
 urlpatterns = [
     path('', include(router.urls)),
+    # Authentication endpoints
+    path('auth/login/', user_login, name='login'),
+    path('auth/signup/', user_signup, name='signup'),
+    path('auth/logout/', user_logout, name='logout'),
+    path('auth/user/', get_user_info, name='user_info'),
 ] 

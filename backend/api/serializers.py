@@ -10,10 +10,21 @@ class VideoJobSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'song_title', 'artist', 'status', 'created_at', 'updated_at', 'video_file']
 
 class VideoStatusSerializer(serializers.ModelSerializer):
+    video_url = serializers.SerializerMethodField()
+    error = serializers.CharField(source='error_message')
+    
     class Meta:
         model = VideoJob
-        fields = ['id', 'status', 'song_title', 'artist', 'video_file', 'error_message']
-        read_only_fields = ['id', 'status', 'song_title', 'artist', 'video_file', 'error_message']
+        fields = ['id', 'status', 'song_title', 'artist', 'video_url', 'error']
+        read_only_fields = ['id', 'status', 'song_title', 'artist', 'video_url', 'error']
+    
+    def get_video_url(self, obj):
+        if obj.video_file and obj.status == 'completed':
+            request = self.context.get('request')
+            if request is not None:
+                return request.build_absolute_uri(obj.video_file.url)
+            return obj.video_file.url if obj.video_file else None
+        return None
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -46,6 +57,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return None
 
 class ProfilePictureSerializer(serializers.ModelSerializer):
+    profile_picture = serializers.ImageField(required=True)
+    
     class Meta:
         model = UserProfile
         fields = ['profile_picture']

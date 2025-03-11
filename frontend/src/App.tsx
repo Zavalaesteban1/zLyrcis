@@ -1,20 +1,59 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import VideoStatusPage from './pages/VideoStatusPage';
 import ProfilePage from './pages/ProfilePage';
+import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
+import { isAuthenticated, getCurrentUser } from './services/api';
 import './app.css';
 
+// Protected route component
+interface ProtectedRouteProps {
+  element: React.ReactNode;
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ element }) => {
+  return isAuthenticated() ? <>{element}</> : <Navigate to="/login" />;
+};
+
 function App() {
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check if user is authenticated on app load
+    const checkAuth = async () => {
+      if (isAuthenticated()) {
+        try {
+          await getCurrentUser();
+        } catch (error) {
+          // Token is invalid, do nothing (user will be redirected to login)
+        }
+      }
+      setLoading(false);
+    };
+
+    checkAuth();
+  }, []);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <Router>
       <div className="App">
         <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/status/:jobId" element={<VideoStatusPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/edit-profile" element={<ProfilePage />} />
-          <Route path="/change-password" element={<ProfilePage />} />
+          {/* Public routes */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          
+          {/* Protected routes */}
+          <Route path="/" element={<ProtectedRoute element={<HomePage />} />} />
+          <Route path="/status/:jobId" element={<ProtectedRoute element={<VideoStatusPage />} />} />
+          <Route path="/profile" element={<ProtectedRoute element={<ProfilePage />} />} />
+          <Route path="/edit-profile" element={<ProtectedRoute element={<ProfilePage />} />} />
+          <Route path="/change-password" element={<ProtectedRoute element={<ProfilePage />} />} />
         </Routes>
       </div>
     </Router>

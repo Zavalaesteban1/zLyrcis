@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
-import { getUserProfile, updateProfilePicture, UserProfile } from '../services/api';
+import { getUserProfile, updateProfilePicture, updateProfile, UserProfile, logout } from '../services/api';
 
 // Define animations
 const gradientAnimation = keyframes`
@@ -172,29 +172,22 @@ const FileInputContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 1rem;
   width: 100%;
   max-width: 300px;
 `;
 
 const FileInput = styled.input`
-  margin-bottom: 1rem;
+  display: none; /* Hide the actual file input */
+`;
+
+const UploadButton = styled(Button90s)`
+  background: linear-gradient(to bottom, #535353, #333);
+  margin-top: 1rem;
   width: 100%;
-  padding: 0.5rem;
-  background-color: #333;
-  color: white;
-  border: 2px solid #000;
-  border-radius: 4px;
-  cursor: pointer;
+  max-width: 250px;
   
-  &::file-selector-button {
-    background: linear-gradient(to bottom, #535353, #333);
-    color: white;
-    border: 1px solid #000;
-    border-radius: 4px;
-    padding: 0.5rem;
-    margin-right: 1rem;
-    cursor: pointer;
+  &:hover {
+    background: linear-gradient(to bottom, #1DB954, #1ed760);
   }
 `;
 
@@ -222,61 +215,253 @@ const BlinkingSpan = styled.span`
   animation: ${blink} 1s step-end infinite;
 `;
 
+// New styled components for edit mode
+const EditButton = styled(Button90s)`
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.5rem 1rem;
+  margin: 0;
+`;
+
+const EditableInput = styled.input`
+  background-color: #333;
+  border: 1px solid #1DB954;
+  border-radius: 4px;
+  color: white;
+  padding: 0.5rem;
+  width: 100%;
+  font-size: 1rem;
+  
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.3);
+  }
+`;
+
+const EditActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1rem;
+`;
+
+const SaveButton = styled(Button90s)`
+  background: linear-gradient(to bottom, #1DB954, #1ed760);
+  
+  &:hover {
+    background: linear-gradient(to bottom, #1ed760, #1DB954);
+  }
+`;
+
+const CancelButton = styled(Button90s)`
+  background: linear-gradient(to bottom, #535353, #333);
+  
+  &:hover {
+    background: linear-gradient(to bottom, #777, #535353);
+  }
+`;
+
+const NotificationMessage = styled.div<{ type: 'success' | 'error' }>`
+  background-color: ${props => props.type === 'success' 
+    ? 'rgba(29, 185, 84, 0.1)' 
+    : 'rgba(255, 82, 82, 0.1)'};
+  color: ${props => props.type === 'success' ? '#1DB954' : '#ff5252'};
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid ${props => props.type === 'success' ? '#1DB954' : '#ff5252'};
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  &::before {
+    content: '${props => props.type === 'success' ? '✅' : '⚠️'}';
+  }
+`;
+
 const ProfilePage: React.FC = () => {
   const [profileData, setProfileData] = useState<UserProfile | null>(null);
+  const [editableProfile, setEditableProfile] = useState<Partial<UserProfile> | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showFileInput, setShowFileInput] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        setLoading(true);
-        const data = await getUserProfile();
-        setProfileData(data);
-        setError(null);
-      } catch (err) {
-        setError('Failed to load profile data. Please try again later.');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     fetchProfile();
   }, []);
   
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setSelectedFile(e.target.files[0]);
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      const data = await getUserProfile();
+      setProfileData(data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load profile data. Please try again later.');
+      console.error('Error fetching profile:', err);
+    } finally {
+      setLoading(false);
     }
   };
   
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUploadClick = () => {
+    // Trigger the hidden file input
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setNotification({
+          message: "Please select an image file (JPEG, PNG, etc.)",
+          type: 'error'
+        });
+        // Clear the file input
+        e.target.value = '';
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setNotification({
+          message: "Image is too large. Maximum size is 5MB.",
+          type: 'error'
+        });
+        // Clear the file input
+        e.target.value = '';
+        return;
+      }
+      
+      setSelectedFile(file);
+      // Clear any existing notifications
+      setNotification(null);
+      
+      // Automatically submit the form after selecting a file
+      handleSubmit();
+    }
+  };
+  
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
     
     if (!selectedFile) return;
     
     try {
       setUploading(true);
+      
+      // Create a new FormData instance
+      const formData = new FormData();
+      formData.append('profile_picture', selectedFile);
+      
+      console.log('Uploading file:', selectedFile.name, selectedFile.type, selectedFile.size);
+      
       const updatedProfile = await updateProfilePicture(selectedFile);
       setProfileData(updatedProfile);
-      alert("Profile picture updated successfully!");
-    } catch (err) {
-      alert("Failed to update profile picture. Please try again.");
-      console.error(err);
+      setNotification({
+        message: "Profile picture updated successfully!",
+        type: 'success'
+      });
+      
+      // Clear notification after 3 seconds
+      setTimeout(() => {
+        setNotification(null);
+      }, 3000);
+      
+      // Clear selected file
+      setSelectedFile(null);
+      // Reset the file input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || "Failed to update profile picture. Please try again.";
+      setNotification({
+        message: errorMessage,
+        type: 'error'
+      });
+      console.error('Error updating profile picture:', err);
     } finally {
       setUploading(false);
     }
   };
   
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (window.confirm('Are you sure you want to log out?')) {
-      // In a real app, you would handle logout logic here
-      console.log('User logged out');
-      navigate('/');
+      try {
+        await logout();
+        navigate('/login');
+      } catch (error) {
+        console.error('Error logging out:', error);
+        // Force logout even if API call fails
+        localStorage.removeItem('auth_token');
+        navigate('/login');
+      }
+    }
+  };
+  
+  const handleEditClick = () => {
+    setIsEditMode(true);
+    setEditableProfile({
+      name: profileData?.name || '',
+      role: profileData?.role || '',
+      email: profileData?.email || ''
+    });
+  };
+  
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    setEditableProfile(null);
+  };
+  
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    if (editableProfile) {
+      setEditableProfile({
+        ...editableProfile,
+        [name]: value
+      });
+    }
+  };
+  
+  const handleSaveProfile = async () => {
+    if (!editableProfile) return;
+    
+    try {
+      setSaving(true);
+      const updatedProfile = await updateProfile(editableProfile);
+      setProfileData(updatedProfile);
+      setIsEditMode(false);
+      setNotification({
+        message: "Profile updated successfully!",
+        type: 'success'
+      });
+      
+      // Clear notification after 3 seconds
+      setTimeout(() => {
+        setNotification(null);
+      }, 3000);
+    } catch (err) {
+      setNotification({
+        message: "Failed to update profile. Please try again.",
+        type: 'error'
+      });
+      console.error('Error updating profile:', err);
+    } finally {
+      setSaving(false);
     }
   };
   
@@ -302,7 +487,7 @@ const ProfilePage: React.FC = () => {
             <div style={{ textAlign: 'center', padding: '2rem' }}>
               <h2>Error</h2>
               <p>{error || 'Failed to load profile data'}</p>
-              <Button90s onClick={() => window.location.reload()}>Try Again</Button90s>
+              <Button90s onClick={fetchProfile}>Try Again</Button90s>
             </div>
           </ProfileContent>
         </ProfileCard>
@@ -315,22 +500,62 @@ const ProfilePage: React.FC = () => {
       <ProfileCard>
         <ProfileHeader>
           <ProfileTitle>Profile</ProfileTitle>
+          {!isEditMode && (
+            <EditButton onClick={handleEditClick}>Edit</EditButton>
+          )}
         </ProfileHeader>
         
         <ProfileContent>
+          {notification && (
+            <NotificationMessage type={notification.type}>
+              {notification.message}
+            </NotificationMessage>
+          )}
+          
           <ProfileTable>
             <tbody>
               <TableRow>
                 <TableLabelCell>Name:</TableLabelCell>
-                <TableValueCell>{profileData.name}</TableValueCell>
+                <TableValueCell>
+                  {isEditMode ? (
+                    <EditableInput
+                      name="name"
+                      value={editableProfile?.name || ''}
+                      onChange={handleEditChange}
+                    />
+                  ) : (
+                    profileData.name
+                  )}
+                </TableValueCell>
               </TableRow>
               <TableRow>
                 <TableLabelCell>Role:</TableLabelCell>
-                <TableValueCell>{profileData.role}</TableValueCell>
+                <TableValueCell>
+                  {isEditMode ? (
+                    <EditableInput
+                      name="role"
+                      value={editableProfile?.role || ''}
+                      onChange={handleEditChange}
+                    />
+                  ) : (
+                    profileData.role
+                  )}
+                </TableValueCell>
               </TableRow>
               <TableRow>
                 <TableLabelCell>Email:</TableLabelCell>
-                <TableValueCell>{profileData.email}</TableValueCell>
+                <TableValueCell>
+                  {isEditMode ? (
+                    <EditableInput
+                      name="email"
+                      type="email"
+                      value={editableProfile?.email || ''}
+                      onChange={handleEditChange}
+                    />
+                  ) : (
+                    profileData.email
+                  )}
+                </TableValueCell>
               </TableRow>
               <TableRow>
                 <TableLabelCell>Last Login:</TableLabelCell>
@@ -338,6 +563,17 @@ const ProfilePage: React.FC = () => {
               </TableRow>
             </tbody>
           </ProfileTable>
+          
+          {isEditMode && (
+            <EditActions>
+              <CancelButton onClick={handleCancelEdit} disabled={saving}>
+                Cancel
+              </CancelButton>
+              <SaveButton onClick={handleSaveProfile} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </SaveButton>
+            </EditActions>
+          )}
           
           <ProfileImageSection>
             <ProfileImageContainer>
@@ -350,24 +586,28 @@ const ProfilePage: React.FC = () => {
             <form onSubmit={handleSubmit}>
               <FileInputContainer>
                 <FileInput 
+                  ref={fileInputRef}
+                  id="profilePicture"
                   type="file" 
                   accept="image/*" 
                   onChange={handleFileChange} 
-                  disabled={uploading}
+                  disabled={uploading || isEditMode}
                 />
-                <Button90s type="submit" disabled={!selectedFile || uploading}>
-                  {uploading ? 'Uploading...' : 'Update Profile Picture'}
-                </Button90s>
               </FileInputContainer>
             </form>
           </ProfileImageSection>
           
           <ButtonContainer>
-            <Button90s as={Link} to="/edit-profile">Edit Profile</Button90s>
             <Button90s as={Link} to="/change-password">Change Password</Button90s>
             <LogoutButton onClick={handleLogout}>
               LOG OUT <BlinkingSpan>_</BlinkingSpan>
             </LogoutButton>
+            <UploadButton 
+              onClick={handleUploadClick} 
+              disabled={uploading || isEditMode}
+            >
+              {uploading ? 'Uploading...' : 'Change Profile Picture'}
+            </UploadButton>
           </ButtonContainer>
         </ProfileContent>
         

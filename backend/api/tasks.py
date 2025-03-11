@@ -17,20 +17,39 @@ import traceback
 
 @shared_task
 def generate_lyric_video(job_id):
-    """Generate a lyric video for a Spotify track"""
+    """
+    Generate a lyric video for a Spotify track
+    
+    Steps:
+    1. Fetch song info from Spotify
+    2. Fetch lyrics from Genius
+    3. Download the audio
+    4. Generate the video with synced lyrics
+    5. Save the video and update the job status
+    """
+    job = None
     try:
         # Get the job
         job = VideoJob.objects.get(id=job_id)
         job.status = 'processing'
         job.save()
-
+        
         print(f"Processing job {job_id} for URL: {job.spotify_url}")
-
+        
         # Extract Spotify track ID from URL
         track_id = extract_spotify_track_id(job.spotify_url)
         if not track_id:
             raise ValueError("Invalid Spotify URL")
-
+            
+        # Validate environment setup
+        if not settings.SPOTIFY_CLIENT_ID or not settings.SPOTIFY_CLIENT_SECRET:
+            error_msg = "Spotify API credentials are missing. Please add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to your .env file."
+            print(error_msg)
+            job.status = 'failed'
+            job.error_message = error_msg
+            job.save()
+            return
+            
         # Fetch song info from Spotify
         song_info = get_spotify_track_info(track_id)
         job.song_title = song_info['title']
@@ -87,21 +106,56 @@ def extract_spotify_track_id(spotify_url):
 
 def get_spotify_track_info(track_id):
     """Get track information from Spotify API"""
-    client_credentials_manager = SpotifyClientCredentials(
-        client_id=settings.SPOTIFY_CLIENT_ID,
-        client_secret=settings.SPOTIFY_CLIENT_SECRET
-    )
-    sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+    try:
+        # Get credentials from Django settings
+        client_id = settings.SPOTIFY_CLIENT_ID
+        client_secret = settings.SPOTIFY_CLIENT_SECRET
+        
+        # Try to get credentials from environment directly if not in settings
+        if not client_id:
+            client_id = os.environ.get('SPOTIFY_CLIENT_ID')
+            print(f"Using SPOTIFY_CLIENT_ID from environment: {'Found' if client_id else 'Not found'}")
+        
+        if not client_secret:
+            client_secret = os.environ.get('SPOTIFY_CLIENT_SECRET')
+            print(f"Using SPOTIFY_CLIENT_SECRET from environment: {'Found' if client_secret else 'Not found'}")
+        
+        # Debug output credentials information (first few chars only for security)
+        if client_id:
+            safe_id = client_id[:4] + '...' if len(client_id) > 4 else client_id
+            print(f"Using Spotify client ID: {safe_id}")
+        
+        # Check if credentials exist
+        if not client_id or not client_secret:
+            raise ValueError("Spotify API credentials not configured correctly")
+            
+        # Set the credentials explicitly for Spotipy
+        os.environ['SPOTIPY_CLIENT_ID'] = client_id
+        os.environ['SPOTIPY_CLIENT_SECRET'] = client_secret
+        
+        # Create client credentials manager with explicit values
+        client_credentials_manager = SpotifyClientCredentials(
+            client_id=client_id,
+            client_secret=client_secret
+        )
+        sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
 
-    track = sp.track(track_id)
+        track = sp.track(track_id)
 
-    return {
-        'title': track['name'],
-        'artist': track['artists'][0]['name'],
-        'album': track['album']['name'],
-        'duration_ms': track['duration_ms'],
-        'album_art_url': track['album']['images'][0]['url'] if track['album']['images'] else None
-    }
+        return {
+            'title': track['name'],
+            'artist': track['artists'][0]['name'],
+            'album': track['album']['name'],
+            'duration_ms': track['duration_ms'],
+            'album_art_url': track['album']['images'][0]['url'] if track['album']['images'] else None
+        }
+    except spotipy.exceptions.SpotifyException as e:
+        print(f"Spotify API error: {str(e)}")
+        raise
+    except Exception as e:
+        print(f"Error in get_spotify_track_info: {str(e)}")
+        traceback.print_exc()
+        raise
 
 def get_lyrics(title, artist):
     """Get lyrics from multiple sources with better error handling"""

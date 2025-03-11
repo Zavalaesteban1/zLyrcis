@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled, { keyframes, createGlobalStyle } from 'styled-components';
-import { submitSpotifyLink } from '../services/api';
+import { submitSpotifyLink, logout, getCurrentUser } from '../services/api';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoSettingsOutline } from 'react-icons/io5';
@@ -331,12 +331,87 @@ const MenuIcon = styled.div`
   color: #b3b3b3;
 `;
 
+// Setup info section styles
+const SetupInfoSection = styled.div`
+  margin-top: 2.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 1.5rem;
+`;
+
+const SetupInfoTitle = styled.h3`
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+  color: #1DB954;
+  font-weight: 600;
+`;
+
+const SetupInfoDescription = styled.p`
+  color: #b3b3b3;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+`;
+
+const CodeSpan = styled.code`
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: #1DB954;
+`;
+
+const EnvCodeBlock = styled.pre`
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 1rem;
+  border-radius: 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: #e0e0e0;
+  overflow-x: auto;
+  margin: 1rem 0;
+`;
+
+const SetupInfoList = styled.ul`
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  color: #b3b3b3;
+  font-size: 0.9rem;
+  line-height: 1.6;
+`;
+
+const SetupInfoLink = styled.a`
+  color: #1DB954;
+  text-decoration: none;
+  transition: color 0.2s ease;
+  
+  &:hover {
+    color: #1ed760;
+    text-decoration: underline;
+  }
+`;
+
 const HomePage: React.FC = () => {
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Fetch current user when component mounts
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const userData = await getCurrentUser();
+        setUsername(userData.username);
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    fetchUser();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -375,19 +450,31 @@ const HomePage: React.FC = () => {
         navigate('/profile');
         break;
       case 'settings':
-        // Navigate to settings page or show settings modal
-        console.log('Settings clicked');
+        // Navigate to settings page
+        navigate('/settings');
         break;
       case 'member':
-        // Navigate to member page or show member info
-        console.log('Member clicked');
+        // Navigate to member page
+        navigate('/member');
         break;
       case 'logout':
-        // Handle logout logic
-        console.log('Logout clicked');
+        // Handle logout
+        handleLogout();
         break;
       default:
         break;
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error logging out:', error);
+      // Force logout even if API call fails
+      localStorage.removeItem('auth_token');
+      navigate('/login');
     }
   };
 
@@ -422,6 +509,14 @@ const HomePage: React.FC = () => {
               </DropdownArrow>
             </MenuButton>
             <DropdownMenu isOpen={isMenuOpen}>
+              {username && (
+                <MenuItem style={{ pointerEvents: 'none' }}>
+                  <MenuIcon>{CgProfile({})}</MenuIcon>
+                  <div>
+                    <strong>Hello, {username}</strong>
+                  </div>
+                </MenuItem>
+              )}
               <MenuItem onClick={() => handleMenuItemClick('profile')}>
                 <MenuIcon>{CgProfile({})}</MenuIcon> Profile
               </MenuItem>

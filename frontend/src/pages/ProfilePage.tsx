@@ -57,7 +57,9 @@ const NavItem = styled(Link)<{ active?: boolean }>`
   transition: all 0.2s ease;
   
   &:hover {
-    background-color: rgba(0, 0, 0, 0.1);
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    border-left: 4px solid rgba(255, 255, 255, 0.7);
   }
 `;
 

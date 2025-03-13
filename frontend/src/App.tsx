@@ -5,6 +5,7 @@ import VideoStatusPage from './pages/VideoStatusPage';
 import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
+import SongsPage from './pages/SongsPage';
 import { isAuthenticated, getCurrentUser } from './services/api';
 import './app.css';
 
@@ -52,6 +53,7 @@ function App() {
           <Route path="/" element={<ProtectedRoute element={<HomePage />} />} />
           <Route path="/status/:jobId" element={<ProtectedRoute element={<VideoStatusPage />} />} />
           <Route path="/profile" element={<ProtectedRoute element={<ProfilePage />} />} />
+          <Route path="/songs" element={<ProtectedRoute element={<SongsPage />} />} />
           <Route path="/edit-profile" element={<ProtectedRoute element={<ProfilePage />} />} />
           <Route path="/change-password" element={<ProtectedRoute element={<ProfilePage />} />} />
         </Routes>

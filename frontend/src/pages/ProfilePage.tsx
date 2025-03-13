@@ -611,11 +611,17 @@ const ProfilePage: React.FC = () => {
         <Sidebar>
           <Logo>zLyrics</Logo>
           <NavMenu>
-            <NavItem to="/">
+            <NavItem to="/" active>
               <NavIcon>{IoHomeOutline({ size: 18 })}</NavIcon> Home
             </NavItem>
-            <NavItem to="/profile" active>
+            <NavItem to="/profile">
               <NavIcon>{CgProfile({ size: 18 })}</NavIcon> Profile
+            </NavItem>
+            <NavItem to="/songs">
+              <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
+            </NavItem>
+            <NavItem to="/create">
+              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
             </NavItem>
           </NavMenu>
         </Sidebar>
@@ -634,11 +640,17 @@ const ProfilePage: React.FC = () => {
         <Sidebar>
           <Logo>zLyrics</Logo>
           <NavMenu>
-            <NavItem to="/">
+            <NavItem to="/" active>
               <NavIcon>{IoHomeOutline({ size: 18 })}</NavIcon> Home
             </NavItem>
-            <NavItem to="/profile" active>
+            <NavItem to="/profile">
               <NavIcon>{CgProfile({ size: 18 })}</NavIcon> Profile
+            </NavItem>
+            <NavItem to="/songs">
+              <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
+            </NavItem>
+            <NavItem to="/create">
+              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
             </NavItem>
           </NavMenu>
         </Sidebar>
@@ -658,10 +670,10 @@ const ProfilePage: React.FC = () => {
       <Sidebar>
         <Logo>zLyrics</Logo>
         <NavMenu>
-          <NavItem to="/">
+          <NavItem to="/" active>
             <NavIcon>{IoHomeOutline({ size: 18 })}</NavIcon> Home
           </NavItem>
-          <NavItem to="/profile" active>
+          <NavItem to="/profile">
             <NavIcon>{CgProfile({ size: 18 })}</NavIcon> Profile
           </NavItem>
           <NavItem to="/songs">

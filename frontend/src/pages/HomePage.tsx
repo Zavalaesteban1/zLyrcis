@@ -1,410 +1,502 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import styled, { keyframes, createGlobalStyle } from 'styled-components';
-import { submitSpotifyLink, logout, getCurrentUser } from '../services/api';
+import { Link, useNavigate } from 'react-router-dom';
+import styled, { keyframes } from 'styled-components';
+import { logout, getUserProfile } from '../services/api';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
-import { IoSettingsOutline } from 'react-icons/io5';
-import { MdOutlineWorkspacePremium } from 'react-icons/md';
-import { FiLogOut, FiUser } from 'react-icons/fi';
-import { BiChevronDown } from 'react-icons/bi';
+import { IoHomeOutline } from 'react-icons/io5';
+import { MdMusicNote, MdAdd, MdLogout } from 'react-icons/md';
+import { BsMusicNoteList, BsSpotify } from 'react-icons/bs';
+import { FiTrendingUp } from 'react-icons/fi';
+import { AiOutlineClockCircle } from 'react-icons/ai';
 
-// Global styles to ensure full-screen coverage
-const GlobalStyle = createGlobalStyle`
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
-  html, body, #root {
-    height: 100%;
-    width: 100%;
-    overflow: hidden;
-  }
-
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-      Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+// Styled components for the home page (matching profile page style)
+const AppLayout = styled.div`
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+  background-color: #f5f5f5;
+  color: #333;
+  max-width: 100vw;
+  overflow-x: hidden;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
   }
 `;
 
-const gradientAnimation = keyframes`
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+const Sidebar = styled.div`
+  width: 240px;
+  background-color: #1DB954;
+  color: white;
+  padding: 30px 0;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  height: 100vh;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  
+  @media (max-width: 768px) {
+    display: none;
+  }
+`;
+
+const Logo = styled.div`
+  font-size: 24px;
+  font-weight: 700;
+  padding: 0 20px 30px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 20px;
+`;
+
+const NavMenu = styled.nav`
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+`;
+
+const NavItem = styled(Link)<{ active?: boolean }>`
+  padding: 12px 20px;
+  color: white;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  font-weight: ${props => props.active ? '600' : '400'};
+  background-color: ${props => props.active ? 'rgba(0, 0, 0, 0.2)' : 'transparent'};
+  border-left: ${props => props.active ? '4px solid white' : '4px solid transparent'};
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    border-left: 4px solid rgba(255, 255, 255, 0.7);
+  }
+`;
+
+const NavIcon = styled.span`
+  margin-right: 10px;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+`;
+
+const MainContent = styled.main`
+  flex: 1;
+  margin-left: 240px;
+  padding: 40px 60px;
+  width: calc(100% - 240px);
+  max-width: 100%;
+  
+  @media (max-width: 1200px) {
+    padding: 30px 40px;
+  }
+  
+  @media (max-width: 768px) {
+    margin-left: 0;
+    width: 100%;
+    padding: 20px;
+  }
+`;
+
+const PageHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e0e0e0;
+`;
+
+const PageTitle = styled.h1`
+  font-size: 28px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+`;
+
+const UserActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 15px;
+`;
+
+const UserInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`;
+
+const UserAvatar = styled.img`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #1DB954;
+`;
+
+const UserName = styled.span`
+  font-weight: 500;
+  color: #333;
+`;
+
+const LogoutButton = styled.button`
+  background-color: transparent;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: #f0f0f0;
+    color: #e91429;
+  }
 `;
 
 const HomeContainer = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  width: 100vw;
-  background: linear-gradient(
-    45deg,
-    #1DB954,
-    #191414,
-    #535353,
-    #1ed760
-  );
-  background-size: 400% 400%;
-  animation: ${gradientAnimation} 15s ease infinite;
-  color: white;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-`;
-
-const ContentWrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   width: 100%;
-  height: 100%;
-  padding: 2rem;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(10px);
-  position: relative;
+  max-width: 100%;
+  gap: 30px;
 `;
 
-const Card = styled.div`
-  background: rgba(18, 18, 18, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  padding: 3rem;
-  width: 90%;
-  max-width: 800px;
-  transition: transform 0.3s ease;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-
+const DashboardGrid = styled.div`
+  display: grid;
+  grid-template-columns: 3fr 1fr;
+  gap: 30px;
+  width: 100%;
+  max-width: 100%;
+  
+  @media (max-width: 1200px) {
+    grid-template-columns: 1fr;
+  }
+  
   @media (max-width: 768px) {
-    padding: 2rem;
-    width: 95%;
+    grid-template-columns: 1fr;
+    gap: 20px;
   }
 `;
 
-const Title = styled.h1`
-  font-size: clamp(2.5rem, 5vw, 4rem);
-  margin-bottom: 1rem;
-  text-align: center;
-  background: linear-gradient(to right, #1DB954, #1ed760);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 800;
-  letter-spacing: -1px;
-  line-height: 1.2;
-`;
-
-const Subtitle = styled.p`
-  text-align: center;
-  color: #b3b3b3;
-  margin-bottom: 3rem;
-  font-size: clamp(1rem, 2vw, 1.2rem);
-  line-height: 1.6;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
-`;
-
-const Form = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
+const WelcomeCard = styled.div`
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  padding: 30px;
   width: 100%;
-`;
-
-const InputContainer = styled.div`
-  position: relative;
-  width: 100%;
-`;
-
-const Input = styled.input`
-  width: 100%;
-  padding: 1.5rem 2rem;
-  border: 2px solid transparent;
-  border-radius: 12px;
-  background-color: #282828;
+  max-width: 100%;
+  background: linear-gradient(135deg, #1DB954, #169c46);
   color: white;
-  font-size: clamp(1rem, 1.5vw, 1.2rem);
-  transition: all 0.3s ease;
-  
-  &:focus {
-    outline: none;
-    border-color: #1DB954;
-    background-color: #333;
-    box-shadow: 0 0 0 4px rgba(29, 185, 84, 0.1);
-  }
-  
-  &::placeholder {
-    color: #b3b3b3;
-  }
-
-  &:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
 `;
 
-const Button = styled.button`
-  padding: 1.5rem 2rem;
-  border: none;
-  border-radius: 12px;
-  background: linear-gradient(45deg, #1DB954, #1ed760);
-  color: white;
-  font-size: clamp(1rem, 1.5vw, 1.2rem);
+const WelcomeTitle = styled.h2`
+  font-size: 24px;
   font-weight: 600;
+  margin-bottom: 15px;
+`;
+
+const WelcomeText = styled.p`
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 25px;
+  opacity: 0.9;
+`;
+
+const ActionButton = styled(Link)`
+  display: inline-block;
+  background-color: white;
+  color: #1DB954;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-  width: 100%;
+  transition: all 0.2s ease;
   
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 16px rgba(29, 185, 84, 0.2);
-  }
-  
-  &:active {
-    transform: translateY(0);
-  }
-  
-  &:disabled {
-    background: #535353;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-    transform: translateX(-100%);
-  }
-
-  &:hover::after {
-    transform: translateX(100%);
-    transition: transform 0.6s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 `;
 
-const ErrorMessage = styled.div`
-  background-color: rgba(255, 82, 82, 0.1);
-  color: #ff5252;
-  padding: 1rem 1.5rem;
-  border-radius: 8px;
-  border-left: 4px solid #ff5252;
-  font-size: clamp(0.875rem, 1.5vw, 1rem);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  &::before {
-    content: '⚠️';
-  }
+const StatsCard = styled.div`
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  padding: 25px;
+  width: 100%;
 `;
 
-const LoadingSpinner = styled.div`
-  display: inline-block;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: white;
-  animation: spin 1s ease-in-out infinite;
-  margin-left: 8px;
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-`;
-
-// Menu Button and Dropdown Styles
-const MenuContainer = styled.div`
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  z-index: 100;
-
-  @media (max-width: 768px) {
-    top: 15px;
-    right: 15px;
-  }
-`;
-
-const MenuButton = styled.button`
-  background: rgba(0, 0, 0, 0.7);
-  border: none;
-  border-radius: 23px;
-  height: 32px;
-  padding: 0 8px 0 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  
-  &:hover {
-    background: #282828;
-  }
-  
-  &:focus {
-    outline: none;
-  }
-`;
-
-const UserIconContainer = styled.div`
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: #333;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #b3b3b3;
-  font-size: 16px;
-`;
-
-const DropdownArrow = styled.div`
-  color: #b3b3b3;
-  display: flex;
-  align-items: center;
+const StatsTitle = styled.h3`
   font-size: 18px;
-`;
-
-const DropdownMenu = styled.div<{ isOpen: boolean }>`
-  position: absolute;
-  top: 40px;
-  right: 0;
-  background: #282828;
-  border-radius: 4px;
-  width: 196px;
-  box-shadow: 0 16px 24px rgba(0, 0, 0, 0.3), 0 6px 8px rgba(0, 0, 0, 0.2);
-  overflow: hidden;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  opacity: ${props => props.isOpen ? 1 : 0};
-  transform: ${props => props.isOpen ? 'translateY(0)' : 'translateY(-10px)'};
-  pointer-events: ${props => props.isOpen ? 'all' : 'none'};
-  z-index: 101;
-  padding: 4px 0;
-`;
-
-const MenuItem = styled.div`
-  padding: 12px 16px;
-  color: #b3b3b3;
-  font-size: 14px;
-  font-weight: 400;
-  cursor: pointer;
-  transition: background-color 0.1s ease, color 0.1s ease;
+  font-weight: 600;
+  margin: 0 0 20px;
+  color: #333;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+`;
+
+const StatsIcon = styled.span`
+  color: #1DB954;
+  display: flex;
+  align-items: center;
+`;
+
+const StatsList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+`;
+
+const StatItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #f0f0f0;
   
-  &:hover {
-    background: #333333;
-    color: #ffffff;
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
   }
 `;
 
-const MenuDivider = styled.div`
-  height: 1px;
-  background-color: #3e3e3e;
-  margin: 4px 0;
+const StatLabel = styled.span`
+  font-size: 14px;
+  color: #666;
 `;
 
-const MenuIcon = styled.div`
+const StatValue = styled.span`
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+`;
+
+const RecentActivityCard = styled.div`
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  padding: 25px;
+  grid-column: span 2;
+  width: 100%;
+  
+  @media (max-width: 1200px) {
+    grid-column: span 1;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 20px;
+  }
+`;
+
+const ActivityTitle = styled.h3`
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 20px;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`;
+
+const ActivityIcon = styled.span`
+  color: #1DB954;
+  display: flex;
+  align-items: center;
+`;
+
+const ActivityList = styled.div`
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 15px;
+  width: 100%;
+  
+  @media (min-width: 1200px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+`;
+
+const ActivityItem = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: #f0f0f0;
+  }
+`;
+
+const ActivityContent = styled.div`
+  flex: 1;
+  margin-left: 15px;
+`;
+
+const ActivityName = styled.h4`
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 5px;
+  color: #333;
+`;
+
+const ActivityMeta = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 15px;
+`;
+
+const ActivityDate = styled.span`
+  font-size: 14px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+`;
+
+const ActivityStatus = styled.span`
+  font-size: 14px;
+  color: #1DB954;
+  font-weight: 500;
+`;
+
+const SongCover = styled.div`
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #eee;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  width: 20px;
-  color: #b3b3b3;
+  color: #999;
+  font-size: 24px;
+  flex-shrink: 0;
 `;
 
-// Setup info section styles
-const SetupInfoSection = styled.div`
-  margin-top: 2.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 1.5rem;
+const SongImage = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 `;
 
-const SetupInfoTitle = styled.h3`
-  font-size: 1.2rem;
-  margin-bottom: 1rem;
-  color: #1DB954;
+const QuickActionsCard = styled.div`
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  padding: 25px;
+  width: 100%;
+`;
+
+const QuickActionsTitle = styled.h3`
+  font-size: 18px;
   font-weight: 600;
+  margin: 0 0 20px;
+  color: #333;
 `;
 
-const SetupInfoDescription = styled.p`
-  color: #b3b3b3;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  margin-bottom: 1rem;
+const QuickActionsList = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  width: 100%;
+  
+  @media (min-width: 1400px) {
+    grid-template-columns: repeat(4, 1fr);
+  }
 `;
 
-const CodeSpan = styled.code`
-  background-color: rgba(0, 0, 0, 0.3);
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  font-size: 0.85rem;
-  color: #1DB954;
-`;
-
-const EnvCodeBlock = styled.pre`
-  background-color: rgba(0, 0, 0, 0.3);
-  padding: 1rem;
+const QuickActionButton = styled(Link)`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background-color: #f9f9f9;
   border-radius: 8px;
-  font-family: 'Courier New', monospace;
-  font-size: 0.85rem;
-  color: #e0e0e0;
-  overflow-x: auto;
-  margin: 1rem 0;
-`;
-
-const SetupInfoList = styled.ul`
-  list-style-type: disc;
-  padding-left: 1.5rem;
-  color: #b3b3b3;
-  font-size: 0.9rem;
-  line-height: 1.6;
-`;
-
-const SetupInfoLink = styled.a`
-  color: #1DB954;
   text-decoration: none;
-  transition: color 0.2s ease;
+  color: #333;
+  transition: all 0.2s ease;
   
   &:hover {
-    color: #1ed760;
-    text-decoration: underline;
+    background-color: #f0f0f0;
+    transform: translateY(-2px);
   }
+`;
+
+const QuickActionIcon = styled.div`
+  font-size: 24px;
+  color: #1DB954;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const QuickActionText = styled.span`
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+`;
+
+const EmptyState = styled.div`
+  padding: 30px;
+  text-align: center;
+  color: #999;
+`;
+
+const EmptyStateIcon = styled.div`
+  font-size: 48px;
+  margin-bottom: 20px;
+  color: #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const EmptyStateText = styled.p`
+  font-size: 16px;
+  margin: 0 0 20px;
 `;
 
 const HomePage: React.FC = () => {
-  const [spotifyUrl, setSpotifyUrl] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [username, setUsername] = useState<string | null>(null);
+  const [userData, setUserData] = useState<any>(null);
   const navigate = useNavigate();
+
+  // Mock data for recent activity
+  const recentActivity = [
+    {
+      id: 1,
+      title: 'Bohemian Rhapsody',
+      artist: 'Queen',
+      date: '2 hours ago',
+      status: 'Completed',
+      coverUrl: 'https://via.placeholder.com/50x50?text=BR'
+    },
+    {
+      id: 2,
+      title: 'Hotel California',
+      artist: 'Eagles',
+      date: 'Yesterday',
+      status: 'Completed',
+      coverUrl: 'https://via.placeholder.com/50x50?text=HC'
+    }
+  ];
 
   // Fetch current user when component mounts
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const userData = await getCurrentUser();
-        setUsername(userData.username);
+        const userData = await getUserProfile();
+        setUserData(userData);
       } catch (error) {
         console.error('Error fetching user data:', error);
       }
@@ -412,59 +504,6 @@ const HomePage: React.FC = () => {
 
     fetchUser();
   }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!spotifyUrl.includes('spotify.com/track/')) {
-      setError('Please enter a valid Spotify track URL');
-      return;
-    }
-    
-    setIsLoading(true);
-    setError('');
-    
-    try {
-      const response = await submitSpotifyLink(spotifyUrl);
-      navigate(`/status/${response.id}`);
-    } catch (err) {
-      setError('An error occurred. Please try again.');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const toggleMenu = () => {
-    setIsMenuOpen(!isMenuOpen);
-  };
-
-  const handleMenuItemClick = (action: string) => {
-    // Close the menu
-    setIsMenuOpen(false);
-    
-    // Handle different menu actions
-    switch (action) {
-      case 'profile':
-        // Navigate to profile page
-        navigate('/profile');
-        break;
-      case 'settings':
-        // Navigate to settings page
-        navigate('/settings');
-        break;
-      case 'member':
-        // Navigate to member page
-        navigate('/member');
-        break;
-      case 'logout':
-        // Handle logout
-        handleLogout();
-        break;
-      default:
-        break;
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -478,94 +517,148 @@ const HomePage: React.FC = () => {
     }
   };
 
-  // Close menu when clicking outside
-  React.useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (isMenuOpen && !target.closest('.menu-container')) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isMenuOpen]);
-
   return (
-    <>
-      <GlobalStyle />
-      <HomeContainer>
-        <ContentWrapper>
-          {/* Menu Button and Dropdown */}
-          <MenuContainer className="menu-container">
-            <MenuButton onClick={toggleMenu}>
-              <UserIconContainer>
-                {FiUser({})}
-              </UserIconContainer>
-              <DropdownArrow>
-                {BiChevronDown({})}
-              </DropdownArrow>
-            </MenuButton>
-            <DropdownMenu isOpen={isMenuOpen}>
-              {username && (
-                <MenuItem style={{ pointerEvents: 'none' }}>
-                  <MenuIcon>{CgProfile({})}</MenuIcon>
-                  <div>
-                    <strong>Hello, {username}</strong>
-                  </div>
-                </MenuItem>
-              )}
-              <MenuItem onClick={() => handleMenuItemClick('profile')}>
-                <MenuIcon>{CgProfile({})}</MenuIcon> Profile
-              </MenuItem>
-              <MenuItem onClick={() => handleMenuItemClick('settings')}>
-                <MenuIcon>{IoSettingsOutline({})}</MenuIcon> Settings
-              </MenuItem>
-              <MenuDivider />
-              <MenuItem onClick={() => handleMenuItemClick('member')}>
-                <MenuIcon>{MdOutlineWorkspacePremium({})}</MenuIcon> Member
-              </MenuItem>
-              <MenuDivider />
-              <MenuItem onClick={() => handleMenuItemClick('logout')}>
-                <MenuIcon>{FiLogOut({})}</MenuIcon> Log Out
-              </MenuItem>
-            </DropdownMenu>
-          </MenuContainer>
-
-          <Card>
-            <Title>Lyric Video Generator</Title>
-            <Subtitle>
-              Transform your favorite Spotify tracks into beautiful lyric videos.
-              Just paste the link and let the magic happen!
-            </Subtitle>
-            <Form onSubmit={handleSubmit}>
-              <InputContainer>
-                <Input
-                  type="text"
-                  placeholder="Paste your Spotify track link here..."
-                  value={spotifyUrl}
-                  onChange={(e) => setSpotifyUrl(e.target.value)}
-                  disabled={isLoading}
+    <AppLayout>
+      <Sidebar>
+        <Logo>zLyrics</Logo>
+        <NavMenu>
+          <NavItem to="/" active>
+            <NavIcon>{IoHomeOutline({ size: 18 })}</NavIcon> Home
+          </NavItem>
+          <NavItem to="/profile">
+            <NavIcon>{CgProfile({ size: 18 })}</NavIcon> Profile
+          </NavItem>
+          <NavItem to="/songs">
+            <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
+          </NavItem>
+          <NavItem to="/create">
+            <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
+          </NavItem>
+        </NavMenu>
+      </Sidebar>
+      
+      <MainContent>
+        <PageHeader>
+          <PageTitle>Dashboard</PageTitle>
+          <UserActions>
+            {userData && (
+              <UserInfo>
+                <UserAvatar 
+                  src={userData.profile_picture || "https://via.placeholder.com/40x40?text=User"} 
+                  alt={userData.name} 
                 />
-              </InputContainer>
-              <Button type="submit" disabled={isLoading || !spotifyUrl}>
-                {isLoading ? (
-                  <>
-                    Generating Video
-                    <LoadingSpinner />
-                  </>
-                ) : (
-                  'Create Lyric Video'
-                )}
-              </Button>
-              {error && <ErrorMessage>{error}</ErrorMessage>}
-            </Form>
-          </Card>
-        </ContentWrapper>
-      </HomeContainer>
-    </>
+                <UserName>{userData.name}</UserName>
+              </UserInfo>
+            )}
+            <LogoutButton onClick={handleLogout}>
+              {MdLogout({ size: 18 })} Logout
+            </LogoutButton>
+          </UserActions>
+        </PageHeader>
+        
+        <HomeContainer>
+          <WelcomeCard>
+            <WelcomeTitle>Welcome back, {userData?.name || 'User'}!</WelcomeTitle>
+            <WelcomeText>
+              Create beautiful lyric videos from your favorite Spotify tracks with just a few clicks.
+              Our AI-powered system extracts lyrics and generates synchronized videos automatically.
+            </WelcomeText>
+            <ActionButton to="/create">Create New Video</ActionButton>
+          </WelcomeCard>
+          
+          <DashboardGrid>
+            <RecentActivityCard>
+              <ActivityTitle>
+                <ActivityIcon>{AiOutlineClockCircle({ size: 20 })}</ActivityIcon>
+                Recent Activity
+              </ActivityTitle>
+              
+              {recentActivity.length > 0 ? (
+                <ActivityList>
+                  {recentActivity.map(activity => (
+                    <ActivityItem key={activity.id}>
+                      <SongCover>
+                        {activity.coverUrl ? (
+                          <SongImage src={activity.coverUrl} alt={activity.title} />
+                        ) : (
+                          MdMusicNote({ size: 24 })
+                        )}
+                      </SongCover>
+                      <ActivityContent>
+                        <ActivityName>{activity.title} - {activity.artist}</ActivityName>
+                        <ActivityMeta>
+                          <ActivityDate>
+                            {AiOutlineClockCircle({ size: 14 })} {activity.date}
+                          </ActivityDate>
+                          <ActivityStatus>{activity.status}</ActivityStatus>
+                        </ActivityMeta>
+                      </ActivityContent>
+                    </ActivityItem>
+                  ))}
+                </ActivityList>
+              ) : (
+                <EmptyState>
+                  <EmptyStateIcon>
+                    {MdMusicNote({ size: 48 })}
+                  </EmptyStateIcon>
+                  <EmptyStateText>No recent activity yet</EmptyStateText>
+                  <ActionButton to="/create" style={{ backgroundColor: '#1DB954', color: 'white' }}>
+                    Create Your First Video
+                  </ActionButton>
+                </EmptyState>
+              )}
+            </RecentActivityCard>
+            
+            <StatsCard>
+              <StatsTitle>
+                <StatsIcon>{FiTrendingUp({ size: 20 })}</StatsIcon>
+                Your Stats
+              </StatsTitle>
+              <StatsList>
+                <StatItem>
+                  <StatLabel>Videos Created</StatLabel>
+                  <StatValue>2</StatValue>
+                </StatItem>
+                <StatItem>
+                  <StatLabel>Total Duration</StatLabel>
+                  <StatValue>12:24</StatValue>
+                </StatItem>
+                <StatItem>
+                  <StatLabel>Account Type</StatLabel>
+                  <StatValue>Free</StatValue>
+                </StatItem>
+                <StatItem>
+                  <StatLabel>Member Since</StatLabel>
+                  <StatValue>March 2023</StatValue>
+                </StatItem>
+              </StatsList>
+            </StatsCard>
+            
+            <QuickActionsCard>
+              <QuickActionsTitle>Quick Actions</QuickActionsTitle>
+              <QuickActionsList>
+                <QuickActionButton to="/create">
+                  <QuickActionIcon>{MdAdd({ size: 24 })}</QuickActionIcon>
+                  <QuickActionText>Create Video</QuickActionText>
+                </QuickActionButton>
+                <QuickActionButton to="/songs">
+                  <QuickActionIcon>{BsMusicNoteList({ size: 24 })}</QuickActionIcon>
+                  <QuickActionText>My Songs</QuickActionText>
+                </QuickActionButton>
+                <QuickActionButton to="/profile">
+                  <QuickActionIcon>{CgProfile({ size: 24 })}</QuickActionIcon>
+                  <QuickActionText>Edit Profile</QuickActionText>
+                </QuickActionButton>
+                <QuickActionButton to="https://spotify.com" target="_blank">
+                  <QuickActionIcon>{BsSpotify({ size: 24 })}</QuickActionIcon>
+                  <QuickActionText>Open Spotify</QuickActionText>
+                </QuickActionButton>
+              </QuickActionsList>
+            </QuickActionsCard>
+          </DashboardGrid>
+        </HomeContainer>
+      </MainContent>
+    </AppLayout>
   );
 };
 

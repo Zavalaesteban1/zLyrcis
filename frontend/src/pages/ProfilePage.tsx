@@ -161,8 +161,16 @@ const ProfileHeader = styled.div`
 
 const ProfileHeaderContent = styled.div`
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 20px;
+`;
+
+const ProfileImageContainer = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 `;
 
 const ProfilePicture = styled.div`
@@ -427,6 +435,29 @@ const FileInput = styled.input`
   display: none;
 `;
 
+const UploadButton = styled.button`
+  background-color: #1DB954;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  
+  &:hover {
+    background-color: #169c46;
+  }
+  
+  &:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+`;
+
 const ProfilePage: React.FC = () => {
   const [profileData, setProfileData] = useState<UserProfile | null>(null);
   const [editableProfile, setEditableProfile] = useState<Partial<UserProfile> | null>(null);
@@ -437,6 +468,7 @@ const ProfilePage: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -467,6 +499,7 @@ const ProfilePage: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      console.log('File selected:', file.name, file.type, file.size);
       
       // Validate file type
       if (!file.type.startsWith('image/')) {
@@ -490,12 +523,26 @@ const ProfilePage: React.FC = () => {
         return;
       }
       
+      // Create a preview of the selected image
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target && event.target.result) {
+          setFilePreview(event.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+      
       setSelectedFile(file);
       // Clear any existing notifications
       setNotification(null);
       
-      // Automatically submit the form after selecting a file
-      handleSubmit();
+      // Show a notification that a file was selected
+      setNotification({
+        message: `Selected file: ${file.name}. Click Upload to save.`,
+        type: 'success'
+      });
+      
+      // Don't automatically submit - let user click the upload button
     }
   };
   
@@ -504,7 +551,10 @@ const ProfilePage: React.FC = () => {
       e.preventDefault();
     }
     
-    if (!selectedFile) return;
+    if (!selectedFile) {
+      console.log('No file selected');
+      return;
+    }
     
     try {
       setUploading(true);
@@ -512,6 +562,7 @@ const ProfilePage: React.FC = () => {
       console.log('Uploading file:', selectedFile.name, selectedFile.type, selectedFile.size);
       
       const updatedProfile = await updateProfilePicture(selectedFile);
+      console.log('Profile updated successfully:', updatedProfile);
       setProfileData(updatedProfile);
       setNotification({
         message: "Profile picture updated successfully!",
@@ -528,6 +579,11 @@ const ProfilePage: React.FC = () => {
       // Reset the file input
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err: any) {
+      console.error('Error details:', err);
+      const errorResponse = err.response || {};
+      console.error('Error status:', errorResponse.status);
+      console.error('Error data:', errorResponse.data);
+      
       const errorMessage = err.response?.data?.error || "Failed to update profile picture. Please try again.";
       setNotification({
         message: errorMessage,
@@ -691,7 +747,7 @@ const ProfilePage: React.FC = () => {
           <UserActions>
             <UserInfo>
               <UserAvatar 
-                src={profileData.profile_picture || "https://via.placeholder.com/40x40?text=User"} 
+                src={filePreview || profileData.profile_picture || "https://via.placeholder.com/40x40?text=User"} 
                 alt={profileData.name} 
               />
               <UserName>{profileData.name}</UserName>
@@ -712,22 +768,33 @@ const ProfilePage: React.FC = () => {
           <ProfileCard>
             <ProfileHeader>
               <ProfileHeaderContent>
-                <ProfilePicture>
-                  <ProfileImage 
-                    src={profileData.profile_picture || "https://via.placeholder.com/100x100?text=Profile"} 
-                    alt={profileData.name} 
-                  />
-                  <ProfileImageOverlay onClick={handleUploadClick}>
-                    <UploadIcon>{BsCamera({ size: 24 })}</UploadIcon>
-                  </ProfileImageOverlay>
-                  <FileInput 
-                    ref={fileInputRef}
-                    type="file" 
-                    accept="image/*" 
-                    onChange={handleFileChange} 
-                    disabled={uploading || isEditMode}
-                  />
-                </ProfilePicture>
+                <ProfileImageContainer>
+                  <ProfilePicture>
+                    <ProfileImage 
+                      src={filePreview || profileData.profile_picture || "https://via.placeholder.com/100x100?text=Profile"} 
+                      alt={profileData.name} 
+                    />
+                    <ProfileImageOverlay onClick={handleUploadClick}>
+                      <UploadIcon>{BsCamera({ size: 24 })}</UploadIcon>
+                    </ProfileImageOverlay>
+                    <FileInput 
+                      ref={fileInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleFileChange} 
+                      disabled={uploading || isEditMode}
+                      name="profile_picture"
+                    />
+                  </ProfilePicture>
+                  {selectedFile && (
+                    <UploadButton 
+                      onClick={handleSubmit} 
+                      disabled={uploading}
+                    >
+                      {uploading ? 'Uploading...' : 'Upload Picture'}
+                    </UploadButton>
+                  )}
+                </ProfileImageContainer>
                 <ProfileDetails>
                   <ProfileName>{profileData.name}</ProfileName>
                   <ProfileRole>{profileData.role}</ProfileRole>

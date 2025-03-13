@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import styled, { keyframes } from 'styled-components';
+import styled from 'styled-components';
 import { signup, SignupCredentials } from '../services/api';
+import { MdMusicNote } from 'react-icons/md';
 
-// Define animations
-const gradientAnimation = keyframes`
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-`;
+// Define interface for form data
+interface SignupFormData extends SignupCredentials {
+  confirmPassword: string;
+}
 
 // Styled components
 const SignupContainer = styled.div`
@@ -18,64 +17,127 @@ const SignupContainer = styled.div`
   justify-content: center;
   min-height: 100vh;
   width: 100%;
-  padding: 2rem;
-  background: linear-gradient(
-    45deg,
-    #1DB954,
-    #191414,
-    #535353,
-    #1ed760
-  );
-  background-size: 400% 400%;
-  animation: ${gradientAnimation} 15s ease infinite;
-  color: white;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  max-width: 100vw;
+  background-color: white;
+  background-image: linear-gradient(rgba(29, 185, 84, 0.03) 1px, transparent 1px), 
+                    linear-gradient(90deg, rgba(29, 185, 84, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+  color: #333;
+  overflow-x: hidden;
+  padding: 40px;
+`;
+
+const Logo = styled.div`
+  font-size: 42px;
+  font-weight: 700;
+  margin-bottom: 50px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  color: #1DB954;
+  
+  @media (min-width: 1600px) {
+    font-size: 48px;
+    margin-bottom: 60px;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 32px;
+    margin-bottom: 30px;
+  }
+`;
+
+const LogoIcon = styled.span`
+  display: flex;
+  align-items: center;
+  font-size: 48px;
+  
+  @media (min-width: 1600px) {
+    font-size: 54px;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 36px;
+  }
 `;
 
 const SignupCard = styled.div`
-  background: rgba(18, 18, 18, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  overflow: hidden;
-  padding: 3rem;
+  background-color: white;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 650px;
+  padding: 60px 80px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  
+  @media (min-width: 1600px) {
+    max-width: 750px;
+    padding: 70px 90px;
+  }
   
   @media (max-width: 768px) {
-    padding: 2rem;
-    width: 95%;
+    padding: 30px;
+    max-width: 100%;
+    border-radius: 10px;
   }
 `;
 
 const SignupHeader = styled.div`
-  margin-bottom: 2rem;
+  margin-bottom: 50px;
   text-align: center;
+  
+  @media (min-width: 1600px) {
+    margin-bottom: 60px;
+  }
+  
+  @media (max-width: 768px) {
+    margin-bottom: 30px;
+  }
 `;
 
-const SignupTitle = styled.h1`
-  font-size: 2.5rem;
-  margin-bottom: 1rem;
-  background: linear-gradient(to right, #1DB954, #1ed760);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 800;
+const SignupTitle = styled.h2`
+  font-size: 36px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+  
+  @media (min-width: 1600px) {
+    font-size: 42px;
+    margin-bottom: 18px;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 28px;
+    margin-bottom: 10px;
+  }
 `;
 
 const SignupSubtitle = styled.p`
-  color: #b3b3b3;
-  margin-bottom: 1rem;
+  color: #666;
+  font-size: 20px;
+  
+  @media (min-width: 1600px) {
+    font-size: 22px;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
 `;
 
 const Form = styled.form`
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 28px;
   width: 100%;
+  
+  @media (min-width: 1600px) {
+    gap: 32px;
+  }
+  
+  @media (max-width: 768px) {
+    gap: 20px;
+  }
 `;
 
 const InputContainer = styled.div`
@@ -84,51 +146,90 @@ const InputContainer = styled.div`
 `;
 
 const Label = styled.label`
-  font-size: 0.9rem;
-  margin-bottom: 0.5rem;
+  font-size: 18px;
+  margin-bottom: 12px;
   display: block;
-  color: #b3b3b3;
+  color: #444;
+  font-weight: 500;
+  
+  @media (min-width: 1600px) {
+    font-size: 20px;
+    margin-bottom: 14px;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
 `;
 
 const Input = styled.input`
   width: 100%;
-  padding: 1rem 1.5rem;
-  border: 2px solid transparent;
-  border-radius: 12px;
-  background-color: #282828;
-  color: white;
-  font-size: 1rem;
+  padding: 16px 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  background-color: white;
+  color: #333;
+  font-size: 18px;
   transition: all 0.3s ease;
+  
+  @media (min-width: 1600px) {
+    padding: 18px 22px;
+    font-size: 20px;
+    border-radius: 12px;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 12px 15px;
+    font-size: 16px;
+    border-radius: 8px;
+  }
   
   &:focus {
     outline: none;
     border-color: #1DB954;
-    background-color: #333;
-    box-shadow: 0 0 0 4px rgba(29, 185, 84, 0.1);
+    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.1);
   }
   
   &::placeholder {
-    color: #b3b3b3;
+    color: #999;
   }
 `;
 
 const Button = styled.button`
-  padding: 1rem 1.5rem;
+  padding: 18px;
   border: none;
-  border-radius: 12px;
-  background: linear-gradient(45deg, #1DB954, #1ed760);
+  border-radius: 10px;
+  background-color: #1DB954;
   color: white;
-  font-size: 1rem;
+  font-size: 20px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 15px;
+  
+  @media (min-width: 1600px) {
+    padding: 20px;
+    font-size: 22px;
+    margin-top: 20px;
+    border-radius: 12px;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 14px;
+    font-size: 16px;
+    margin-top: 5px;
+    border-radius: 8px;
+  }
   
   &:hover {
+    background-color: #169c46;
     transform: translateY(-2px);
-    box-shadow: 0 8px 16px rgba(29, 185, 84, 0.2);
+    box-shadow: 0 4px 12px rgba(29, 185, 84, 0.2);
   }
   
   &:active {
@@ -136,7 +237,7 @@ const Button = styled.button`
   }
   
   &:disabled {
-    background: #535353;
+    background-color: #a0a0a0;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
@@ -144,20 +245,41 @@ const Button = styled.button`
 `;
 
 const ErrorMessage = styled.div`
-  background-color: rgba(255, 82, 82, 0.1);
-  color: #ff5252;
-  padding: 1rem;
-  border-radius: 8px;
-  border-left: 4px solid #ff5252;
-  font-size: 0.9rem;
-  margin-top: 1rem;
+  background-color: rgba(233, 20, 41, 0.1);
+  color: #e91429;
+  padding: 16px 20px;
+  border-radius: 10px;
+  font-size: 18px;
+  border-left: 4px solid #e91429;
+  
+  @media (min-width: 1600px) {
+    padding: 18px 22px;
+    font-size: 20px;
+    border-radius: 12px;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 12px 15px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
 `;
 
 const LinkContainer = styled.div`
-  margin-top: 1.5rem;
+  margin-top: 35px;
   text-align: center;
-  color: #b3b3b3;
-  font-size: 0.9rem;
+  color: #666;
+  font-size: 18px;
+  
+  @media (min-width: 1600px) {
+    margin-top: 40px;
+    font-size: 20px;
+  }
+  
+  @media (max-width: 768px) {
+    margin-top: 25px;
+    font-size: 14px;
+  }
   
   a {
     color: #1DB954;
@@ -172,58 +294,60 @@ const LinkContainer = styled.div`
 
 const LoadingSpinner = styled.div`
   display: inline-block;
-  width: 1.2rem;
-  height: 1.2rem;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
   border-top-color: white;
   animation: spin 1s ease-in-out infinite;
-  margin-left: 8px;
 
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
+  
+  @media (min-width: 1600px) {
+    width: 28px;
+    height: 28px;
+    border-width: 3px;
+  }
+  
+  @media (max-width: 768px) {
+    width: 20px;
+    height: 20px;
+    border-width: 2px;
+  }
 `;
 
 const SignupPage: React.FC = () => {
-  const [credentials, setCredentials] = useState<SignupCredentials>({
+  const [formData, setFormData] = useState<SignupFormData>({
     username: '',
     email: '',
-    password: ''
+    password: '',
+    confirmPassword: ''
   });
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    if (name === 'confirmPassword') {
-      setConfirmPassword(value);
-    } else {
-      setCredentials(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
+    setFormData((prev: SignupFormData) => ({
+      ...prev,
+      [name]: value
+    }));
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
-    if (!credentials.username || !credentials.email || !credentials.password) {
-      setError('Please fill in all fields');
+    // Validate form
+    if (!formData.username || !formData.email || !formData.password || !formData.confirmPassword) {
+      setError('All fields are required');
       return;
     }
     
-    if (credentials.password !== confirmPassword) {
+    if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
-      return;
-    }
-    
-    if (credentials.password.length < 8) {
-      setError('Password must be at least 8 characters long');
       return;
     }
     
@@ -231,8 +355,10 @@ const SignupPage: React.FC = () => {
     setError(null);
     
     try {
+      // Extract the credentials without confirmPassword
+      const { confirmPassword, ...credentials } = formData;
       await signup(credentials);
-      navigate('/');
+      navigate('/login');
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || 'Signup failed. Please try again.';
       setError(errorMessage);
@@ -243,10 +369,15 @@ const SignupPage: React.FC = () => {
   
   return (
     <SignupContainer>
+      <Logo>
+        <LogoIcon>{MdMusicNote({ size: 48 })}</LogoIcon>
+        zLyrics
+      </Logo>
+      
       <SignupCard>
         <SignupHeader>
           <SignupTitle>Create Account</SignupTitle>
-          <SignupSubtitle>Sign up to start creating lyric videos</SignupSubtitle>
+          <SignupSubtitle>Sign up to start creating amazing lyric videos</SignupSubtitle>
         </SignupHeader>
         
         <Form onSubmit={handleSubmit}>
@@ -257,7 +388,7 @@ const SignupPage: React.FC = () => {
               name="username"
               type="text"
               placeholder="Choose a username"
-              value={credentials.username}
+              value={formData.username}
               onChange={handleChange}
               disabled={isLoading}
             />
@@ -270,7 +401,7 @@ const SignupPage: React.FC = () => {
               name="email"
               type="email"
               placeholder="Enter your email"
-              value={credentials.email}
+              value={formData.email}
               onChange={handleChange}
               disabled={isLoading}
             />
@@ -282,8 +413,8 @@ const SignupPage: React.FC = () => {
               id="password"
               name="password"
               type="password"
-              placeholder="Create a password (min. 8 characters)"
-              value={credentials.password}
+              placeholder="Create a password"
+              value={formData.password}
               onChange={handleChange}
               disabled={isLoading}
             />
@@ -296,7 +427,7 @@ const SignupPage: React.FC = () => {
               name="confirmPassword"
               type="password"
               placeholder="Confirm your password"
-              value={confirmPassword}
+              value={formData.confirmPassword}
               onChange={handleChange}
               disabled={isLoading}
             />

@@ -121,17 +121,39 @@ export const updateProfilePicture = async (file: File): Promise<UserProfile> => 
   formData.append('profile_picture', file);
   
   console.log('FormData contents:', 
-    Array.from(formData.entries()).map(entry => `${entry[0]}: ${entry[1]}`));
+    Array.from(formData.entries()).map(entry => `${entry[0]}: ${entry[1] instanceof File ? 
+      `File: ${(entry[1] as File).name}, type: ${(entry[1] as File).type}, size: ${(entry[1] as File).size}` : 
+      entry[1]}`));
   
   try {
-    // Using axios directly to have more control over the request
-    const response = await api.post('/profile/update_picture/', formData, {
+    // Use the fetch API instead of axios
+    const token = getAuthToken();
+    const url = `${API_URL}/profile/update_picture/`;
+    
+    console.log('Sending request to:', url);
+    console.log('With token:', token ? 'Token present' : 'No token');
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
       headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+        // Don't set Content-Type for FormData
+        'Authorization': token ? `Token ${token}` : ''
+      }
     });
     
-    return response.data;
+    console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers));
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+      console.error('Server error response:', errorData);
+      throw new Error(errorData.error || `Server error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Response data:', data);
+    return data;
   } catch (error) {
     console.error('Error updating profile picture:', error);
     throw error;

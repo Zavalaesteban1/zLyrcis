@@ -538,7 +538,7 @@ const CreateVideoPage: React.FC = () => {
             <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
           </NavItem>
           <NavItem to="/create" active>
-            <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
+            <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
           </NavItem>
         </NavMenu>
       </Sidebar>

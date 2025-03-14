@@ -13,6 +13,7 @@
   "author": "Esteban Zavala",
   "license": "ISC",
   "dependencies": {
+    "@mui/icons-material": "^6.4.7",
     "@types/node": "^16.18.0",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",

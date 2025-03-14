@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/LoginPage';
@@ -16,6 +16,35 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ element }) => {
   return isAuthenticated() ? <>{element}</> : <Navigate to="/login" />;
+};
+
+// Page transition wrapper component
+const PageTransitionWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isActive, setIsActive] = useState(false);
+  
+  useEffect(() => {
+    // Small delay to ensure smooth transitions
+    const timer = setTimeout(() => {
+      setIsActive(true);
+    }, 50);
+    
+    // Clean up function for when component unmounts
+    return () => {
+      clearTimeout(timer);
+      setIsActive(false);
+    };
+  }, []);
+  
+  return (
+    <div className={`page-transition ${isActive ? 'active' : ''}`}>
+      {children}
+    </div>
+  );
+};
+
+// Apply the transition wrapper to routes
+const TransitionRoute: React.FC<ProtectedRouteProps> = ({ element }) => {
+  return <PageTransitionWrapper>{element}</PageTransitionWrapper>;
 };
 
 function App() {
@@ -37,26 +66,26 @@ function App() {
     checkAuth();
   }, []);
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
   return (
     <Router>
       <div className="App">
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          
-          {/* Protected routes */}
-          <Route path="/" element={<ProtectedRoute element={<HomePage />} />} />
-          <Route path="/profile" element={<ProtectedRoute element={<ProfilePage />} />} />
-          <Route path="/songs" element={<ProtectedRoute element={<SongsPage />} />} />
-          <Route path="/create" element={<ProtectedRoute element={<CreateVideoPage />} />} />
-          <Route path="/edit-profile" element={<ProtectedRoute element={<ProfilePage />} />} />
-          <Route path="/change-password" element={<ProtectedRoute element={<ProfilePage />} />} />
-        </Routes>
+        {loading ? (
+          <div className="silent-loading"></div>
+        ) : (
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<TransitionRoute element={<LoginPage />} />} />
+            <Route path="/signup" element={<TransitionRoute element={<SignupPage />} />} />
+            
+            {/* Protected routes */}
+            <Route path="/" element={<ProtectedRoute element={<TransitionRoute element={<HomePage />} />} />} />
+            <Route path="/profile" element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
+            <Route path="/songs" element={<ProtectedRoute element={<TransitionRoute element={<SongsPage />} />} />} />
+            <Route path="/create" element={<ProtectedRoute element={<TransitionRoute element={<CreateVideoPage />} />} />} />
+            <Route path="/edit-profile" element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
+            <Route path="/change-password" element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
+          </Routes>
+        )}
       </div>
     </Router>
   );

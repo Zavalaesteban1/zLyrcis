@@ -17,6 +17,13 @@ const AppLayout = styled.div`
   min-height: 100vh;
   background-color: #f5f5f5;
   color: #333;
+  max-width: 100vw;
+  overflow-x: hidden;
+  transition: opacity 0.2s ease;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
 `;
 
 const Sidebar = styled.div`
@@ -29,6 +36,11 @@ const Sidebar = styled.div`
   position: fixed;
   height: 100vh;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  
+  @media (max-width: 768px) {
+    display: none;
+  }
 `;
 
 const Logo = styled.div`
@@ -75,6 +87,17 @@ const MainContent = styled.main`
   margin-left: 240px;
   padding: 30px;
   width: calc(100% - 240px);
+  transition: all 0.2s ease;
+  
+  @media (max-width: 1200px) {
+    padding: 30px 40px;
+  }
+  
+  @media (max-width: 768px) {
+    margin-left: 0;
+    width: 100%;
+    padding: 20px;
+  }
 `;
 
 const PageHeader = styled.div`
@@ -683,7 +706,6 @@ const ProfilePage: React.FC = () => {
         </Sidebar>
         <MainContent>
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-            <h2>Loading profile data...</h2>
           </div>
         </MainContent>
       </AppLayout>

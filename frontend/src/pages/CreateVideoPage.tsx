@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
-import { submitSpotifyLink, logout, getUserProfile, getVideoStatus } from '../services/api';
+import { submitSpotifyLink, logout, getUserProfile, getVideoStatus, getVideoJob, VideoJob, VideoStatusResponse } from '../services/api';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
@@ -381,62 +381,82 @@ const CreateVideoPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [userData, setUserData] = useState<any>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<VideoStatusResponse | null>(null);
+  const [jobDetails, setJobDetails] = useState<VideoJob | null>(null);
+  const [statusPolling, setStatusPolling] = useState(false);
   const navigate = useNavigate();
   
-  // Add state variables for status tracking
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [jobStatus, setJobStatus] = useState<{
-    status: 'pending' | 'processing' | 'completed' | 'failed';
-    video_url: string | null;
-    error: string | null;
-  } | null>(null);
-  const [statusPolling, setStatusPolling] = useState(false);
-
-  // Fetch current user when component mounts
+  // Use a ref to store the interval ID
+  const statusPollRef = useRef<number | null>(null);
+  
+  // Clear interval on unmount
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const userData = await getUserProfile();
-        setUserData(userData);
-      } catch (error) {
-        console.error('Error fetching user data:', error);
+    return () => {
+      if (statusPollRef.current) {
+        clearInterval(statusPollRef.current);
       }
     };
-
+  }, []);
+  
+  // Fetch user data when component mounts
+  useEffect(() => {
     fetchUser();
   }, []);
-
-  // Add a useEffect for status polling
+  
+  // Fetch current user
+  const fetchUser = async () => {
+    try {
+      const userData = await getUserProfile();
+      setUserData(userData);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  };
+  
+  // Poll for status updates
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    
-    const pollStatus = async () => {
-      if (!jobId || !statusPolling) return;
-      
-      try {
-        const data = await getVideoStatus(jobId);
-        setJobStatus(data);
-        
-        // Continue polling if the job is still in progress
-        if (data.status === 'pending' || data.status === 'processing') {
-          timer = setTimeout(pollStatus, 5000); // Poll every 5 seconds
-        } else {
-          setStatusPolling(false);
-        }
-      } catch (err) {
-        console.error('Error fetching video status:', err);
-        setStatusPolling(false);
-      }
-    };
-    
-    if (statusPolling) {
+    if (jobId) {
+      setIsLoading(true);
       pollStatus();
     }
-    
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [jobId, statusPolling]);
+  }, [jobId]);
+
+  const pollStatus = async () => {
+    try {
+      const status = await getVideoStatus(jobId!);
+      setJobStatus(status);
+      setIsLoading(false);
+      
+      // Fetch job details to get song title and artist
+      try {
+        const details = await getVideoJob(jobId!);
+        setJobDetails(details);
+      } catch (detailsError) {
+        console.error('Error fetching job details:', detailsError);
+      }
+      
+      // If the job is still in progress, poll again in 5 seconds
+      if (status.status === 'pending' || status.status === 'processing') {
+        // Clear previous interval if it exists
+        if (statusPollRef.current) {
+          clearInterval(statusPollRef.current);
+        }
+        
+        // Set new interval
+        statusPollRef.current = window.setInterval(pollStatus, 5000);
+      } else {
+        // Clear interval if job is complete or failed
+        if (statusPollRef.current) {
+          clearInterval(statusPollRef.current);
+        }
+      }
+    } catch (error) {
+      console.error('Error polling status:', error);
+      setIsLoading(false);
+      setError('Failed to get job status');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -612,7 +632,7 @@ const CreateVideoPage: React.FC = () => {
                   {jobStatus?.status === 'completed' && jobStatus.video_url && (
                     <DownloadButton 
                       href={jobStatus.video_url} 
-                      target="_blank" 
+                      target="_blank"
                       rel="noopener noreferrer"
                     >
                       Download Video

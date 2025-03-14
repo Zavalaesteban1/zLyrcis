@@ -19,6 +19,7 @@ const AppLayout = styled.div`
   color: #333;
   max-width: 100vw;
   overflow-x: hidden;
+  transition: opacity 0.2s ease;
   
   @media (max-width: 768px) {
     flex-direction: column;
@@ -35,6 +36,7 @@ const Sidebar = styled.div`
   position: fixed;
   height: 100vh;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 100;
   
   @media (max-width: 768px) {
     display: none;
@@ -86,6 +88,7 @@ const MainContent = styled.main`
   padding: 40px 60px;
   width: calc(100% - 240px);
   max-width: 100%;
+  transition: all 0.2s ease;
   
   @media (max-width: 1200px) {
     padding: 30px 40px;

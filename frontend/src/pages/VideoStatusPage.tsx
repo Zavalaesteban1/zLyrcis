@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import styled, { keyframes, createGlobalStyle } from 'styled-components';
-import { getVideoStatus } from '../services/api';
+import { getVideoStatus, VideoJob } from '../services/api';
 
 // Global styles to ensure full-screen coverage
 const GlobalStyle = createGlobalStyle`
@@ -245,6 +245,7 @@ interface StatusResponse {
 const VideoStatusPage: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
   const [status, setStatus] = useState<StatusResponse | null>(null);
+  const [jobDetails, setJobDetails] = useState<VideoJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -343,7 +344,7 @@ const VideoStatusPage: React.FC = () => {
                   {status.status === 'completed' && status.video_url && (
                     <Button 
                       href={status.video_url} 
-                      target="_blank" 
+                      target="_blank"
                       rel="noopener noreferrer"
                     >
                       Download Video

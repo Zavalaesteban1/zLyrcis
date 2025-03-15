@@ -1,7 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import styled, { keyframes, createGlobalStyle } from 'styled-components';
 import { getVideoStatus, VideoJob } from '../services/api';
+
+// Define extended HTMLVideoElement with browser-specific properties
+interface ExtendedHTMLVideoElement extends HTMLVideoElement {
+  // Firefox
+  mozHasAudio?: boolean;
+  // Safari/Chrome
+  webkitAudioDecodedByteCount?: number;
+  // Standard future API
+  audioTracks?: {
+    length: number;
+  };
+}
 
 // Global styles to ensure full-screen coverage
 const GlobalStyle = createGlobalStyle`
@@ -142,53 +154,49 @@ const ProgressBar = styled.div<{ progress: number }>`
   }
 `;
 
-const Button = styled.a`
-  display: inline-block;
-  padding: 1.5rem 2rem;
-  border: none;
-  border-radius: 12px;
-  background: linear-gradient(45deg, #1DB954, #1ed760);
+const Button = styled.button`
+  background: linear-gradient(to right, #1DB954, #1ed760);
   color: white;
-  font-size: clamp(1rem, 1.5vw, 1.2rem);
+  border: none;
+  border-radius: 30px;
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin: 10px;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  }
+  
+  &:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+`;
+
+const VideoButton = styled.a`
+  display: inline-block;
+  padding: 12px 24px;
+  border: 2px solid #1DB954;
+  border-radius: 30px;
+  background: transparent;
+  color: #1DB954;
+  font-size: 1rem;
   font-weight: 600;
   text-decoration: none;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-  width: 100%;
+  margin: 10px;
   
   &:hover {
+    background: rgba(29, 185, 84, 0.1);
     transform: translateY(-2px);
-    box-shadow: 0 8px 16px rgba(29, 185, 84, 0.2);
-  }
-  
-  &:active {
-    transform: translateY(0);
-  }
-  
-  &:disabled {
-    background: #535353;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-    transform: translateX(-100%);
-  }
-
-  &:hover::after {
-    transform: translateX(100%);
-    transition: transform 0.6s ease;
   }
 `;
 
@@ -236,10 +244,54 @@ const LoadingSpinner = styled.div`
   }
 `;
 
+const VideoPreviewContainer = styled.div`
+  width: 100%;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+`;
+
+const VideoPlayer = styled.video`
+  width: 100%;
+  border-radius: 8px;
+  background-color: #000;
+`;
+
+const AudioIndicator = styled.div<{ hasAudio: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 20px;
+  color: ${props => props.hasAudio ? '#1DB954' : '#ff5252'};
+  
+  &::before {
+    content: ${props => props.hasAudio ? '"🔊"' : '"🔇"'};
+  }
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  width: 100%;
+`;
+
+// Add a small loading spinner variant
+const SmallLoadingSpinner = styled(LoadingSpinner)`
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border-width: 2px;
+`;
+
 interface StatusResponse {
   status: 'pending' | 'processing' | 'completed' | 'failed';
   video_url: string | null;
   error: string | null;
+  song_title?: string;
+  artist?: string;
 }
 
 const VideoStatusPage: React.FC = () => {
@@ -248,6 +300,11 @@ const VideoStatusPage: React.FC = () => {
   const [jobDetails, setJobDetails] = useState<VideoJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [hasAudio, setHasAudio] = useState<boolean | null>(null);
+  const [isPreviewLoaded, setIsPreviewLoaded] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  
+  const videoRef = useRef<ExtendedHTMLVideoElement>(null);
   
   useEffect(() => {
     const fetchStatus = async () => {
@@ -275,6 +332,88 @@ const VideoStatusPage: React.FC = () => {
       fetchStatus();
     }
   }, [jobId, loading]);
+
+  // Check if video has audio tracks when loaded
+  const handleVideoLoaded = () => {
+    setIsPreviewLoaded(true);
+    if (videoRef.current) {
+      // Check if video has audio tracks
+      const video = videoRef.current as ExtendedHTMLVideoElement;
+      
+      // Method 1: Check audio tracks if available
+      if (video.audioTracks && video.audioTracks.length > 0) {
+        console.log("Audio detected via audioTracks property");
+        setHasAudio(true);
+        return;
+      }
+      
+      // Method 2: Play video briefly to check if audio can be detected
+      const originalVolume = video.volume;
+      video.volume = 0.5; // Set higher volume to ensure audio detection works
+      
+      console.log("Attempting to play video to detect audio...");
+      const playPromise = video.play();
+      
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          // Video started playing
+          setTimeout(() => {
+            // Check if we can detect audio using multiple methods
+            const usingMoz = typeof video.mozHasAudio !== 'undefined';
+            const usingWebkit = typeof video.webkitAudioDecodedByteCount !== 'undefined';
+            const usingTracks = video.audioTracks && video.audioTracks.length > 0;
+            
+            console.log("Audio detection details:", {
+              mozHasAudio: video.mozHasAudio,
+              webkitAudioDecodedByteCount: video.webkitAudioDecodedByteCount,
+              audioTracks: video.audioTracks ? video.audioTracks.length : 'not available'
+            });
+            
+            if (video.mozHasAudio || 
+                Boolean(video.webkitAudioDecodedByteCount) || 
+                Boolean(usingTracks)) {
+              console.log("Audio detected through browser properties");
+              setHasAudio(true);
+            } else {
+              // If using webkit and we've decoded some bytes
+              if (usingWebkit) {
+                const hasAudio = video.webkitAudioDecodedByteCount! > 0;
+                console.log(`Webkit audio detection: ${hasAudio ? 'YES' : 'NO'} (${video.webkitAudioDecodedByteCount} bytes)`);
+                setHasAudio(hasAudio);
+              } else {
+                // As a last resort, check if we're getting video duration updates
+                // which often indicates there's some kind of track (usually audio)
+                const initialTime = video.currentTime;
+                console.log("Using last resort method - checking time updates");
+                
+                // Give it a bit more time and check again
+                setTimeout(() => {
+                  if (video.currentTime > initialTime + 0.5) {
+                    console.log("Audio likely present - video is playing");
+                    setHasAudio(true);
+                  } else {
+                    console.log("No audio detected by any method");
+                    setHasAudio(false);
+                  }
+                }, 1000);
+              }
+            }
+            
+            // Pause the video and reset
+            video.pause();
+            video.currentTime = 0;
+            video.volume = originalVolume;
+          }, 2000); // Give it more time to decode audio
+        })
+        .catch(e => {
+          console.error("Error trying to play video to check audio:", e);
+          video.volume = originalVolume;
+          // We still assume there might be audio but playback failed for other reasons
+          setHasAudio(true); 
+        });
+      }
+    }
+  };
   
   const getProgressPercentage = () => {
     if (!status) return 0;
@@ -310,6 +449,27 @@ const VideoStatusPage: React.FC = () => {
     }
   };
 
+  // Modify handleDownload function in VideoStatusPage.tsx
+  const handleDownload = async () => {
+    if (!status?.video_url) return;
+
+    try {
+      // Show loading indicator
+      setIsDownloading(true);
+      
+      // Open in new tab instead of trying to process the download
+      window.open(status.video_url, '_blank');
+      
+      // Hide loading indicator after a brief delay
+      setTimeout(() => {
+        setIsDownloading(false);
+      }, 1000);
+    } catch (err) {
+      console.error('Error downloading video:', err);
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <>
       <GlobalStyle />
@@ -342,13 +502,57 @@ const VideoStatusPage: React.FC = () => {
                   )}
                   
                   {status.status === 'completed' && status.video_url && (
-                    <Button 
-                      href={status.video_url} 
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Download Video
-                    </Button>
+                    <>
+                      <VideoPreviewContainer>
+                        <VideoPlayer 
+                          ref={videoRef}
+                          controls
+                          onLoadedData={handleVideoLoaded}
+                          onCanPlay={handleVideoLoaded}
+                          preload="metadata"
+                          poster="/video-thumbnail.png"
+                          onError={(e) => {
+                            console.error("Video error:", e);
+                            setHasAudio(false);
+                          }}
+                        >
+                          <source src={`${status.video_url}?t=${new Date().getTime()}`} type="video/mp4" />
+                          Your browser does not support the video tag.
+                        </VideoPlayer>
+                      </VideoPreviewContainer>
+                      
+                      {isPreviewLoaded && hasAudio !== null && (
+                        <AudioIndicator hasAudio={hasAudio}>
+                          {hasAudio 
+                            ? "Audio detected - Video includes sound!" 
+                            : "No audio detected - Video might be silent."}
+                        </AudioIndicator>
+                      )}
+                      
+                      <ButtonGroup>
+                        <Button 
+                          onClick={handleDownload}
+                          disabled={isDownloading}
+                        >
+                          {isDownloading ? (
+                            <>
+                              <SmallLoadingSpinner />
+                              Downloading...
+                            </>
+                          ) : (
+                            'Download Video'
+                          )}
+                        </Button>
+                        
+                        <VideoButton 
+                          href={status.video_url} 
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Open in New Tab
+                        </VideoButton>
+                      </ButtonGroup>
+                    </>
                   )}
                 </StatusInfo>
               </>

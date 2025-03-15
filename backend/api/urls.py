@@ -8,6 +8,8 @@ from .views import (
     user_logout,
     get_user_info
 )
+from django.conf import settings
+from django.conf.urls.static import static
 
 router = DefaultRouter()
 router.register(r'videos', VideoJobViewSet)
@@ -20,4 +22,7 @@ urlpatterns = [
     path('auth/signup/', user_signup, name='signup'),
     path('auth/logout/', user_logout, name='logout'),
     path('auth/user/', get_user_info, name='user_info'),
-] 
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) 

@@ -7,4 +7,9 @@ celery==5.4.0
 redis==5.2.1
 ffmpeg-python==0.2.0
 spotipy==2.25.1
-lyricsgenius==3.2.0 
+lyricsgenius==3.2.0
+librosa==0.11.0
+yt-dlp==2023.12.30
+scipy>=1.10.0 youtube-dl>=2021.12.17
+deezer-python>=0.8.0
+pydub>=0.25.1

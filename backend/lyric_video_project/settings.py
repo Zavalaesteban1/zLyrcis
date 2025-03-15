@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 import os
 from pathlib import Path
 import dotenv
+import mimetypes
 
 # Load environment variables from .env file
 dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
@@ -66,6 +67,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'api.middleware.ContentTypeMiddleware',  # Custom middleware for Content-Type headers
 ]
 
 ROOT_URLCONF = 'lyric_video_project.urls'
@@ -148,10 +150,35 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = True  # For development only, restrict in production
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # Media files
-MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/'
+
+# Add correct MIME types
+if not mimetypes.inited:
+    mimetypes.init()
+mimetypes.add_type("video/mp4", ".mp4")
+mimetypes.add_type("audio/mpeg", ".mp3")
 
 # Celery settings
 CELERY_BROKER_URL = 'redis://localhost:6379/0'

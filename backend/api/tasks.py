@@ -15,6 +15,7 @@ import time
 from bs4 import BeautifulSoup
 import traceback
 import math
+import shutil
 
 @shared_task
 def generate_lyric_video(job_id):
@@ -69,21 +70,111 @@ def generate_lyric_video(job_id):
 
         # Create temporary directory for processing
         with tempfile.TemporaryDirectory() as temp_dir:
-            # 1. Create a silent audio file with the correct duration
+            # 1. Download audio
             audio_path = os.path.join(temp_dir, 'audio.mp3')
             audio_duration = download_audio(track_id, audio_path)
+            
+            print("AUDIO DEBUG: Starting lyric video creation with audio")
+            print(f"AUDIO DEBUG: Audio path exists: {os.path.exists(audio_path)}")
+            print(f"AUDIO DEBUG: Audio file size: {os.path.getsize(audio_path)} bytes")
+            
+            # Get vocal start time from track info or use default
+            vocal_start_time = song_info.get('vocal_start_time', 5.0)
+            print(f"Using vocal start time: {vocal_start_time} seconds")
+            
+            # Clean and process lyrics
+            cleaned_lyrics = process_lyrics_structure(lyrics)
             
             # 2. Define the output video path
             video_path = os.path.join(temp_dir, 'output.mp4')
             
-            # 3. Create the lyric video with known paths and duration
-            create_lyric_video(
-                audio_path, 
-                lyrics, 
-                video_path, 
-                audio_duration, 
-                vocal_start_time=song_info.get('vocal_start_time', 5.0)
-            )
+            # Improve lyric synchronization if possible
+            try:
+                # Try to synchronize lyrics with audio
+                lyrics_lines = []
+                for section in cleaned_lyrics["sections"]:
+                    lyrics_lines.extend(section["lines"])
+                
+                synchronized_lyrics = synchronize_lyrics_with_audio(lyrics_lines, audio_path, vocal_start_time)
+                if synchronized_lyrics:
+                    print("Using synchronized lyrics timing")
+                    # Create subtitles with synchronized timing
+                    subtitle_path = os.path.join(temp_dir, 'subtitles.srt')
+                    create_synchronized_subtitles(synchronized_lyrics, subtitle_path)
+                else:
+                    # Fall back to default timing if synchronization fails
+                    print("Using default lyric timing")
+                    subtitle_path = create_subtitles_with_timing(lyrics_lines, vocal_start_time, audio_duration, temp_dir)
+            except Exception as e:
+                print(f"Error synchronizing lyrics: {e}")
+                # Fall back to original method
+                create_lyric_video(audio_path, lyrics, video_path, audio_duration, vocal_start_time)
+                
+                # Save the video file
+                with open(video_path, 'rb') as video_file:
+                    job.video_file.save(f"{job.id}.mp4", video_file)
+                    
+                # Skip the rest of the processing
+                job.status = 'completed'
+                job.save()
+                return
+            
+            # 3. Create video with audio
+            print(f"Creating video with audio: {audio_duration} seconds")
+            
+            # Create a black video with the audio
+            black_video_path = os.path.join(temp_dir, 'black.mp4')
+            subprocess.run([
+                'ffmpeg',
+                '-f', 'lavfi',
+                '-i', f'color=c=black:s=1280x720:d={audio_duration}',
+                '-i', audio_path,
+                '-c:v', 'libx264',
+                '-c:a', 'aac',
+                '-shortest',
+                '-y',
+                black_video_path
+            ], check=True, capture_output=True)
+            
+            print(f"Created video with audio: {black_video_path}")
+            
+            # Verify audio was included in the black video
+            print("AUDIO DEBUG: Verifying audio was included in the black video")
+            audio_streams_result = subprocess.run([
+                'ffprobe',
+                '-v', 'quiet',
+                '-print_format', 'json',
+                '-show_streams',
+                '-select_streams', 'a',
+                black_video_path
+            ], capture_output=True, text=True, check=True)
+            
+            print(f"AUDIO DEBUG: FFprobe audio streams result: {audio_streams_result.stdout}")
+            
+            # Add subtitles to the video
+            subprocess.run([
+                'ffmpeg',
+                '-i', black_video_path,
+                '-vf', f'subtitles={subtitle_path}:force_style=\'FontName=Arial,FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H00000000,Bold=1,Alignment=2,MarginV=20\'',
+                '-c:a', 'copy',
+                '-y',
+                video_path
+            ], check=True, capture_output=True)
+            
+            print(f"Added subtitles to video: {video_path}")
+            
+            # Verify audio in final output
+            print("AUDIO DEBUG: Verifying audio in final output")
+            final_audio_result = subprocess.run([
+                'ffprobe',
+                '-v', 'quiet',
+                '-print_format', 'json',
+                '-show_streams',
+                '-select_streams', 'a',
+                video_path
+            ], capture_output=True, text=True, check=True)
+            
+            print(f"AUDIO DEBUG: Final FFprobe audio result: {final_audio_result.stdout}")
 
             # Save the video file
             with open(video_path, 'rb') as video_file:
@@ -453,128 +544,387 @@ def download_audio(track_id, output_path):
     """
     Download the actual audio for a Spotify track using multiple sources with fallbacks
     """
-    # Get track info from Spotify
-    track_info = get_spotify_track_info(track_id)
-    duration_seconds = track_info['duration_ms'] / 1000
-    
-    print(f"Song duration from Spotify: {duration_seconds} seconds")
-    print(f"Track duration in MS: {track_info['duration_ms']}")
-    print(f"Track duration in seconds: {duration_seconds}")
-    
-    # Create a search query using title and artist
-    search_query = f"{track_info['title']} {track_info['artist']}"
-    print(f"Searching for audio: {search_query}")
-    
-    # Try multiple audio sources with fallbacks
-    audio_downloaded = False
-    
-    # 1. Try YouTube first (most reliable source)
     try:
-        print("Attempting to download audio from YouTube...")
-        youtube_path = get_youtube_audio(track_info['title'], track_info['artist'], output_path)
-        if youtube_path and os.path.exists(youtube_path) and os.path.getsize(youtube_path) > 100000:
-            print(f"Successfully downloaded audio from YouTube")
-            audio_downloaded = True
-            
-            # Verify the duration is similar to what we expect
-            result = subprocess.run([
-                'ffprobe',
-                '-v', 'error',
-                '-show_entries', 'format=duration',
-                '-of', 'default=noprint_wrappers=1:nokey=1',
-                output_path
-            ], capture_output=True, text=True, check=True)
-            
-            if result.stdout.strip():
-                actual_duration = float(result.stdout.strip())
-                print(f"Downloaded audio duration: {actual_duration} seconds (Expected: {duration_seconds})")
-                return actual_duration
-    except Exception as e:
-        print(f"Error downloading from YouTube: {e}")
-    
-    # 2. Try Deezer as fallback
-    if not audio_downloaded:
+        # Try to get track info from Spotify
+        track_info = get_spotify_track_info(track_id)
+        duration_seconds = track_info['duration_ms'] / 1000
+        
+        print(f"Song duration from Spotify: {duration_seconds} seconds")
+        print(f"Track duration in MS: {track_info['duration_ms']}")
+        print(f"Track duration in seconds: {duration_seconds}")
+        
+        # Create a search query using title and artist
+        search_query = f"{track_info['title']} {track_info['artist']}"
+        print(f"Searching for audio: {search_query}")
+        
+        # Try to find a local audio file first
+        local_audio = get_local_audio(track_info['title'], track_info['artist'], output_path)
+        if local_audio:
+            print(f"Using local audio file: {local_audio}")
+            return get_audio_duration(local_audio)
+        
+        # If no local file found, try multiple audio sources with fallbacks
+        audio_downloaded = False
+        
+        # 1. Try YouTube first (most reliable source)
         try:
-            print("Attempting to download audio from Deezer...")
-            deezer_path = get_deezer_audio(track_info['title'], track_info['artist'], output_path)
-            if deezer_path and os.path.exists(deezer_path) and os.path.getsize(deezer_path) > 100000:
-                print(f"Successfully downloaded audio from Deezer")
+            print("Attempting to download audio from YouTube...")
+            youtube_path = get_youtube_audio(track_info['title'], track_info['artist'], output_path)
+            if youtube_path and os.path.exists(youtube_path) and os.path.getsize(youtube_path) > 100000:
+                print(f"Successfully downloaded audio from YouTube")
                 audio_downloaded = True
                 
-                # Verify duration
-                result = subprocess.run([
-                    'ffprobe',
-                    '-v', 'error',
-                    '-show_entries', 'format=duration',
-                    '-of', 'default=noprint_wrappers=1:nokey=1',
-                    output_path
-                ], capture_output=True, text=True, check=True)
-                
-                if result.stdout.strip():
-                    actual_duration = float(result.stdout.strip())
-                    print(f"Downloaded audio duration: {actual_duration} seconds (Expected: {duration_seconds})")
-                    return actual_duration
+                # Verify the duration is similar to what we expect
+                return get_audio_duration(output_path)
         except Exception as e:
-            print(f"Error downloading from Deezer: {e}")
-    
-    # 3. Last resort: Generate synthetic music
-    if not audio_downloaded:
-        print(f"All download methods failed. Creating synthetic audio with duration: {duration_seconds} seconds")
+            print(f"Error downloading from YouTube: {e}")
+        
+        # 2. Try Deezer as fallback
+        if not audio_downloaded:
+            try:
+                print("Attempting to download audio from Deezer...")
+                deezer_path = get_deezer_audio(track_info['title'], track_info['artist'], output_path)
+                if deezer_path and os.path.exists(deezer_path) and os.path.getsize(deezer_path) > 100000:
+                    print(f"Successfully downloaded audio from Deezer")
+                    audio_downloaded = True
+                    
+                    # Verify duration
+                    return get_audio_duration(output_path)
+            except Exception as e:
+                print(f"Error downloading from Deezer: {e}")
+        
+        # 3. Last resort: Generate synthetic music
+        if not audio_downloaded:
+            print(f"All download methods failed. Creating synthetic audio with duration: {duration_seconds} seconds")
+            try:
+                # Create a melodic tone as a last resort
+                generate_synthetic_music(duration_seconds, output_path)
+                
+                print(f"Created synthetic audio file at {output_path}")
+                
+                # Verify the file was created
+                if os.path.exists(output_path):
+                    return get_audio_duration(output_path)
+            except Exception as e:
+                print(f"Error creating synthetic audio: {e}")
+                
+                # Absolute last resort - silent audio
+                print(f"Falling back to silent audio with duration: {duration_seconds} seconds")
+                try:
+                    subprocess.run([
+                        'ffmpeg',
+                        '-f', 'lavfi',
+                        '-i', 'sine=frequency=0:sample_rate=44100:duration=' + str(duration_seconds),
+                        '-c:a', 'libmp3lame',
+                        '-y',
+                        output_path
+                    ], check=True, capture_output=True)
+                    
+                    print(f"Created silent audio file at {output_path}")
+                    
+                    if os.path.exists(output_path):
+                        return get_audio_duration(output_path)
+                except Exception as e2:
+                    print(f"Error creating silent audio: {e2}")
+        
+        # If all else fails, return the expected duration
+        return duration_seconds
+        
+    except Exception as e:
+        # Handle Spotify API failures by using job data and local files
+        print(f"Error getting track info from Spotify: {e}")
+        print("Attempting to fallback to local audio files...")
+        
         try:
-            # Create a melodic tone as a last resort
-            generate_synthetic_music(duration_seconds, output_path)
+            # Get job from database to extract song info
+            from .models import VideoJob
             
-            print(f"Created synthetic audio file at {output_path}")
+            # Extract job ID from track_id - this assumes track_id format is consistent
+            # We might need to adjust this based on how track_id is passed
+            try:
+                job_id = int(track_id.split('_')[-1])
+                job = VideoJob.objects.get(id=job_id)
+                title = job.song_title
+                artist = job.artist
+            except (ValueError, IndexError, VideoJob.DoesNotExist):
+                # If we can't get job info, try to extract artist/title from track_id
+                parts = track_id.split('-')
+                if len(parts) >= 2:
+                    artist = parts[0].replace('_', ' ').strip()
+                    title = parts[1].replace('_', ' ').strip()
+                else:
+                    # Default to some values that might help find a matching audio file
+                    title = "Unknown Song"
+                    artist = "Unknown Artist"
             
-            # Verify the file was created
-            if os.path.exists(output_path):
-                result = subprocess.run([
-                    'ffprobe',
-                    '-v', 'error',
-                    '-show_entries', 'format=duration',
-                    '-of', 'default=noprint_wrappers=1:nokey=1',
-                    output_path
-                ], capture_output=True, text=True, check=True)
+            print(f"Using fallback title: '{title}' and artist: '{artist}'")
+            
+            # Try to find local audio with the extracted info
+            local_audio = get_local_audio(title, artist, output_path)
+            if local_audio:
+                print(f"Using local audio file as Spotify fallback: {local_audio}")
+                return get_audio_duration(local_audio)
                 
-                if result.stdout.strip():
-                    actual_duration = float(result.stdout.strip())
-                    print(f"Synthetic audio file duration: {actual_duration} seconds")
-                    return actual_duration
-        except Exception as e:
-            print(f"Error creating synthetic audio: {e}")
+            # If no local file found, check if any audio file exists in audio_files directory
+            project_audio_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "audio_files")
             
-            # Absolute last resort - silent audio
-            print(f"Falling back to silent audio with duration: {duration_seconds} seconds")
+            if os.path.exists(project_audio_dir):
+                for root, _, files in os.walk(project_audio_dir):
+                    for file in files:
+                        if any(file.lower().endswith(ext) for ext in ['.mp3', '.m4a', '.wav', '.flac', '.ogg']):
+                            print(f"No good match found, but using available audio file: {file}")
+                            import shutil
+                            shutil.copy2(os.path.join(root, file), output_path)
+                            return get_audio_duration(output_path)
+            
+            # If all else fails, create a silent audio file (3 minutes)
+            default_duration = 180.0
+            print(f"No audio sources available. Creating silent audio with duration: {default_duration} seconds")
             try:
                 subprocess.run([
                     'ffmpeg',
                     '-f', 'lavfi',
-                    '-i', 'sine=frequency=0:sample_rate=44100:duration=' + str(duration_seconds),
+                    '-i', f'sine=frequency=0:sample_rate=44100:duration={default_duration}',
                     '-c:a', 'libmp3lame',
                     '-y',
                     output_path
                 ], check=True, capture_output=True)
                 
-                print(f"Created silent audio file at {output_path}")
-                
                 if os.path.exists(output_path):
-                    result = subprocess.run([
-                        'ffprobe',
-                        '-v', 'error',
-                        '-show_entries', 'format=duration',
-                        '-of', 'default=noprint_wrappers=1:nokey=1',
-                        output_path
-                    ], capture_output=True, text=True, check=True)
-                    
-                    if result.stdout.strip():
-                        actual_duration = float(result.stdout.strip())
-                        print(f"Silent audio file duration: {actual_duration} seconds")
-                        return actual_duration
+                    return get_audio_duration(output_path)
             except Exception as e2:
                 print(f"Error creating silent audio: {e2}")
+                
+            return default_duration
+            
+        except Exception as fallback_error:
+            print(f"Error in fallback logic: {fallback_error}")
+            # Last resort - create a silent audio file
+            try:
+                default_duration = 180.0
+                subprocess.run([
+                    'ffmpeg',
+                    '-f', 'lavfi',
+                    '-i', f'sine=frequency=0:sample_rate=44100:duration={default_duration}',
+                    '-c:a', 'libmp3lame',
+                    '-y',
+                    output_path
+                ], check=True, capture_output=True)
+                return default_duration
+            except:
+                return 180.0  # Default to 3 minutes
+
+def get_audio_duration(audio_path):
+    """Get the duration of an audio file"""
+    try:
+        result = subprocess.run([
+            'ffprobe',
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            audio_path
+        ], capture_output=True, text=True, check=True)
+        
+        if result.stdout.strip():
+            actual_duration = float(result.stdout.strip())
+            print(f"Audio duration: {actual_duration} seconds")
+            return actual_duration
+    except Exception as e:
+        print(f"Error getting audio duration: {e}")
     
-    # If all else fails, return the expected duration
-    return duration_seconds
+    # If we can't determine the duration, estimate based on file size
+    try:
+        file_size = os.path.getsize(audio_path)
+        # Rough estimate: ~150KB per second for MP3 at 192kbps
+        estimated_duration = file_size / 150000
+        print(f"Estimated duration from file size: {estimated_duration} seconds")
+        return estimated_duration
+    except Exception as e:
+        print(f"Error estimating duration from file size: {e}")
+        
+    # Default fallback
+    return 180.0  # Default to 3 minutes
+
+def get_local_audio(song_title, artist, output_path):
+    """
+    Look for a local audio file matching the song title and artist
+    
+    This function checks common locations for music files and copies
+    the matching file to the output path if found.
+    """
+    # Normalize the song title and artist for matching
+    import re
+    from difflib import SequenceMatcher
+    
+    def normalize_string(s):
+        # Remove special characters and convert to lowercase
+        return re.sub(r'[^\w\s]', '', s.lower())
+    
+    def string_similarity(a, b):
+        # Calculate string similarity using SequenceMatcher
+        return SequenceMatcher(None, normalize_string(a), normalize_string(b)).ratio()
+    
+    normalized_title = normalize_string(song_title)
+    normalized_artist = normalize_string(artist)
+    
+    print(f"Looking for local audio file with normalized title: '{normalized_title}' by '{normalized_artist}'")
+    
+    # Define common music directories to search
+    music_dirs = [
+        os.path.expanduser("~/Music"),
+        os.path.expanduser("~/Downloads"),
+        # Add more common music directories here
+        # For example: "/Volumes/External/Music"
+    ]
+    
+    # Add the current directory and its parent as potential locations
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    music_dirs.append(current_dir)
+    music_dirs.append(os.path.dirname(current_dir))
+    
+    # Add a specific directory for test audio files in the project
+    project_audio_dir = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "audio_files")
+    if os.path.exists(project_audio_dir):
+        music_dirs.append(project_audio_dir)
+    
+    print(f"Searching for local audio file for: {song_title} by {artist}")
+    
+    # Extensions to look for
+    audio_extensions = ['.mp3', '.m4a', '.wav', '.flac', '.ogg']
+    
+    best_match = None
+    best_match_score = 0.4  # Minimum threshold for a good match
+    
+    # Special handling for audio_files directory - still require some relevance
+    audio_files_dir_threshold = 0.35  # Require some minimal relevance even for dedicated directory
+    
+    # For tracking all potential matches
+    all_potential_matches = []
+    
+    # Search through directories
+    for directory in music_dirs:
+        if not os.path.exists(directory):
+            continue
+            
+        print(f"Searching in directory: {directory}")
+        
+        # Check if this is the dedicated audio_files directory
+        is_audio_files_dir = "audio_files" in directory
+        
+        # List all audio files in this directory for debugging
+        audio_files_in_dir = []
+        for root, _, files in os.walk(directory):
+            for file in files:
+                if any(file.lower().endswith(ext) for ext in audio_extensions):
+                    audio_files_in_dir.append(os.path.join(root, file))
+        
+        if audio_files_in_dir:
+            print(f"Found {len(audio_files_in_dir)} audio files in {directory}:")
+            for audio_file in audio_files_in_dir:
+                print(f"  - {os.path.basename(audio_file)}")
+        else:
+            print(f"No audio files found in {directory}")
+        
+        # Check each file for a match
+        for root, _, files in os.walk(directory):
+            for file in files:
+                # Check if the file has an audio extension
+                if any(file.lower().endswith(ext) for ext in audio_extensions):
+                    # Extract the filename without extension
+                    filename = os.path.splitext(file)[0]
+                    
+                    # Calculate similarity scores
+                    title_score = string_similarity(filename, song_title)
+                    artist_score = string_similarity(filename, artist)
+                    combined_score = string_similarity(filename, f"{song_title} {artist}")
+                    artist_title_score = string_similarity(filename, f"{artist} {song_title}")
+                    
+                    # Check for key terms in the filename
+                    normalized_filename = normalize_string(filename)
+                    contains_title_keywords = False
+                    contains_artist_keywords = False
+                    
+                    # Check if any significant words from the title are in the filename
+                    title_words = [word for word in normalized_title.split() if len(word) > 2]
+                    for word in title_words:
+                        if word in normalized_filename:
+                            contains_title_keywords = True
+                            break
+                    
+                    # Check if artist name is in the filename
+                    if normalized_artist in normalized_filename:
+                        contains_artist_keywords = True
+                    
+                    # Calculate overall relevance
+                    # Require at least some keyword match or decent similarity
+                    is_relevant = (contains_title_keywords or contains_artist_keywords or 
+                                 title_score > 0.3 or artist_score > 0.3 or
+                                 combined_score > 0.3 or artist_title_score > 0.3)
+                    
+                    # Use the best score
+                    score = max(title_score, combined_score, artist_title_score)
+                    
+                    # Add bonuses for specific matches
+                    if contains_title_keywords:
+                        score += 0.15
+                    if contains_artist_keywords:
+                        score += 0.15
+                    
+                    # Choose threshold based on directory
+                    current_threshold = audio_files_dir_threshold if is_audio_files_dir else best_match_score
+                    
+                    # Track this match
+                    match_info = {
+                        'file': os.path.join(root, file),
+                        'filename': filename,
+                        'title_score': title_score,
+                        'artist_score': artist_score,
+                        'combined_score': combined_score,
+                        'artist_title_score': artist_title_score,
+                        'contains_title_keywords': contains_title_keywords,
+                        'contains_artist_keywords': contains_artist_keywords,
+                        'is_relevant': is_relevant,
+                        'final_score': score,
+                        'is_audio_files_dir': is_audio_files_dir
+                    }
+                    all_potential_matches.append(match_info)
+                    
+                    # If this is a good match and relevant, save it
+                    if score > current_threshold and is_relevant:
+                        best_match = os.path.join(root, file)
+                        best_match_score = score
+                        print(f"Found potential match: {file} (score: {score:.2f}, relevant: {is_relevant})")
+                        
+                        # If we have a very good match, use it immediately
+                        if score > 0.6 and is_relevant:
+                            print(f"Found high-quality match: {file}")
+                            import shutil
+                            shutil.copy2(best_match, output_path)
+                            return output_path
+    
+    # Print all potential matches sorted by score for debugging
+    if all_potential_matches:
+        print("\nAll potential matches (sorted by score):")
+        sorted_matches = sorted(all_potential_matches, key=lambda x: x['final_score'], reverse=True)
+        for i, match in enumerate(sorted_matches[:10]):  # Show top 10 matches
+            audio_dir_note = " (in audio_files dir)" if match['is_audio_files_dir'] else ""
+            relevance_note = " ✓ RELEVANT" if match['is_relevant'] else " ✗ NOT RELEVANT"
+            print(f"{i+1}. {os.path.basename(match['file'])} - Score: {match['final_score']:.2f}{audio_dir_note}{relevance_note} "
+                  f"(title: {match['title_score']:.2f}, artist: {match['artist_score']:.2f}, "
+                  f"contains_title: {match['contains_title_keywords']}, contains_artist: {match['contains_artist_keywords']})")
+    else:
+        print("No potential matches found in any directory")
+    
+    # If we found a good match that's relevant, use it
+    if best_match:
+        print(f"Using local audio file: {best_match} (match score: {best_match_score:.2f})")
+        import shutil
+        shutil.copy2(best_match, output_path)
+        return output_path
+    
+    # If we're here, we didn't find a good match
+    print("No suitable local audio file found - will try online sources")
+    return None
 
 def get_youtube_audio(song_title, artist, output_path):
     """Download audio from YouTube"""
@@ -1454,3 +1804,419 @@ def count_syllables(word):
         prev_is_vowel = is_vowel
 
     return max(1, count)  # At least 1 syllable per word
+
+    """Generate a lyric video for a track"""
+    try:
+        # Create a temporary directory for intermediate files
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Get track info from Spotify
+            track_info = get_spotify_track_info(track_id)
+            
+            # Download audio
+            audio_path = os.path.join(temp_dir, 'audio.mp3')
+            audio_duration = download_audio(track_id, audio_path)
+            
+            print("AUDIO DEBUG: Starting lyric video creation with audio")
+            print(f"AUDIO DEBUG: Audio path exists: {os.path.exists(audio_path)}")
+            print(f"AUDIO DEBUG: Audio file size: {os.path.getsize(audio_path)} bytes")
+            
+            # Process lyrics
+            print(f"Raw lyrics (first 200 chars):\n{lyrics[:200]}")
+            
+            # Get vocal start time from track info or use default
+            vocal_start_time = track_info.get('vocal_start_time', 5.0)
+            print(f"Using vocal start time: {vocal_start_time} seconds")
+            
+            # Clean and process lyrics
+            cleaned_lyrics = clean_lyrics(lyrics)
+            
+            # Improve lyric synchronization if possible
+            try:
+                synchronized_lyrics = synchronize_lyrics_with_audio(cleaned_lyrics, audio_path, vocal_start_time)
+                if synchronized_lyrics:
+                    print("Using synchronized lyrics timing")
+                    # Create subtitles with synchronized timing
+                    subtitle_path = os.path.join(temp_dir, 'subtitles.srt')
+                    create_synchronized_subtitles(synchronized_lyrics, subtitle_path)
+                else:
+                    # Fall back to default timing if synchronization fails
+                    print("Using default lyric timing")
+                    subtitle_path = create_subtitles_with_timing(cleaned_lyrics, vocal_start_time, audio_duration, temp_dir)
+            except Exception as e:
+                print(f"Error synchronizing lyrics: {e}")
+                # Fall back to default timing
+                subtitle_path = create_subtitles_with_timing(cleaned_lyrics, vocal_start_time, audio_duration, temp_dir)
+            
+            # Create video with audio
+            print(f"Creating video with audio: {audio_duration} seconds")
+            
+            # Verify audio file before video creation
+            print("AUDIO DEBUG: Verifying audio file before video creation")
+            
+            # Create a black video with the audio
+            black_video_path = os.path.join(temp_dir, 'black.mp4')
+            subprocess.run([
+                'ffmpeg',
+                '-f', 'lavfi',
+                '-i', f'color=c=black:s=1280x720:d={audio_duration}',
+                '-i', audio_path,
+                '-c:v', 'libx264',
+                '-c:a', 'aac',
+                '-shortest',
+                '-y',
+                black_video_path
+            ], check=True, capture_output=True)
+            
+            print(f"Created video with audio: {black_video_path}")
+            
+            # Verify audio was included in the black video
+            print("AUDIO DEBUG: Verifying audio was included in the black video")
+            audio_streams_result = subprocess.run([
+                'ffprobe',
+                '-v', 'quiet',
+                '-print_format', 'json',
+                '-show_streams',
+                '-select_streams', 'a',
+                black_video_path
+            ], capture_output=True, text=True, check=True)
+            
+            print(f"AUDIO DEBUG: FFprobe audio streams result: {audio_streams_result.stdout}")
+            
+            # Get the duration of the video with audio
+            duration_result = subprocess.run([
+                'ffprobe',
+                '-v', 'error',
+                '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                black_video_path
+            ], capture_output=True, text=True, check=True)
+            
+            if duration_result.stdout.strip():
+                video_duration = float(duration_result.stdout.strip())
+                print(f"VERIFICATION: Video with audio duration is {video_duration} seconds")
+            
+            # Add subtitles to the video
+            output_video_path = os.path.join(temp_dir, 'output.mp4')
+            subprocess.run([
+                'ffmpeg',
+                '-i', black_video_path,
+                '-vf', f'subtitles={subtitle_path}:force_style=\'FontName=Arial,FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H00000000,Bold=1,Alignment=2,MarginV=20\'',
+                '-c:a', 'copy',
+                '-y',
+                output_video_path
+            ], check=True, capture_output=True)
+            
+            print(f"Added subtitles to video: {output_video_path}")
+            
+            # Verify audio in final output
+            print("AUDIO DEBUG: Verifying audio in final output")
+            print(f"AUDIO DEBUG: Final audio path: {output_video_path}, exists: {os.path.exists(output_video_path)}, size: {os.path.getsize(output_video_path)} bytes")
+            
+            final_audio_result = subprocess.run([
+                'ffprobe',
+                '-v', 'quiet',
+                '-print_format', 'json',
+                '-show_streams',
+                '-select_streams', 'a',
+                output_video_path
+            ], capture_output=True, text=True, check=True)
+            
+            print(f"AUDIO DEBUG: Final FFprobe audio result: {final_audio_result.stdout}")
+            
+            # Copy the final video to the output path
+            shutil.copy2(output_video_path, output_path)
+            
+            print(f"Final video created successfully: {output_path} ({os.path.getsize(output_path)} bytes)")
+            
+            # Get the duration of the final video
+            final_duration_result = subprocess.run([
+                'ffprobe',
+                '-v', 'error',
+                '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                output_path
+            ], capture_output=True, text=True, check=True)
+            
+            if final_duration_result.stdout.strip():
+                final_duration = float(final_duration_result.stdout.strip())
+                print(f"Final video duration: {final_duration} seconds")
+            
+            # Final verification of audio in the output file
+            final_check = subprocess.run([
+                'ffprobe',
+                '-v', 'quiet',
+                '-print_format', 'json',
+                '-show_streams',
+                '-select_streams', 'a',
+                output_path
+            ], capture_output=True, text=True, check=True)
+            
+            print(f"FINAL VIDEO AUDIO CHECK: {final_check.stdout}")
+            
+            return output_path
+    except Exception as e:
+        print(f"Error generating lyric video: {e}")
+        traceback.print_exc()
+        raise
+
+def synchronize_lyrics_with_audio(lyrics_lines, audio_path, default_start_time=5.0):
+    """
+    Attempt to synchronize lyrics with audio by analyzing the audio file
+    
+    Args:
+        lyrics_lines: List of lyric lines
+        audio_path: Path to the audio file
+        default_start_time: Default time to start lyrics if analysis fails
+        
+    Returns:
+        List of dictionaries with 'text', 'start_time', and 'duration' keys
+        or None if synchronization fails
+    """
+    try:
+        # Check if we have the necessary libraries
+        import librosa
+        import numpy as np
+    except ImportError:
+        print("librosa not available for audio analysis, using default timing")
+        return None
+    
+    try:
+        print(f"Analyzing audio for lyric synchronization: {audio_path}")
+        
+        # Load the audio file (limit duration to avoid memory issues)
+        max_duration = min(300, os.path.getsize(audio_path) / 150000)  # Estimate max duration
+        y, sr = librosa.load(audio_path, sr=None, duration=max_duration)
+        
+        print(f"Audio loaded: {len(y)/sr:.2f} seconds at {sr}Hz")
+        
+        # Detect beats
+        tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+        beat_times = librosa.frames_to_time(beat_frames, sr=sr)
+        
+        print(f"Detected tempo: {tempo} BPM, {len(beat_times)} beats")
+        
+        # Detect onsets (might indicate vocal entry points)
+        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+        onset_frames = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr)
+        onset_times = librosa.frames_to_time(onset_frames, sr=sr)
+        
+        print(f"Detected {len(onset_times)} onsets")
+        
+        # If we don't have enough beats or onsets, fall back to default timing
+        if len(beat_times) < len(lyrics_lines) or len(onset_times) < len(lyrics_lines):
+            print("Not enough beats/onsets detected for synchronization")
+            return None
+        
+        # Try to detect vocal segments
+        # This is a simplified approach - a real solution would be more complex
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
+        mfcc_delta = librosa.feature.delta(mfcc)
+        
+        # Compute spectral contrast
+        contrast = librosa.feature.spectral_contrast(y=y, sr=sr)
+        
+        # Combine features to estimate vocal activity
+        vocal_activity = np.mean(np.abs(mfcc_delta), axis=0) + np.mean(contrast, axis=0)
+        
+        # Smooth the activity curve
+        from scipy.ndimage import gaussian_filter1d
+        vocal_activity_smooth = gaussian_filter1d(vocal_activity, sigma=10)
+        
+        # Normalize
+        vocal_activity_smooth = (vocal_activity_smooth - np.min(vocal_activity_smooth)) / (np.max(vocal_activity_smooth) - np.min(vocal_activity_smooth))
+        
+        # Convert to frames
+        frames = np.arange(len(vocal_activity_smooth))
+        times = librosa.frames_to_time(frames, sr=sr)
+        
+        # Find potential vocal entry points (peaks in the activity)
+        from scipy.signal import find_peaks
+        peaks, _ = find_peaks(vocal_activity_smooth, height=0.5, distance=sr//2)
+        peak_times = librosa.frames_to_time(peaks, sr=sr)
+        
+        print(f"Detected {len(peak_times)} potential vocal entry points")
+        
+        # If we found some peaks, use them as potential lyric timings
+        if len(peak_times) >= len(lyrics_lines):
+            # Skip some early peaks that might be intro
+            start_idx = 0
+            
+            # If the first peak is very early, it might be noise
+            if peak_times[0] < 1.0 and len(peak_times) > len(lyrics_lines):
+                start_idx = 1
+            
+            # If we have a default start time from Spotify, try to find the closest peak
+            if default_start_time > 0:
+                closest_idx = np.argmin(np.abs(peak_times - default_start_time))
+                if closest_idx > 0:
+                    start_idx = max(0, closest_idx - 1)  # Start slightly before
+            
+            # Use peaks for timing, ensuring we have enough for all lyrics
+            if start_idx + len(lyrics_lines) <= len(peak_times):
+                synchronized_lyrics = []
+                
+                for i, line in enumerate(lyrics_lines):
+                    if not line.strip():  # Skip empty lines
+                        continue
+                        
+                    start_time = peak_times[start_idx + i]
+                    
+                    # Estimate duration based on line length and next peak
+                    if i < len(lyrics_lines) - 1 and start_idx + i + 1 < len(peak_times):
+                        duration = peak_times[start_idx + i + 1] - start_time
+                    else:
+                        # For the last line, use a fixed duration
+                        duration = 4.0
+                    
+                    synchronized_lyrics.append({
+                        'text': line,
+                        'start_time': start_time,
+                        'duration': duration
+                    })
+                
+                print(f"Created synchronized timing for {len(synchronized_lyrics)} lines")
+                return synchronized_lyrics
+        
+        # If peak detection didn't work well, try using beats or onsets
+        if len(beat_times) >= len(lyrics_lines):
+            # Skip some early beats that might be intro
+            start_idx = len(beat_times) // 10
+            
+            # If we have a default start time from Spotify, try to find the closest beat
+            if default_start_time > 0:
+                closest_idx = np.argmin(np.abs(beat_times - default_start_time))
+                if closest_idx > 0:
+                    start_idx = closest_idx
+            
+            # Ensure we have enough beats for all lyrics
+            if start_idx + len(lyrics_lines) <= len(beat_times):
+                synchronized_lyrics = []
+                
+                for i, line in enumerate(lyrics_lines):
+                    if not line.strip():  # Skip empty lines
+                        continue
+                        
+                    # Use every other beat for better spacing
+                    beat_idx = start_idx + i * 2
+                    if beat_idx < len(beat_times):
+                        start_time = beat_times[beat_idx]
+                        
+                        # Estimate duration based on beats
+                        if beat_idx + 2 < len(beat_times):
+                            duration = beat_times[beat_idx + 2] - start_time
+                        else:
+                            duration = 4.0
+                        
+                        synchronized_lyrics.append({
+                            'text': line,
+                            'start_time': start_time,
+                            'duration': duration
+                        })
+                
+                print(f"Created beat-based timing for {len(synchronized_lyrics)} lines")
+                return synchronized_lyrics
+        
+        # If all else fails, return None to use default timing
+        print("Could not create synchronized timing, falling back to default")
+        return None
+    
+    except Exception as e:
+        print(f"Error in lyric synchronization: {e}")
+        traceback.print_exc()
+        return None
+
+def create_synchronized_subtitles(synchronized_lyrics, output_path):
+    """
+    Create a subtitle file with synchronized timing
+    
+    Args:
+        synchronized_lyrics: List of dictionaries with 'text', 'start_time', and 'duration' keys
+        output_path: Path to save the subtitle file
+    """
+    with open(output_path, 'w', encoding='utf-8') as f:
+        for i, lyric in enumerate(synchronized_lyrics):
+            # Skip empty lines
+            if not lyric['text'].strip():
+                continue
+                
+            # Convert times to SRT format (HH:MM:SS,mmm)
+            start_time = lyric['start_time']
+            end_time = start_time + lyric['duration']
+            
+            start_str = format_srt_time(start_time)
+            end_str = format_srt_time(end_time)
+            
+            # Write the subtitle entry
+            f.write(f"{i+1}\n")
+            f.write(f"{start_str} --> {end_str}\n")
+            f.write(f"{lyric['text']}\n\n")
+    
+    print(f"Created synchronized subtitle file at {output_path}")
+    return output_path
+
+def format_srt_time(seconds):
+    """Format seconds as SRT time format: HH:MM:SS,mmm"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    seconds = seconds % 60
+    milliseconds = int((seconds - int(seconds)) * 1000)
+    
+    return f"{hours:02d}:{minutes:02d}:{int(seconds):02d},{milliseconds:03d}"
+
+def create_subtitles_with_timing(lyrics_lines, vocal_start_time, audio_duration, temp_dir):
+    """Create subtitles with default timing based on vocal start time"""
+    # Calculate timing for subtitles
+    subtitle_path = os.path.join(temp_dir, 'subtitles.srt')
+    
+    # Set a pre-roll delay slightly less than the vocal start time
+    pre_roll = max(0, vocal_start_time - 0.5)
+    print(f"Setting pre-roll delay to {pre_roll} seconds")
+    
+    # Calculate duration per line based on total duration and number of lines
+    non_empty_lines = [line for line in lyrics_lines if line.strip()]
+    if non_empty_lines:
+        # Reserve some time at the end
+        usable_duration = audio_duration - pre_roll - 5.0
+        duration_per_line = max(3.0, min(8.0, usable_duration / len(non_empty_lines)))
+    else:
+        duration_per_line = 4.0
+    
+    with open(subtitle_path, 'w', encoding='utf-8') as f:
+        current_time = pre_roll
+        subtitle_index = 1
+        
+        for line in lyrics_lines:
+            # Skip empty lines
+            if not line.strip():
+                continue
+            
+            # Calculate start and end times
+            start_time = current_time
+            end_time = start_time + duration_per_line
+            
+            # Format times as SRT format (HH:MM:SS,mmm)
+            start_str = format_srt_time(start_time)
+            end_str = format_srt_time(end_time)
+            
+            # Write the subtitle entry
+            f.write(f"{subtitle_index}\n")
+            f.write(f"{start_str} --> {end_str}\n")
+            f.write(f"{line}\n\n")
+            
+            # Update for next line
+            current_time = end_time
+            subtitle_index += 1
+    
+    print(f"Created subtitle file at {subtitle_path}")
+    return subtitle_path
+
+def clean_lyrics(lyrics):
+    """Clean up lyrics from Genius format"""
+    import re
+    
+    # Clean up the lyrics from Genius
+    lyrics = re.sub(r'\d+Embed', '', lyrics)  # Remove Embed markers
+    lyrics = re.sub(r'You might also like', '', lyrics)  # Remove suggestions
+    
+    # Process lyrics to identify structure
+    return process_lyrics_structure(lyrics)

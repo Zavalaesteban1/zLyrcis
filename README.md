@@ -1,110 +1,93 @@
 # Lyric Video Generator
 
-A web application that generates high-quality lyric videos from Spotify song links. The application fetches song information and lyrics, then creates a video with synchronized lyrics.
+A web application that generates lyric videos for songs by combining lyrics with audio.
 
 ## Features
 
-- Input a Spotify song link and generate a lyric video
-- High-quality 4K video output
-- Lyrics synchronized with the audio
-- Responsive web interface
-- Background processing for video generation
+- Automatically retrieves song information from Spotify
+- Fetches lyrics from Genius or alternative sources
+- Downloads audio from multiple sources (YouTube, Deezer) with fallbacks
+- Supports using local audio files
+- Synchronizes lyrics with audio using beat detection
+- Generates professional-looking lyric videos
 
-## Tech Stack
+## Using Local Audio Files
 
-- **Frontend**: React with TypeScript
-- **Backend**: Django with Django REST Framework
-- **Music API**: Spotify API
-- **Lyrics API**: Genius API
-- **Video Generation**: FFmpeg
-- **Background Tasks**: Celery with Redis
-- **Database**: SQLite (development) / PostgreSQL (production)
+If you're having trouble with the automatic audio download, you can use your own audio files:
 
-## Setup
-
-### Prerequisites
-
-- Python 3.8+
-- Node.js 14+
-- Redis server
-- FFmpeg
-
-### Backend Setup
-
-1. Navigate to the backend directory:
+1. Create an `audio_files` directory in the project root:
    ```
-   cd lyric_video_generator/backend
+   mkdir -p /path/to/lyric_video_generator/audio_files
    ```
 
-2. Create and activate a virtual environment:
+2. Add your MP3 files to this directory. Name them to match the song title and artist for best results:
    ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   Example: "Shape of You - Ed Sheeran.mp3"
+   ```
+
+3. The system will automatically search for matching audio files when generating videos.
+
+## Installation
+
+1. Clone the repository:
+   ```
+   git clone <repository-url>
+   cd lyric_video_generator
+   ```
+
+2. Set up the virtual environment:
+   ```
+   python -m venv backend/venv
+   source backend/venv/bin/activate  # On Windows: backend\venv\Scripts\activate
    ```
 
 3. Install dependencies:
    ```
-   pip install -r requirements.txt
+   pip install -r backend/requirements.txt
    ```
 
-4. Create a `.env` file based on `.env.example` and add your API keys:
+4. Set up environment variables:
    ```
    cp .env.example .env
    ```
+   Edit the `.env` file with your Spotify and Genius API credentials.
 
 5. Run migrations:
    ```
+   cd backend
    python manage.py migrate
    ```
 
-6. Start the Django development server:
+## Running the Application
+
+1. Start the Redis server (required for Celery):
    ```
-   python manage.py runserver
+   redis-server
    ```
 
-7. In a separate terminal, start the Celery worker:
+2. Start the Celery worker:
    ```
+   cd backend
    celery -A lyric_video_project worker --loglevel=info
    ```
 
-### Frontend Setup
-
-1. Navigate to the frontend directory:
+3. Start the Django development server:
    ```
-   cd lyric_video_generator/frontend
-   ```
-
-2. Install dependencies:
-   ```
-   npm install
+   cd backend
+   python manage.py runserver
    ```
 
-3. Start the development server:
-   ```
-   npm start
-   ```
+4. Access the application at http://localhost:8000
 
-## Usage
+## Troubleshooting Audio Issues
 
-1. Open your browser and go to `http://localhost:3000`
-2. Paste a Spotify song link in the input field
-3. Click "Generate Video"
-4. Wait for the video to be generated
-5. Download the video when it's ready
+If you're experiencing issues with audio in the generated videos:
 
-## API Endpoints
-
-- `POST /api/videos/`: Create a new video generation job
-- `GET /api/videos/`: List all video generation jobs
-- `GET /api/videos/{id}/`: Get details of a specific job
-- `GET /api/videos/{id}/status/`: Get the status of a specific job
+1. Check that FFmpeg is installed and available in your PATH
+2. Verify that the audio files are valid MP3 files
+3. Look at the logs for any error messages related to audio processing
+4. Try using a local audio file as described above
 
 ## License
 
-MIT
-
-## Acknowledgements
-
-- Spotify API
-- Genius API
-- FFmpeg 
+[MIT License](LICENSE) 

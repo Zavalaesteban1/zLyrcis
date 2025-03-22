@@ -6,7 +6,8 @@ from .views import (
     user_login,
     user_signup,
     user_logout,
-    get_user_info
+    get_user_info,
+    google_login
 )
 from django.conf import settings
 from django.conf.urls.static import static
@@ -22,6 +23,7 @@ urlpatterns = [
     path('auth/signup/', user_signup, name='signup'),
     path('auth/logout/', user_logout, name='logout'),
     path('auth/user/', get_user_info, name='user_info'),
+    path('auth/google-login/', google_login, name='google_login'),
 ]
 
 if settings.DEBUG:

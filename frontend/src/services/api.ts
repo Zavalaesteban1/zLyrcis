@@ -59,6 +59,10 @@ export interface LoginCredentials {
   password: string;
 }
 
+export interface GoogleLoginCredentials {
+  token_id: string;
+}
+
 export interface SignupCredentials {
   username: string;
   email: string;
@@ -72,6 +76,19 @@ export interface AuthResponse {
   email: string;
   profile: UserProfile | null;
 }
+
+// Helper function to clear previous user data from localStorage
+const clearPreviousUserData = () => {
+  // Get all localStorage keys
+  const keys = Object.keys(localStorage);
+  
+  // Find and remove any song learning data that doesn't belong to the current user
+  keys.forEach(key => {
+    if (key.includes('song_learning_') && !key.includes('user_')) {
+      localStorage.removeItem(key);
+    }
+  });
+};
 
 /**
  * Submit a Spotify link to generate a lyric video
@@ -185,22 +202,44 @@ export const changePassword = async (oldPassword: string, newPassword: string): 
 // Authentication API functions
 export const login = async (credentials: LoginCredentials): Promise<AuthResponse> => {
   const response = await api.post('/auth/login/', credentials);
-  // Save token to localStorage
+  // Clear any previous user data
+  clearPreviousUserData();
+  // Save token and user_id to localStorage
   localStorage.setItem('auth_token', response.data.token);
+  localStorage.setItem('user_id', response.data.user_id.toString());
   return response.data;
+};
+
+export const googleLogin = async (credentials: GoogleLoginCredentials): Promise<AuthResponse> => {
+  try {
+    const response = await api.post('/auth/google-login/', credentials);
+    // Clear any previous user data
+    clearPreviousUserData();
+    // Save token and user_id to localStorage
+    localStorage.setItem('auth_token', response.data.token);
+    localStorage.setItem('user_id', response.data.user_id.toString());
+    return response.data;
+  } catch (error) {
+    console.error('Google login error:', error);
+    throw error;
+  }
 };
 
 export const signup = async (credentials: SignupCredentials): Promise<AuthResponse> => {
   const response = await api.post('/auth/signup/', credentials);
-  // Save token to localStorage
+  // Clear any previous user data
+  clearPreviousUserData();
+  // Save token and user_id to localStorage
   localStorage.setItem('auth_token', response.data.token);
+  localStorage.setItem('user_id', response.data.user_id.toString());
   return response.data;
 };
 
 export const logout = async (): Promise<void> => {
   await api.post('/auth/logout/');
-  // Remove token from localStorage
+  // Remove token and user_id from localStorage
   localStorage.removeItem('auth_token');
+  localStorage.removeItem('user_id');
 };
 
 export const getCurrentUser = async (): Promise<AuthResponse> => {
@@ -251,10 +290,24 @@ export const deleteVideo = async (videoId: string): Promise<void> => {
  * @returns Extracted track ID or null if not found
  */
 export const extractSpotifyTrackId = (spotifyUrl: string): string | null => {
-  // Handle different Spotify URL formats
-  const regex = /spotify\.com\/track\/([a-zA-Z0-9]+)/;
-  const match = spotifyUrl.match(regex);
-  return match ? match[1] : null;
+  if (!spotifyUrl) return null;
+  
+  // Handle multiple Spotify URL formats
+  const patterns = [
+    /spotify\.com\/track\/([a-zA-Z0-9]+)/, // standard web URL
+    /open\.spotify\.com\/track\/([a-zA-Z0-9]+)/, // open.spotify URL
+    /spotify:track:([a-zA-Z0-9]+)/ // URI format
+  ];
+  
+  for (const pattern of patterns) {
+    const match = spotifyUrl.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  console.warn(`Could not extract track ID from Spotify URL: ${spotifyUrl}`);
+  return null;
 };
 
 // Spotify API Client ID and Secret
@@ -333,6 +386,11 @@ const albumCoverCache: Record<string, string | null> = {};
  * @returns Album artwork URL or null if not found
  */
 export const getSpotifyAlbumArtwork = async (trackId: string): Promise<string | null> => {
+  if (!trackId) {
+    console.warn('No track ID provided to getSpotifyAlbumArtwork');
+    return null;
+  }
+  
   try {
     // Check cache first
     if (albumCoverCache[trackId] !== undefined) {
@@ -356,7 +414,7 @@ export const getSpotifyAlbumArtwork = async (trackId: string): Promise<string | 
       return mockUrl;
     }
     
-    // Skip the backend API attempt and go straight to Spotify API
+    // Try to get album artwork from Spotify API
     try {
       const token = await getSpotifyAccessToken();
       
@@ -368,31 +426,37 @@ export const getSpotifyAlbumArtwork = async (trackId: string): Promise<string | 
       });
       
       if (!response.ok) {
-        throw new Error(`Spotify API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text().catch(() => '');
+        console.error(`Spotify API error for track ${trackId}: ${response.status} ${response.statusText} - ${errorText}`);
+        throw new Error(`Spotify API error: ${response.status}`);
       }
       
       const data = await response.json();
       
       if (data && data.album && data.album.images && data.album.images.length > 0) {
-        console.log('Successfully retrieved album artwork from Spotify API');
+        console.log(`Successfully retrieved album artwork for track ${trackId}`);
         const coverUrl = data.album.images[0].url;
         albumCoverCache[trackId] = coverUrl; // Cache the result
         return coverUrl;
       } else {
-        console.log('No album artwork found in Spotify response');
-        albumCoverCache[trackId] = null; // Cache the null result
-        return null;
+        console.warn(`No album artwork found in Spotify response for track ${trackId}`);
+        // Instead of caching null, we'll use a placeholder
+        const placeholderUrl = `https://picsum.photos/seed/${trackId}/300/300`;
+        albumCoverCache[trackId] = placeholderUrl;
+        return placeholderUrl;
       }
     } catch (err) {
-      console.error('Error with Spotify API call:', err);
-      // Fall back to mock image in case of API errors
+      console.error(`Error with Spotify API call for track ${trackId}:`, err);
+      // Always use a fallback image instead of returning null
       const fallbackUrl = `https://picsum.photos/seed/${trackId}/300/300`;
       albumCoverCache[trackId] = fallbackUrl; // Cache the fallback
       return fallbackUrl;
     }
   } catch (error) {
-    console.error('Error fetching Spotify album artwork:', error);
-    return null;
+    console.error(`Error fetching Spotify album artwork for track ${trackId}:`, error);
+    // Generate a placeholder rather than returning null
+    const placeholderUrl = `https://picsum.photos/seed/${trackId}/300/300`;
+    return placeholderUrl;
   }
 };
 

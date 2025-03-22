@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { getUserProfile, updateProfilePicture, updateProfile, UserProfile, logout } from '../services/api';
+import { getUserProfile, updateProfilePicture, updateProfile, UserProfile, logout, getUserVideos, VideoJob } from '../services/api';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoSettingsOutline, IoHomeOutline } from 'react-icons/io5';
-import { MdOutlineWorkspacePremium, MdMusicNote, MdAdd, MdEdit, MdLogout } from 'react-icons/md';
+import { MdOutlineWorkspacePremium, MdMusicNote, MdAdd, MdEdit, MdLogout, MdCheckCircle } from 'react-icons/md';
 import { FiLogOut, FiUser } from 'react-icons/fi';
 import { BiChevronDown } from 'react-icons/bi';
 import { BsCamera } from 'react-icons/bs';
+import { BsMusicNoteList } from 'react-icons/bs';
+import { FiTrendingUp } from 'react-icons/fi';
 
 // Styled components for the redesigned profile page
 const AppLayout = styled.div`
@@ -481,6 +483,13 @@ const UploadButton = styled.button`
   }
 `;
 
+// Extended VideoJob interface with learning properties
+interface SongWithLearningData extends VideoJob {
+  learned: boolean;
+  lastPracticed?: string | null;
+  difficultyRating?: number | null;
+}
+
 const ProfilePage: React.FC = () => {
   const [profileData, setProfileData] = useState<UserProfile | null>(null);
   const [editableProfile, setEditableProfile] = useState<Partial<UserProfile> | null>(null);
@@ -492,11 +501,17 @@ const ProfilePage: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  
+  // Update songs state to use the extended interface
+  const [songs, setSongs] = useState<SongWithLearningData[]>([]);
+  const [songsLoading, setSongsLoading] = useState(true);
+  
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
   useEffect(() => {
     fetchProfile();
+    fetchUserSongs();
   }, []);
   
   const fetchProfile = async () => {
@@ -510,6 +525,34 @@ const ProfilePage: React.FC = () => {
       console.error('Error fetching profile:', err);
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Update the fetchUserSongs function to use the extended interface
+  const fetchUserSongs = async () => {
+    try {
+      setSongsLoading(true);
+      const videosData = await getUserVideos();
+      
+      // Get the current user ID from localStorage or profileData
+      const userId = profileData?.id || parseInt(localStorage.getItem('user_id') || '0');
+      
+      // Load learned status from localStorage with user-specific keys
+      const songsWithLearningStatus: SongWithLearningData[] = videosData.map(video => {
+        const learningData = JSON.parse(localStorage.getItem(`user_${userId}_song_learning_${video.id}`) || 'null');
+        return {
+          ...video,
+          learned: learningData?.learned || false,
+          lastPracticed: learningData?.lastPracticed || null,
+          difficultyRating: learningData?.difficultyRating || null
+        };
+      });
+      
+      setSongs(songsWithLearningStatus);
+    } catch (err) {
+      console.error('Error fetching user songs:', err);
+    } finally {
+      setSongsLoading(false);
     }
   };
   
@@ -683,6 +726,62 @@ const ProfilePage: React.FC = () => {
       setSaving(false);
     }
   };
+  
+  // Helper function to safely format dates with more robust type checking
+  const formatDate = (dateString?: string | null): string => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch (e) {
+      return 'Invalid Date';
+    }
+  };
+  
+  // Get the last practiced date across all songs
+  const getLastPracticedDate = (): string => {
+    const learnedSongs = songs.filter(song => song.learned && song.lastPracticed);
+    if (learnedSongs.length === 0) return 'Never';
+    
+    const sortedSongs = [...learnedSongs].sort((a, b) => {
+      const dateA = a.lastPracticed ? new Date(a.lastPracticed).getTime() : 0;
+      const dateB = b.lastPracticed ? new Date(b.lastPracticed).getTime() : 0;
+      return dateB - dateA;
+    });
+    
+    return formatDate(sortedSongs[0]?.lastPracticed);
+  };
+
+  // Calculate learning stats properly
+  const getTotalSongsLearned = (): number => {
+    return songs.filter(song => song.learned).length;
+  };
+
+  const getLearningProgress = (): number => {
+    if (songs.length === 0) return 0;
+    return Math.round((getTotalSongsLearned() / songs.length) * 100);
+  };
+
+  const getMostRecentSong = (): SongWithLearningData | null => {
+    if (songs.length === 0) return null;
+    return songs[0]; // We already sorted by date in fetchUserSongs
+  };
+  
+  // Calculate the account age in months
+  const getAccountAge = () => {
+    if (!profileData?.last_login) return 'N/A';
+    
+    const now = new Date();
+    const joined = new Date(profileData.last_login);
+    const months = (now.getFullYear() - joined.getFullYear()) * 12 + now.getMonth() - joined.getMonth();
+    return months <= 0 ? 'Just joined' : `${months} ${months === 1 ? 'month' : 'months'}`;
+  };
+  
+  // Determine recent song content in a type-safe way
+  const recentSong = getMostRecentSong();
+  const recentSongTitle = recentSong?.song_title || 'None';
+  const recentSongArtist = recentSong?.artist || '';
+  const recentSongDate = recentSong ? formatDate(recentSong.created_at) : '';
+  const isRecentSongLearned = recentSong?.learned || false;
   
   if (loading) {
     return (
@@ -889,28 +988,37 @@ const ProfilePage: React.FC = () => {
               <StatsList>
                 <StatItem>
                   <StatLabel>Member Since</StatLabel>
-                  <StatValue>March 2023</StatValue>
+                  <StatValue>{getAccountAge()}</StatValue>
                 </StatItem>
                 <StatItem>
                   <StatLabel>Videos Created</StatLabel>
-                  <StatValue>0</StatValue>
+                  <StatValue>{songs.length}</StatValue>
                 </StatItem>
                 <StatItem>
                   <StatLabel>Songs Learned</StatLabel>
-                  <StatValue>0</StatValue>
+                  <StatValue>{getTotalSongsLearned()}</StatValue>
                 </StatItem>
                 <StatItem>
-                  <StatLabel>Account Type</StatLabel>
-                  <StatValue>Free</StatValue>
+                  <StatLabel>Learning Progress</StatLabel>
+                  <StatValue>{getLearningProgress()}%</StatValue>
+                </StatItem>
+                <StatItem>
+                  <StatLabel>Last Practiced</StatLabel>
+                  <StatValue>{getLastPracticedDate()}</StatValue>
+                </StatItem>
+                <StatItem>
+                  <StatLabel>Recent Song</StatLabel>
+                  <StatValue>{recentSongTitle}</StatValue>
                 </StatItem>
               </StatsList>
             </StatsCard>
             
             <ComingSoonCard>
-              <ComingSoonTitle>Coming Soon</ComingSoonTitle>
+              <ComingSoonTitle>Your Learning Journey</ComingSoonTitle>
               <ComingSoonText>
-                Soon you'll be able to see all the songs you're learning right here in your profile.
-                Stay tuned for more exciting features!
+                You've learned {getTotalSongsLearned()} out of {songs.length} songs. 
+                {songs.length > 0 ? ` That's ${getLearningProgress()}% progress!` : ''}
+                {getTotalSongsLearned() > 0 ? ` Your last practice was on ${getLastPracticedDate()}.` : ''}
               </ComingSoonText>
             </ComingSoonCard>
           </div>

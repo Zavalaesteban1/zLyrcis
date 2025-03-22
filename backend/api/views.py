@@ -15,6 +15,12 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
+import json
+from django.conf import settings
+import os
+import logging
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 # Create your views here.
 
@@ -187,6 +193,109 @@ def user_login(request):
         'email': user.email,
         'profile': profile_data
     })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def google_login(request):
+    """Login or register a user through Google OAuth"""
+    token_id = request.data.get('token_id')
+    
+    if not token_id:
+        return Response(
+            {'error': 'No token provided'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # Get Google client ID from environment variable
+        google_client_id = os.environ.get('GOOGLE_CLIENT_ID', '')
+        
+        if not google_client_id:
+            return Response(
+                {'error': 'Google authentication is not configured on the server'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Verify the token with Google
+        idinfo = id_token.verify_oauth2_token(
+            token_id, 
+            google_requests.Request(), 
+            google_client_id
+        )
+        
+        # Get user info from the token
+        email = idinfo.get('email')
+        if not email:
+            return Response(
+                {'error': 'Email not provided by Google'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if this Google account's email already exists
+        try:
+            user = User.objects.get(email=email)
+            # User exists, login
+        except User.DoesNotExist:
+            # User doesn't exist, create a new user
+            username = email.split('@')[0]
+            # Make sure username is unique
+            base_username = username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            # Generate a random password for the user (they'll use Google to login)
+            import secrets
+            password = secrets.token_urlsafe(32)
+            
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password
+            )
+            
+            # If Google provides name information, save it
+            if 'given_name' in idinfo:
+                user.first_name = idinfo['given_name']
+            if 'family_name' in idinfo:
+                user.last_name = idinfo['family_name']
+            user.save()
+        
+        # Log the user in
+        login(request, user)
+        
+        # Get or create token
+        token, _ = Token.objects.get_or_create(user=user)
+        
+        # Get user profile
+        try:
+            profile = UserProfile.objects.get(user=user)
+            profile_data = UserProfileSerializer(profile).data
+        except UserProfile.DoesNotExist:
+            profile_data = None
+        
+        return Response({
+            'token': token.key,
+            'user_id': user.pk,
+            'username': user.username,
+            'email': user.email,
+            'profile': profile_data
+        })
+        
+    except ValueError:
+        # Invalid token
+        return Response(
+            {'error': 'Invalid token'}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    except Exception as e:
+        # Log the error for debugging
+        logging.error(f"Google login error: {str(e)}")
+        return Response(
+            {'error': 'Authentication error'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

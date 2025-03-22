@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import styled from 'styled-components';
-import { login, LoginCredentials } from '../services/api';
+import { login, googleLogin, LoginCredentials } from '../services/api';
 import { MdMusicNote } from 'react-icons/md';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
 
 // Styled components
 const LoginContainer = styled.div`
@@ -313,6 +315,47 @@ const LoadingSpinner = styled.div`
   }
 `;
 
+const OrDivider = styled.div`
+  display: flex;
+  align-items: center;
+  margin: 25px 0;
+  color: #666;
+  
+  &::before, &::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  
+  span {
+    margin: 0 15px;
+    font-size: 16px;
+  }
+  
+  @media (min-width: 1600px) {
+    margin: 30px 0;
+    span {
+      margin: 0 20px;
+      font-size: 18px;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    margin: 20px 0;
+    span {
+      margin: 0 10px;
+      font-size: 14px;
+    }
+  }
+`;
+
+const GoogleLoginButton = styled.div`
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+`;
+
 const LoginPage: React.FC = () => {
   const [credentials, setCredentials] = useState<LoginCredentials>({
     username: '',
@@ -321,6 +364,10 @@ const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  
+  // Google Client ID - replace with your actual client ID
+  const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
+  console.log('Google Client ID:', GOOGLE_CLIENT_ID); // Add this line
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -352,6 +399,40 @@ const LoginPage: React.FC = () => {
     }
   };
   
+  const handleGoogleLoginSuccess = async (credentialResponse: any) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Extract the token_id from credentialResponse
+      const { credential } = credentialResponse;
+      
+      if (!credential) {
+        throw new Error('No credentials returned from Google');
+      }
+      
+      // Decode the JWT to get user info (client-side only)
+      const decoded: any = jwtDecode(credential);
+      console.log('Google login successful:', decoded);
+      
+      // Send the token to your backend
+      await googleLogin({ token_id: credential });
+      
+      // Navigate to home page
+      navigate('/');
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      const errorMessage = err.response?.data?.error || 'Google login failed. Please try again.';
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleGoogleLoginError = () => {
+    setError('Google sign-in was unsuccessful. Please try again.');
+  };
+  
   return (
     <LoginContainer>
       <Logo>
@@ -364,6 +445,25 @@ const LoginPage: React.FC = () => {
           <LoginTitle>Sign In</LoginTitle>
           <LoginSubtitle>Sign in to continue creating amazing lyric videos</LoginSubtitle>
         </LoginHeader>
+        
+        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+          <GoogleLoginButton>
+            <GoogleLogin
+              onSuccess={handleGoogleLoginSuccess}
+              onError={handleGoogleLoginError}
+              useOneTap
+              theme="outline"
+              size="large"
+              text="signin_with"
+              shape="rectangular"
+              width="100%"
+            />
+          </GoogleLoginButton>
+        </GoogleOAuthProvider>
+        
+        <OrDivider>
+          <span>OR</span>
+        </OrDivider>
         
         <Form onSubmit={handleSubmit}>
           <InputContainer>

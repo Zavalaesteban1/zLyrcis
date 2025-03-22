@@ -5,8 +5,9 @@ import { getUserProfile, logout, getUserVideos, deleteVideo, VideoJob, extractSp
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
-import { MdMusicNote, MdAdd, MdLogout, MdDownload, MdPlayArrow, MdPause, MdClose, MdDelete } from 'react-icons/md';
-import { BsMusicNoteList } from 'react-icons/bs';
+import { MdMusicNote, MdAdd, MdLogout, MdDownload, MdPlayArrow, MdPause, MdClose, MdDelete, MdCheckCircle, MdStar, MdStarBorder } from 'react-icons/md';
+import { BsMusicNoteList, BsCheckSquare, BsCheckSquareFill } from 'react-icons/bs';
+import { AiFillStar, AiOutlineStar } from 'react-icons/ai';
 
 // Styled components for the songs page (matching profile page style)
 const AppLayout = styled.div`
@@ -241,6 +242,7 @@ const SongCover = styled.div`
   justify-content: center;
   color: #999;
   font-size: 28px;
+  position: relative;
   
   @media (max-width: 768px) {
     width: 60px;
@@ -704,7 +706,7 @@ const AlbumPlaceholder = styled.div<{ color: string }>`
   font-weight: bold;
 `;
 
-// Update the Song interface to include album cover
+// Update the Song interface to include learning status
 interface Song {
   id: string;
   song_title: string;
@@ -713,7 +715,142 @@ interface Song {
   created_at: string;
   spotify_url: string;
   albumCoverUrl?: string | null;
+  learned: boolean;
+  lastPracticed?: string | null;
+  difficultyRating?: number | null;
 }
+
+// Add a styled component for the checkbox to mark a song as learned
+const LearnedCheckbox = styled.div<{ checked: boolean }>`
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 2px solid ${props => props.checked ? '#1DB954' : '#ddd'};
+  background-color: ${props => props.checked ? '#1DB954' : 'transparent'};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  margin-right: 15px;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    border-color: #1DB954;
+    background-color: ${props => props.checked ? '#169c46' : 'rgba(29, 185, 84, 0.1)'};
+  }
+`;
+
+// Update the StarRating component to use icons
+const StarRating = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 8px;
+`;
+
+const Star = styled.div<{ filled: boolean }>`
+  color: ${props => props.filled ? '#FFD700' : '#ddd'};
+  cursor: pointer;
+  font-size: 16px;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  
+  &:hover {
+    color: #FFD700;
+  }
+`;
+
+// Add a filter bar for the songs list
+const FilterBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 30px;
+  border-bottom: 1px solid #f0f0f0;
+  background-color: #fafafa;
+`;
+
+const FilterOptions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 15px;
+`;
+
+const FilterOption = styled.button<{ active: boolean }>`
+  background: ${props => props.active ? 'rgba(29, 185, 84, 0.1)' : 'transparent'};
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: ${props => props.active ? '#1DB954' : '#666'};
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: rgba(29, 185, 84, 0.1);
+    color: #1DB954;
+  }
+`;
+
+const SearchInput = styled.input`
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 200px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  
+  &:focus {
+    border-color: #1DB954;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.1);
+  }
+`;
+
+// Add a progress bar component for the learning status
+const ProgressBarContainer = styled.div`
+  width: 100%;
+  height: 8px;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 15px 0;
+`;
+
+const ProgressFill = styled.div<{ percent: number }>`
+  height: 100%;
+  background: linear-gradient(90deg, #1DB954, #169c46);
+  width: ${props => props.percent}%;
+  transition: width 0.3s ease;
+`;
+
+const ProgressStats = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #666;
+`;
+
+const LearnedBadge = styled.div`
+  position: absolute;
+  bottom: -5px;
+  right: -5px;
+  background-color: #1DB954;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  border: 2px solid white;
+`;
 
 const SongsPage: React.FC = () => {
   const [songs, setSongs] = useState<Song[]>([]);
@@ -727,6 +864,10 @@ const SongsPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
+  
+  // Add new state variables for learning feature
+  const [filter, setFilter] = useState<'all' | 'learned' | 'not-learned'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   
   useEffect(() => {
     // Fetch user profile data
@@ -746,45 +887,81 @@ const SongsPage: React.FC = () => {
         const videosData = await getUserVideos();
         
         // Map VideoJob data to Song interface
-        const formattedSongs = videosData.map(video => ({
-          id: video.id,
-          song_title: video.song_title,
-          artist: video.artist,
-          video_file: video.video_file,
-          created_at: video.created_at,
-          spotify_url: video.spotify_url,
-          albumCoverUrl: null // Will be populated soon
-        }));
+        const formattedSongs = videosData.map(video => {
+          // Check local storage for learning data
+          const learningData = JSON.parse(localStorage.getItem(`song_learning_${video.id}`) || 'null');
+          
+          return {
+            id: video.id,
+            song_title: video.song_title,
+            artist: video.artist,
+            video_file: video.video_file,
+            created_at: video.created_at,
+            spotify_url: video.spotify_url,
+            albumCoverUrl: null, // Will be populated soon
+            learned: learningData?.learned || false,
+            lastPracticed: learningData?.lastPracticed || null,
+            difficultyRating: learningData?.difficultyRating || null
+          };
+        });
         
         // First set songs without album covers to show UI faster
         setSongs(formattedSongs);
         
-        // Then immediately start fetching album covers in parallel
-        const songsWithCovers = await Promise.all(
-          formattedSongs.map(async (song) => {
-            // Extract track ID from Spotify URL
-            const trackId = extractSpotifyTrackId(song.spotify_url);
-            
-            if (trackId) {
-              try {
-                // Fetch album cover
-                const albumCoverUrl = await getSpotifyAlbumArtwork(trackId);
-                if (albumCoverUrl) {
-                  return {
-                    ...song,
-                    albumCoverUrl
-                  };
-                }
-              } catch (err) {
-                console.error(`Error fetching album cover for song ${song.id}:`, err);
-              }
-            }
+        // Then immediately start fetching album covers in parallel with retries
+        const fetchAlbumCover = async (song: Song): Promise<Song> => {
+          // Extract track ID from Spotify URL
+          const trackId = extractSpotifyTrackId(song.spotify_url);
+          
+          if (!trackId) {
+            console.warn(`Could not extract track ID from Spotify URL for "${song.song_title}": ${song.spotify_url}`);
             return song;
-          })
-        );
+          }
+          
+          try {
+            // Fetch album cover with retry
+            const fetchWithRetry = async (attempts = 3): Promise<string | null> => {
+              try {
+                const albumCoverUrl = await getSpotifyAlbumArtwork(trackId);
+                return albumCoverUrl;
+              } catch (err) {
+                if (attempts <= 1) throw err;
+                console.log(`Retrying album cover fetch for "${song.song_title}" (${attempts-1} attempts left)`);
+                await new Promise(r => setTimeout(r, 500)); // Wait 500ms before retry
+                return fetchWithRetry(attempts - 1);
+              }
+            };
+            
+            const albumCoverUrl = await fetchWithRetry();
+            if (albumCoverUrl) {
+              return { ...song, albumCoverUrl };
+            }
+          } catch (err) {
+            console.error(`Error fetching album cover for "${song.song_title}":`, err);
+          }
+          
+          return song;
+        };
         
-        // Update songs with album covers
-        setSongs(songsWithCovers);
+        // Process in batches to avoid overwhelming the API
+        const batchSize = 5;
+        let songsWithCovers: Song[] = [...formattedSongs];
+        
+        for (let i = 0; i < formattedSongs.length; i += batchSize) {
+          const batch = formattedSongs.slice(i, i + batchSize);
+          const batchResults = await Promise.all(batch.map(fetchAlbumCover));
+          
+          // Update songs with this batch of results
+          songsWithCovers = [
+            ...songsWithCovers.slice(0, i),
+            ...batchResults,
+            ...songsWithCovers.slice(i + batchSize)
+          ];
+          
+          // Update state with partial results
+          setSongs(songsWithCovers);
+        }
+        
         setError(null);
       } catch (err) {
         setError('Failed to load songs. Please try again later.');
@@ -947,6 +1124,155 @@ const SongsPage: React.FC = () => {
     setSongToDelete(null);
   };
   
+  // Add function to toggle learned status
+  const toggleLearnedStatus = (songId: string) => {
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id === songId) {
+          const newLearnedStatus = !song.learned;
+          const lastPracticed = newLearnedStatus ? new Date().toISOString() : song.lastPracticed;
+          
+          // Get the current user ID
+          const userId = userData?.id || parseInt(localStorage.getItem('user_id') || '0');
+          
+          // Save learning data to localStorage with user-specific key
+          localStorage.setItem(`user_${userId}_song_learning_${songId}`, JSON.stringify({
+            learned: newLearnedStatus,
+            lastPracticed,
+            difficultyRating: song.difficultyRating
+          }));
+          
+          return {
+            ...song,
+            learned: newLearnedStatus,
+            lastPracticed
+          };
+        }
+        return song;
+      });
+      
+      // Show notification
+      const song = prevSongs.find(s => s.id === songId);
+      if (song) {
+        setNotification({
+          message: song.learned 
+            ? `Marked "${song.song_title}" as not learned` 
+            : `Congratulations! You've learned "${song.song_title}"`,
+          type: 'success'
+        });
+        
+        // Clear notification after 3 seconds
+        setTimeout(() => {
+          setNotification(null);
+        }, 3000);
+      }
+      
+      return updatedSongs;
+    });
+  };
+  
+  // Add function to set difficulty rating
+  const setDifficultyRating = (songId: string, rating: number) => {
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id === songId) {
+          // Get the current user ID
+          const userId = userData?.id || parseInt(localStorage.getItem('user_id') || '0');
+          
+          // Get existing learning data
+          const existingData = JSON.parse(localStorage.getItem(`user_${userId}_song_learning_${songId}`) || '{}');
+          
+          // Update and save learning data with user-specific key
+          localStorage.setItem(`user_${userId}_song_learning_${songId}`, JSON.stringify({
+            ...existingData,
+            difficultyRating: rating
+          }));
+          
+          return {
+            ...song,
+            difficultyRating: rating
+          };
+        }
+        return song;
+      });
+      
+      return updatedSongs;
+    });
+  };
+  
+  // Add function to filter songs
+  const getFilteredSongs = () => {
+    return songs.filter(song => {
+      // Apply filter
+      if (filter === 'all' && song.learned) return false; // Only show unlearned songs in "All Songs"
+      if (filter === 'learned' && !song.learned) return false;
+      if (filter === 'not-learned' && song.learned) return false;
+      
+      // Apply search
+      if (searchTerm.trim() !== '') {
+        const term = searchTerm.toLowerCase();
+        return song.song_title.toLowerCase().includes(term) || 
+               song.artist.toLowerCase().includes(term);
+      }
+      
+      return true;
+    });
+  };
+  
+  // Calculate learning stats
+  const getTotalLearned = () => songs.filter(song => song.learned).length;
+  const getLearningProgress = () => (songs.length > 0 ? (getTotalLearned() / songs.length) * 100 : 0);
+  const getNextToLearn = () => songs.find(song => !song.learned);
+  
+  // Update the stats card
+  const renderLearningStats = () => {
+    return (
+      <StatsCard>
+        <StatsTitle>Learning Progress</StatsTitle>
+        
+        <ProgressStats>
+          <span>Learned {getTotalLearned()} of {songs.length} songs</span>
+          <span>{Math.round(getLearningProgress())}%</span>
+        </ProgressStats>
+        
+        <ProgressBarContainer>
+          <ProgressFill percent={getLearningProgress()} />
+        </ProgressBarContainer>
+        
+        <StatsList>
+          <StatItem>
+            <StatLabel>Total Songs</StatLabel>
+            <StatValue>{songs.length}</StatValue>
+          </StatItem>
+          <StatItem>
+            <StatLabel>Songs Learned</StatLabel>
+            <StatValue>{getTotalLearned()}</StatValue>
+          </StatItem>
+          <StatItem>
+            <StatLabel>Next to Learn</StatLabel>
+            <StatValue>{getNextToLearn()?.song_title || 'None'}</StatValue>
+          </StatItem>
+          {getTotalLearned() > 0 && (
+            <StatItem>
+              <StatLabel>Last Practiced</StatLabel>
+              <StatValue>
+                {(() => {
+                  const lastPracticedSong = [...songs]
+                    .filter(s => s.lastPracticed)
+                    .sort((a, b) => new Date(b.lastPracticed!).getTime() - new Date(a.lastPracticed!).getTime())[0];
+                  
+                  return lastPracticedSong ? 
+                    new Date(lastPracticedSong.lastPracticed!).toLocaleDateString() : 
+                    'Never';
+                })()}
+              </StatValue>
+            </StatItem>
+          )}
+        </StatsList>
+      </StatsCard>
+    );
+  };
+  
   if (loading) {
     return (
       <AppLayout>
@@ -1007,6 +1333,9 @@ const SongsPage: React.FC = () => {
     );
   }
   
+  // Get filtered songs
+  const filteredSongs = getFilteredSongs();
+  
   return (
     <AppLayout>
       <Sidebar>
@@ -1060,6 +1389,37 @@ const SongsPage: React.FC = () => {
               </SongsHeaderTitle>
             </SongsHeader>
             
+            {songs.length > 0 && (
+              <FilterBar>
+                <FilterOptions>
+                  <FilterOption 
+                    active={filter === 'all'} 
+                    onClick={() => setFilter('all')}
+                  >
+                    Unlearned Songs
+                  </FilterOption>
+                  <FilterOption 
+                    active={filter === 'learned'} 
+                    onClick={() => setFilter('learned')}
+                  >
+                    Learned
+                  </FilterOption>
+                  <FilterOption 
+                    active={filter === 'not-learned'} 
+                    onClick={() => setFilter('not-learned')}
+                  >
+                    Still Learning
+                  </FilterOption>
+                </FilterOptions>
+                <SearchInput 
+                  type="text" 
+                  placeholder="Search songs..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </FilterBar>
+            )}
+            
             <SongsList>
               {songs.length === 0 ? (
                 <EmptyState>
@@ -1071,9 +1431,22 @@ const SongsPage: React.FC = () => {
                     {MdAdd({ size: 18 })} Create Your First Video
                   </Button>
                 </EmptyState>
+              ) : filteredSongs.length === 0 ? (
+                <EmptyState>
+                  <EmptyStateText>No songs match your current filter.</EmptyStateText>
+                  <Button onClick={() => { setFilter('all'); setSearchTerm(''); }}>
+                    Clear Filters
+                  </Button>
+                </EmptyState>
               ) : (
-                songs.map(song => (
+                filteredSongs.map(song => (
                   <SongItem key={song.id}>
+                    <LearnedCheckbox 
+                      checked={song.learned} 
+                      onClick={() => toggleLearnedStatus(song.id)}
+                    >
+                      {song.learned ? BsCheckSquareFill({ size: 16 }) : null}
+                    </LearnedCheckbox>
                     <SongCover>
                       {song.albumCoverUrl ? (
                         <SongImage src={song.albumCoverUrl} alt={`${song.song_title} cover`} />
@@ -1082,13 +1455,34 @@ const SongsPage: React.FC = () => {
                           {song.song_title.charAt(0).toUpperCase()}
                         </AlbumPlaceholder>
                       )}
+                      {song.learned && (
+                        <LearnedBadge title="Learned">
+                          {MdCheckCircle({ size: 16 })}
+                        </LearnedBadge>
+                      )}
                     </SongCover>
                     <SongInfo>
                       <SongTitle>{song.song_title}</SongTitle>
                       <SongArtist>{song.artist}</SongArtist>
+                      <StarRating>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star 
+                            key={star} 
+                            filled={!!song.difficultyRating && star <= song.difficultyRating}
+                            onClick={() => setDifficultyRating(song.id, star)}
+                            title={`Difficulty: ${star}`}
+                          >
+                            {!!song.difficultyRating && star <= song.difficultyRating 
+                              ? AiFillStar({ size: 16 }) 
+                              : AiOutlineStar({ size: 16 })}
+                          </Star>
+                        ))}
+                      </StarRating>
                     </SongInfo>
                     <SongDuration>
-                      {new Date(song.created_at).toLocaleDateString()}
+                      {song.lastPracticed 
+                        ? `Last practiced: ${new Date(song.lastPracticed).toLocaleDateString()}`
+                        : new Date(song.created_at).toLocaleDateString()}
                     </SongDuration>
                     <SongActions>
                       {song.video_file && (
@@ -1118,35 +1512,14 @@ const SongsPage: React.FC = () => {
           </SongsContainer>
           
           <div>
-            <StatsCard>
-              <StatsTitle>Music Statistics</StatsTitle>
-              <StatsList>
-                <StatItem>
-                  <StatLabel>Total Songs</StatLabel>
-                  <StatValue>{songs.length}</StatValue>
-                </StatItem>
-                <StatItem>
-                  <StatLabel>Last Added</StatLabel>
-                  <StatValue>
-                    {songs.length > 0 ? new Date(songs[0].created_at).toLocaleDateString() : 'None'}
-                  </StatValue>
-                </StatItem>
-                <StatItem>
-                  <StatLabel>Most Played</StatLabel>
-                  <StatValue>{songs[0]?.song_title || 'None'}</StatValue>
-                </StatItem>
-                <StatItem>
-                  <StatLabel>Total Duration</StatLabel>
-                  <StatValue>{songs.length} videos</StatValue>
-                </StatItem>
-              </StatsList>
-            </StatsCard>
+            {renderLearningStats()}
             
             <ComingSoonCard>
-              <ComingSoonTitle>Coming Soon</ComingSoonTitle>
+              <ComingSoonTitle>Track Your Progress</ComingSoonTitle>
               <ComingSoonText>
-                Soon you'll be able to create playlists and share your favorite songs with friends.
-                Stay tuned for more exciting features!
+                Mark songs as "learned" when you've mastered them. Set difficulty ratings to
+                prioritize your practice sessions. Filter the list to focus on what you're
+                still learning.
               </ComingSoonText>
             </ComingSoonCard>
           </div>

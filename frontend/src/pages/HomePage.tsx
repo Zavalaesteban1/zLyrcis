@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
-import { logout, getUserProfile } from '../services/api';
+import { logout, getUserProfile, getUserVideos, extractSpotifyTrackId, getSpotifyAlbumArtwork, VideoJob } from '../services/api';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
-import { MdMusicNote, MdAdd, MdLogout } from 'react-icons/md';
+import { MdMusicNote, MdAdd, MdLogout, MdCheckCircle } from 'react-icons/md';
 import { BsMusicNoteList, BsSpotify } from 'react-icons/bs';
 import { FiTrendingUp } from 'react-icons/fi';
 import { AiOutlineClockCircle } from 'react-icons/ai';
@@ -470,42 +470,108 @@ const EmptyStateText = styled.p`
   margin: 0 0 20px;
 `;
 
+// Extended VideoJob interface with learning properties
+interface SongWithLearningData extends VideoJob {
+  learned: boolean;
+  lastPracticed?: string | null;
+  difficultyRating?: number | null;
+}
+
+const RecentActivityItem: React.FC<{ song: SongWithLearningData, albumCover: string | null }> = ({ song, albumCover }) => {
+  return (
+    <ActivityItem>
+      <SongCover>
+        {albumCover ? (
+          <SongImage src={albumCover} alt={song.song_title} />
+        ) : (
+          MdMusicNote({ size: 24 })
+        )}
+      </SongCover>
+      <ActivityContent>
+        <ActivityName>{song.song_title}</ActivityName>
+        <ActivityMeta>
+          <ActivityDate>
+            {AiOutlineClockCircle({ size: 14 })} {new Date(song.created_at).toLocaleDateString()}
+          </ActivityDate>
+          {song.learned && (
+            <ActivityStatus>Learned</ActivityStatus>
+          )}
+        </ActivityMeta>
+      </ActivityContent>
+    </ActivityItem>
+  );
+};
+
 const HomePage: React.FC = () => {
   const [userData, setUserData] = useState<any>(null);
+  const [songs, setSongs] = useState<SongWithLearningData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [albumCovers, setAlbumCovers] = useState<{[key: string]: string | null}>({});
   const navigate = useNavigate();
 
-  // Mock data for recent activity
-  const recentActivity = [
-    {
-      id: 1,
-      title: 'Bohemian Rhapsody',
-      artist: 'Queen',
-      date: '2 hours ago',
-      status: 'Completed',
-      coverUrl: 'https://via.placeholder.com/50x50?text=BR'
-    },
-    {
-      id: 2,
-      title: 'Hotel California',
-      artist: 'Eagles',
-      date: 'Yesterday',
-      status: 'Completed',
-      coverUrl: 'https://via.placeholder.com/50x50?text=HC'
-    }
-  ];
-
-  // Fetch current user when component mounts
+  // Fetch current user and songs when component mounts
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchData = async () => {
+      setLoading(true);
       try {
+        // Fetch user profile
         const userData = await getUserProfile();
         setUserData(userData);
+        
+        // Fetch user's videos/songs
+        const videosData = await getUserVideos();
+        
+        // Add learning data from localStorage
+        const songsWithLearningData: SongWithLearningData[] = videosData.map(video => {
+          const learningData = JSON.parse(localStorage.getItem(`song_learning_${video.id}`) || 'null');
+          return {
+            ...video,
+            learned: learningData?.learned || false,
+            lastPracticed: learningData?.lastPracticed || null,
+            difficultyRating: learningData?.difficultyRating || null
+          };
+        });
+        
+        // Sort songs by creation date (newest first)
+        const sortedSongs = songsWithLearningData.sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        
+        setSongs(sortedSongs);
+        
+        // Fetch album covers for the most recent songs
+        const recentSongs = sortedSongs.slice(0, 4);
+        const coverPromises = recentSongs.map(async (song) => {
+          try {
+            if (song.spotify_url) {
+              const trackId = extractSpotifyTrackId(song.spotify_url);
+              if (trackId) {
+                const coverUrl = await getSpotifyAlbumArtwork(trackId);
+                return { id: song.id, coverUrl };
+              }
+            }
+            return { id: song.id, coverUrl: null };
+          } catch (error) {
+            console.error('Error fetching album cover:', error);
+            return { id: song.id, coverUrl: null };
+          }
+        });
+        
+        const covers = await Promise.all(coverPromises);
+        const coverMap = covers.reduce((acc, { id, coverUrl }) => {
+          acc[id] = coverUrl;
+          return acc;
+        }, {} as {[key: string]: string | null});
+        
+        setAlbumCovers(coverMap);
+        setLoading(false);
       } catch (error) {
-        console.error('Error fetching user data:', error);
+        console.error('Error fetching data:', error);
+        setLoading(false);
       }
     };
-
-    fetchUser();
+    
+    fetchData();
   }, []);
 
   const handleLogout = async () => {
@@ -519,6 +585,80 @@ const HomePage: React.FC = () => {
       navigate('/login');
     }
   };
+  
+  // Calculate statistics from data
+  const getVideosCreated = (): number => {
+    return songs.length;
+  };
+
+  const getTotalDuration = (): number => {
+    // Since we might not have duration, let's estimate 3 minutes per song
+    return songs.length * 180; // 3 minutes in seconds
+  };
+
+  const getSongsLearned = (): number => {
+    return songs.filter(song => song.learned).length;
+  };
+
+  const getLearningProgress = (): number => {
+    if (songs.length === 0) return 0;
+    return Math.round((getSongsLearned() / songs.length) * 100);
+  };
+
+  const getMemberSince = (): string => {
+    if (!userData?.created_at) return 'N/A';
+    return new Date(userData.created_at).toLocaleDateString();
+  };
+
+  // Format the date to show how long ago it was created
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMins < 60) {
+      return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    } else if (diffDays < 7) {
+      return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    } else {
+      return date.toLocaleDateString();
+    }
+  };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <Sidebar>
+          <Logo>zLyrics</Logo>
+          <NavMenu>
+            <NavItem to="/" active>
+              <NavIcon>{IoHomeOutline({ size: 18 })}</NavIcon> Home
+            </NavItem>
+            <NavItem to="/profile">
+              <NavIcon>{CgProfile({ size: 18 })}</NavIcon> Profile
+            </NavItem>
+            <NavItem to="/songs">
+              <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
+            </NavItem>
+            <NavItem to="/create">
+              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
+            </NavItem>
+          </NavMenu>
+        </Sidebar>
+        <MainContent>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+            {/* Loading state */}
+          </div>
+        </MainContent>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -563,8 +703,10 @@ const HomePage: React.FC = () => {
           <WelcomeCard>
             <WelcomeTitle>Welcome back, {userData?.name || 'User'}!</WelcomeTitle>
             <WelcomeText>
-              Create beautiful lyric videos from your favorite Spotify tracks with just a few clicks.
-              Our AI-powered system extracts lyrics and generates synchronized videos automatically.
+              {songs.length > 0 
+                ? `You have created ${songs.length} lyric videos and learned ${getSongsLearned()} songs. Keep up the great work!` 
+                : 'Create beautiful lyric videos from your favorite Spotify tracks with just a few clicks.'}
+              {getLearningProgress() > 0 && ` Your learning progress is at ${getLearningProgress()}%.`}
             </WelcomeText>
             <ActionButton to="/create">Create New Video</ActionButton>
           </WelcomeCard>
@@ -576,27 +718,14 @@ const HomePage: React.FC = () => {
                 Recent Activity
               </ActivityTitle>
               
-              {recentActivity.length > 0 ? (
+              {songs.length > 0 ? (
                 <ActivityList>
-                  {recentActivity.map(activity => (
-                    <ActivityItem key={activity.id}>
-                      <SongCover>
-                        {activity.coverUrl ? (
-                          <SongImage src={activity.coverUrl} alt={activity.title} />
-                        ) : (
-                          MdMusicNote({ size: 24 })
-                        )}
-                      </SongCover>
-                      <ActivityContent>
-                        <ActivityName>{activity.title} - {activity.artist}</ActivityName>
-                        <ActivityMeta>
-                          <ActivityDate>
-                            {AiOutlineClockCircle({ size: 14 })} {activity.date}
-                          </ActivityDate>
-                          <ActivityStatus>{activity.status}</ActivityStatus>
-                        </ActivityMeta>
-                      </ActivityContent>
-                    </ActivityItem>
+                  {songs.slice(0, 4).map(song => (
+                    <RecentActivityItem 
+                      key={song.id} 
+                      song={song} 
+                      albumCover={albumCovers[song.id] || null} 
+                    />
                   ))}
                 </ActivityList>
               ) : (
@@ -620,19 +749,19 @@ const HomePage: React.FC = () => {
               <StatsList>
                 <StatItem>
                   <StatLabel>Videos Created</StatLabel>
-                  <StatValue>2</StatValue>
+                  <StatValue>{getVideosCreated()}</StatValue>
                 </StatItem>
                 <StatItem>
-                  <StatLabel>Total Duration</StatLabel>
-                  <StatValue>12:24</StatValue>
+                  <StatLabel>Songs Learned</StatLabel>
+                  <StatValue>{getSongsLearned()}</StatValue>
                 </StatItem>
                 <StatItem>
-                  <StatLabel>Account Type</StatLabel>
-                  <StatValue>Free</StatValue>
+                  <StatLabel>Learning Progress</StatLabel>
+                  <StatValue>{getLearningProgress()}%</StatValue>
                 </StatItem>
                 <StatItem>
                   <StatLabel>Member Since</StatLabel>
-                  <StatValue>March 2023</StatValue>
+                  <StatValue>{getMemberSince()}</StatValue>
                 </StatItem>
               </StatsList>
             </StatsCard>

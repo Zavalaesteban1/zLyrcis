@@ -27,6 +27,33 @@ from google.auth.transport import requests as google_requests
 class VideoJobViewSet(viewsets.ModelViewSet):
     """ViewSet for handling video generation jobs"""
     queryset = VideoJob.objects.all().order_by('-created_at')
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """
+        Temporary solution to filter videos by user using session storage
+        until database migrations can be applied to add user field
+        """
+        user = self.request.user
+        
+        # Store user_id in the session if not already there
+        if not self.request.session.get('user_videos'):
+            self.request.session['user_videos'] = []
+        
+        # Get all videos created in this session by this user
+        user_videos = self.request.session.get('user_videos', [])
+        
+        # Return only videos in the user's session or filter by user if field exists
+        try:
+            # Try to filter by user field if it exists (after migration)
+            return VideoJob.objects.filter(user=user).order_by('-created_at')
+        except:
+            # Fallback to filtering by IDs in session
+            if user_videos:
+                return VideoJob.objects.filter(id__in=user_videos).order_by('-created_at')
+            else:
+                # If no videos in session yet, return empty queryset
+                return VideoJob.objects.none()
     
     def get_serializer_class(self):
         if self.action == 'status':
@@ -36,7 +63,20 @@ class VideoJobViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        job = serializer.save(status='pending')
+        
+        # Create the job
+        try:
+            # Try to set user if field exists
+            job = serializer.save(status='pending', user=request.user)
+        except:
+            # Fallback if user field doesn't exist yet
+            job = serializer.save(status='pending')
+            
+        # Store the job ID in the session for this user
+        user_videos = request.session.get('user_videos', [])
+        user_videos.append(str(job.id))
+        request.session['user_videos'] = user_videos
+        request.session.modified = True
         
         # Queue the video generation task
         generate_lyric_video.delay(job.id)
@@ -47,7 +87,7 @@ class VideoJobViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def status(self, request, pk=None):
         """Get the status of a video generation job"""
-        job = get_object_or_404(VideoJob, pk=pk)
+        job = self.get_object()
         serializer = self.get_serializer(job, context={'request': request})
         return Response(serializer.data)
 

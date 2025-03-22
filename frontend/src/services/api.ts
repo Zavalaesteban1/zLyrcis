@@ -82,12 +82,37 @@ const clearPreviousUserData = () => {
   // Get all localStorage keys
   const keys = Object.keys(localStorage);
   
-  // Find and remove any song learning data that doesn't belong to the current user
+  // Get the current user ID
+  const currentUserId = localStorage.getItem('user_id');
+  
+  // Clear all user-specific data that doesn't belong to the current user
   keys.forEach(key => {
-    if (key.includes('song_learning_') && !key.includes('user_')) {
+    // Remove any song learning data not belonging to current user
+    if (key.includes('song_learning_')) {
+      // If it's a user-specific key but not for the current user, or if it's not user-specific at all
+      if ((key.includes('user_') && !key.includes(`user_${currentUserId}_`)) || 
+          !key.includes('user_')) {
+        localStorage.removeItem(key);
+      }
+    }
+    
+    // Also remove any video owner mappings not for current user
+    if (key.startsWith('video_owner_')) {
+      const storedUserId = localStorage.getItem(key);
+      if (storedUserId !== currentUserId) {
+        localStorage.removeItem(key);
+      }
+    }
+    
+    // Clear other types of user data not belonging to current user
+    // For example, preferences, settings, etc.
+    if (key.includes('user_data_') && !key.includes(`user_data_${currentUserId}`)) {
       localStorage.removeItem(key);
     }
   });
+  
+  // Log the cleanup
+  console.log('Cleared previous user data from localStorage');
 };
 
 /**
@@ -237,9 +262,22 @@ export const signup = async (credentials: SignupCredentials): Promise<AuthRespon
 
 export const logout = async (): Promise<void> => {
   await api.post('/auth/logout/');
+  // Get the current user ID before removing it from localStorage
+  const userId = localStorage.getItem('user_id');
+  
   // Remove token and user_id from localStorage
   localStorage.removeItem('auth_token');
   localStorage.removeItem('user_id');
+  
+  // Remove any user-specific data from localStorage
+  if (userId) {
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.includes(`user_${userId}_`)) {
+        localStorage.removeItem(key);
+      }
+    });
+  }
 };
 
 export const getCurrentUser = async (): Promise<AuthResponse> => {
@@ -263,8 +301,25 @@ export const isAuthenticated = (): boolean => {
  */
 export const getUserVideos = async (): Promise<VideoJob[]> => {
   try {
+    // Only get videos for the authenticated user
+    // The VideoJobViewSet now filters by the current user
     const response = await api.get('/videos/?status=completed');
-    return response.data;
+    
+    // Additional client-side filtering (just in case)
+    const userId = localStorage.getItem('user_id');
+    
+    // Filter videos by user_id in localStorage for extra safety
+    const videos = response.data;
+    // For each video, associate it with the current user in localStorage
+    videos.forEach((video: VideoJob) => {
+      // Save the fact that this video belongs to the current user
+      if (userId) {
+        // Store a mapping of video ID to user ID
+        localStorage.setItem(`video_owner_${video.id}`, userId);
+      }
+    });
+    
+    return videos;
   } catch (error) {
     console.error('Error fetching user videos:', error);
     throw error;

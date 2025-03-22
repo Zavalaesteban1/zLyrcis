@@ -19,6 +19,7 @@ class VideoJob(models.Model):
     )
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey('auth.User', related_name='videos', on_delete=models.CASCADE, null=True)
     spotify_url = models.URLField(max_length=255)
     song_title = models.CharField(max_length=255, blank=True)
     artist = models.CharField(max_length=255, blank=True)

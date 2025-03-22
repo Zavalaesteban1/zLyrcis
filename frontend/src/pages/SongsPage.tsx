@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { getUserProfile, logout } from '../services/api';
+import { getUserProfile, logout, getUserVideos, deleteVideo, VideoJob, extractSpotifyTrackId, getSpotifyAlbumArtwork } from '../services/api';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
-import { MdMusicNote, MdAdd, MdLogout, MdDownload, MdPlayArrow, MdPause } from 'react-icons/md';
+import { MdMusicNote, MdAdd, MdLogout, MdDownload, MdPlayArrow, MdPause, MdClose, MdDelete } from 'react-icons/md';
 import { BsMusicNoteList } from 'react-icons/bs';
 
 // Styled components for the songs page (matching profile page style)
@@ -525,51 +525,194 @@ const ComingSoonText = styled.p`
   line-height: 1.5;
 `;
 
-// Mock data for songs (replace with actual API call later)
-const mockSongs = [
-  {
-    id: 1,
-    title: 'Bohemian Rhapsody',
-    artist: 'Queen',
-    duration: '5:55',
-    coverUrl: 'https://via.placeholder.com/60x60?text=BR',
-  },
-  {
-    id: 2,
-    title: 'Hotel California',
-    artist: 'Eagles',
-    duration: '6:30',
-    coverUrl: 'https://via.placeholder.com/60x60?text=HC',
-  },
-  {
-    id: 3,
-    title: 'Imagine',
-    artist: 'John Lennon',
-    duration: '3:04',
-    coverUrl: 'https://via.placeholder.com/60x60?text=IM',
-  },
-  {
-    id: 4,
-    title: 'Sweet Child O\' Mine',
-    artist: 'Guns N\' Roses',
-    duration: '5:56',
-    coverUrl: 'https://via.placeholder.com/60x60?text=SC',
-  },
-  {
-    id: 5,
-    title: 'Billie Jean',
-    artist: 'Michael Jackson',
-    duration: '4:54',
-    coverUrl: 'https://via.placeholder.com/60x60?text=BJ',
-  }
-];
+// Add new styled components for the video player modal
+const VideoModal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+`;
 
+const VideoContainer = styled.div`
+  width: 90%;
+  max-width: 800px;
+  background: #191414;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  position: relative;
+`;
+
+const VideoPlayer = styled.video`
+  width: 100%;
+  display: block;
+`;
+
+const VideoCloseButton = styled.button`
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+  }
+`;
+
+const VideoInfoBar = styled.div`
+  padding: 15px;
+  background: #191414;
+  color: white;
+`;
+
+const VideoTitle = styled.h4`
+  font-size: 18px;
+  margin: 0 0 5px;
+`;
+
+const VideoArtist = styled.p`
+  font-size: 14px;
+  color: #1DB954;
+  margin: 0;
+`;
+
+// Add a styled component for the delete button
+const DeleteButton = styled(ActionButton)`
+  &:hover {
+    color: #e91429;
+    background-color: rgba(233, 20, 41, 0.1);
+  }
+`;
+
+// Add a styled component for the confirm dialog
+const ConfirmDialog = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+`;
+
+const ConfirmBox = styled.div`
+  background-color: white;
+  border-radius: 10px;
+  padding: 25px;
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+`;
+
+const ConfirmTitle = styled.h3`
+  font-size: 18px;
+  margin-bottom: 15px;
+  color: #333;
+`;
+
+const ConfirmText = styled.p`
+  margin-bottom: 20px;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+`;
+
+const CancelButton = styled.button`
+  background-color: #f5f5f5;
+  color: #333;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 15px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: #e0e0e0;
+  }
+`;
+
+const ConfirmDeleteButton = styled.button`
+  background-color: #e91429;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 15px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: #c51226;
+  }
+`;
+
+// Add function to generate a placeholder color based on song title 
+const generatePlaceholderColor = (title: string): string => {
+  // Simple hash function to convert string to a number
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) {
+    hash = title.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  // Convert hash to a bright/vibrant color
+  const hue = Math.abs(hash % 360);
+  return `hsl(${hue}, 80%, 60%)`;
+};
+
+// Add a placeholder component for when there's no album cover
+const AlbumPlaceholder = styled.div<{ color: string }>`
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: ${props => props.color};
+  color: white;
+  font-size: 22px;
+  font-weight: bold;
+`;
+
+// Update the Song interface to include album cover
 interface Song {
-  id: number;
-  title: string;
+  id: string;
+  song_title: string;
   artist: string;
-  duration: string;
-  coverUrl: string;
+  video_file: string | null;
+  created_at: string;
+  spotify_url: string;
+  albumCoverUrl?: string | null;
 }
 
 const SongsPage: React.FC = () => {
@@ -577,9 +720,13 @@ const SongsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-  const [playingSongId, setPlayingSongId] = useState<number | null>(null);
+  const [playingSongId, setPlayingSongId] = useState<string | null>(null);
   const [userData, setUserData] = useState<any>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [songToDelete, setSongToDelete] = useState<Song | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const navigate = useNavigate();
+  const videoRef = useRef<HTMLVideoElement>(null);
   
   useEffect(() => {
     // Fetch user profile data
@@ -592,16 +739,52 @@ const SongsPage: React.FC = () => {
       }
     };
     
-    // Fetch songs (using mock data for now)
-    const fetchSongs = async () => {
+    // Fetch user's videos and album covers together
+    const fetchSongsAndCovers = async () => {
       try {
         setLoading(true);
-        // In a real app, this would be an API call
-        // const response = await getSongs();
-        // setSongs(response.data);
+        const videosData = await getUserVideos();
         
-        // Using mock data for now
-        setSongs(mockSongs);
+        // Map VideoJob data to Song interface
+        const formattedSongs = videosData.map(video => ({
+          id: video.id,
+          song_title: video.song_title,
+          artist: video.artist,
+          video_file: video.video_file,
+          created_at: video.created_at,
+          spotify_url: video.spotify_url,
+          albumCoverUrl: null // Will be populated soon
+        }));
+        
+        // First set songs without album covers to show UI faster
+        setSongs(formattedSongs);
+        
+        // Then immediately start fetching album covers in parallel
+        const songsWithCovers = await Promise.all(
+          formattedSongs.map(async (song) => {
+            // Extract track ID from Spotify URL
+            const trackId = extractSpotifyTrackId(song.spotify_url);
+            
+            if (trackId) {
+              try {
+                // Fetch album cover
+                const albumCoverUrl = await getSpotifyAlbumArtwork(trackId);
+                if (albumCoverUrl) {
+                  return {
+                    ...song,
+                    albumCoverUrl
+                  };
+                }
+              } catch (err) {
+                console.error(`Error fetching album cover for song ${song.id}:`, err);
+              }
+            }
+            return song;
+          })
+        );
+        
+        // Update songs with album covers
+        setSongs(songsWithCovers);
         setError(null);
       } catch (err) {
         setError('Failed to load songs. Please try again later.');
@@ -612,7 +795,7 @@ const SongsPage: React.FC = () => {
     };
     
     fetchUserData();
-    fetchSongs();
+    fetchSongsAndCovers();
   }, []);
   
   const handleLogout = async () => {
@@ -629,19 +812,91 @@ const SongsPage: React.FC = () => {
     }
   };
   
-  const handlePlayPause = (songId: number) => {
+  const handlePlayPause = (songId: string) => {
     if (playingSongId === songId) {
       setPlayingSongId(null);
+      // Stop the video if it's playing
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
     } else {
       setPlayingSongId(songId);
+      setVideoLoading(true);
+      // The video will be loaded in the useEffect
     }
   };
   
+  // Add useEffect to handle video playback
+  useEffect(() => {
+    if (playingSongId && videoRef.current) {
+      const song = songs.find(s => s.id === playingSongId);
+      if (song && song.video_file) {
+        videoRef.current.src = song.video_file;
+        
+        // Listen for the loaded data event to hide the loading indicator
+        const handleVideoLoaded = () => {
+          setVideoLoading(false);
+        };
+        
+        // Clean up function to remove event listeners
+        const cleanUpVideo = () => {
+          if (videoRef.current) {
+            videoRef.current.removeEventListener('loadeddata', handleVideoLoaded);
+            videoRef.current.removeEventListener('error', handleVideoError);
+          }
+        };
+        
+        const handleVideoError = (e: Event) => {
+          console.error('Error loading video:', e);
+          setVideoLoading(false);
+          setNotification({
+            message: 'Error loading video. Please try again.',
+            type: 'error'
+          });
+        };
+        
+        videoRef.current.addEventListener('loadeddata', handleVideoLoaded);
+        videoRef.current.addEventListener('error', handleVideoError);
+        
+        videoRef.current.play().catch(err => {
+          console.error('Error playing video:', err);
+          setVideoLoading(false);
+          setNotification({
+            message: 'Error playing video. Please try again.',
+            type: 'error'
+          });
+        });
+        
+        // Clean up the event listeners when the component unmounts
+        return cleanUpVideo;
+      }
+    }
+  }, [playingSongId, songs]);
+  
   const handleDownload = (song: Song) => {
-    // This is where you would implement the actual download functionality
-    // For now, we'll just show a notification
+    if (!song.video_file) {
+      setNotification({
+        message: `Error: No video file available for "${song.song_title}"`,
+        type: 'error'
+      });
+      return;
+    }
+    
+    // Create a temporary anchor element to trigger download
+    const link = document.createElement('a');
+    link.href = song.video_file;
+    link.download = `${song.song_title} - ${song.artist}.mp4`;
+    link.target = '_blank';
+    
+    // Append to the document and trigger click
+    document.body.appendChild(link);
+    link.click();
+    
+    // Clean up
+    document.body.removeChild(link);
+    
     setNotification({
-      message: `Downloading "${song.title}" by ${song.artist}...`,
+      message: `Downloading "${song.song_title}" by ${song.artist}...`,
       type: 'success'
     });
     
@@ -649,6 +904,47 @@ const SongsPage: React.FC = () => {
     setTimeout(() => {
       setNotification(null);
     }, 3000);
+  };
+  
+  // Add delete song function
+  const handleDeleteClick = (song: Song) => {
+    setSongToDelete(song);
+  };
+  
+  const confirmDelete = async () => {
+    if (!songToDelete) return;
+    
+    try {
+      setIsDeleting(true);
+      await deleteVideo(songToDelete.id);
+      
+      // Remove the deleted song from the state
+      setSongs(songs.filter(s => s.id !== songToDelete.id));
+      
+      // Show success notification
+      setNotification({
+        message: `"${songToDelete.song_title}" has been deleted`,
+        type: 'success'
+      });
+      
+      // Clear notification after 3 seconds
+      setTimeout(() => {
+        setNotification(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Error deleting song:', err);
+      setNotification({
+        message: 'Error deleting song. Please try again.',
+        type: 'error'
+      });
+    } finally {
+      setIsDeleting(false);
+      setSongToDelete(null);
+    }
+  };
+  
+  const cancelDelete = () => {
+    setSongToDelete(null);
   };
   
   if (loading) {
@@ -779,30 +1075,41 @@ const SongsPage: React.FC = () => {
                 songs.map(song => (
                   <SongItem key={song.id}>
                     <SongCover>
-                      {song.coverUrl ? (
-                        <SongImage src={song.coverUrl} alt={song.title} />
+                      {song.albumCoverUrl ? (
+                        <SongImage src={song.albumCoverUrl} alt={`${song.song_title} cover`} />
                       ) : (
-                        MdMusicNote({ size: 24 })
+                        <AlbumPlaceholder color={generatePlaceholderColor(song.song_title)}>
+                          {song.song_title.charAt(0).toUpperCase()}
+                        </AlbumPlaceholder>
                       )}
                     </SongCover>
                     <SongInfo>
-                      <SongTitle>{song.title}</SongTitle>
+                      <SongTitle>{song.song_title}</SongTitle>
                       <SongArtist>{song.artist}</SongArtist>
                     </SongInfo>
-                    <SongDuration>{song.duration}</SongDuration>
+                    <SongDuration>
+                      {new Date(song.created_at).toLocaleDateString()}
+                    </SongDuration>
                     <SongActions>
-                      <PlayButton 
-                        onClick={() => handlePlayPause(song.id)}
-                        className={playingSongId === song.id ? 'playing' : ''}
-                      >
-                        {playingSongId === song.id 
-                          ? MdPause({ size: 22 })
-                          : MdPlayArrow({ size: 22 })
-                        }
-                      </PlayButton>
-                      <DownloadButton onClick={() => handleDownload(song)}>
-                        {MdDownload({ size: 22 })}
-                      </DownloadButton>
+                      {song.video_file && (
+                        <>
+                          <PlayButton 
+                            onClick={() => handlePlayPause(song.id)}
+                            className={playingSongId === song.id ? 'playing' : ''}
+                          >
+                            {playingSongId === song.id 
+                              ? MdPause({ size: 22 })
+                              : MdPlayArrow({ size: 22 })
+                            }
+                          </PlayButton>
+                          <DownloadButton onClick={() => handleDownload(song)}>
+                            {MdDownload({ size: 22 })}
+                          </DownloadButton>
+                          <DeleteButton onClick={() => handleDeleteClick(song)}>
+                            {MdDelete({ size: 22 })}
+                          </DeleteButton>
+                        </>
+                      )}
                     </SongActions>
                   </SongItem>
                 ))
@@ -820,15 +1127,17 @@ const SongsPage: React.FC = () => {
                 </StatItem>
                 <StatItem>
                   <StatLabel>Last Added</StatLabel>
-                  <StatValue>Today</StatValue>
+                  <StatValue>
+                    {songs.length > 0 ? new Date(songs[0].created_at).toLocaleDateString() : 'None'}
+                  </StatValue>
                 </StatItem>
                 <StatItem>
                   <StatLabel>Most Played</StatLabel>
-                  <StatValue>{songs[0]?.title || 'None'}</StatValue>
+                  <StatValue>{songs[0]?.song_title || 'None'}</StatValue>
                 </StatItem>
                 <StatItem>
                   <StatLabel>Total Duration</StatLabel>
-                  <StatValue>20:19</StatValue>
+                  <StatValue>{songs.length} videos</StatValue>
                 </StatItem>
               </StatsList>
             </StatsCard>
@@ -843,8 +1152,106 @@ const SongsPage: React.FC = () => {
           </div>
         </ContentGrid>
       </MainContent>
+      
+      {/* Video Player Modal */}
+      {playingSongId && (
+        <VideoModal onClick={() => setPlayingSongId(null)}>
+          <VideoContainer onClick={(e) => e.stopPropagation()}>
+            <VideoCloseButton onClick={() => setPlayingSongId(null)}>
+              {MdClose({ size: 20 })}
+            </VideoCloseButton>
+            
+            {videoLoading && (
+              <LoadingOverlay>
+                <LoadingSpinner />
+                <LoadingText>Loading video...</LoadingText>
+              </LoadingOverlay>
+            )}
+            
+            <VideoPlayer 
+              ref={videoRef}
+              controls
+              preload="auto"
+              autoPlay
+              onEnded={() => setPlayingSongId(null)}
+            />
+            
+            <VideoInfoBar>
+              {(() => {
+                const playingSong = songs.find(s => s.id === playingSongId);
+                return playingSong ? (
+                  <>
+                    <VideoTitle>{playingSong.song_title}</VideoTitle>
+                    <VideoArtist>{playingSong.artist}</VideoArtist>
+                  </>
+                ) : null;
+              })()}
+            </VideoInfoBar>
+          </VideoContainer>
+        </VideoModal>
+      )}
+      
+      {/* Confirm Delete Dialog */}
+      {songToDelete && (
+        <ConfirmDialog>
+          <ConfirmBox>
+            <ConfirmTitle>Delete Song</ConfirmTitle>
+            <ConfirmText>
+              Are you sure you want to delete "{songToDelete.song_title}" by {songToDelete.artist}? 
+              This action cannot be undone.
+            </ConfirmText>
+            <ButtonGroup>
+              <CancelButton onClick={cancelDelete} disabled={isDeleting}>
+                Cancel
+              </CancelButton>
+              <ConfirmDeleteButton onClick={confirmDelete} disabled={isDeleting}>
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </ConfirmDeleteButton>
+            </ButtonGroup>
+          </ConfirmBox>
+        </ConfirmDialog>
+      )}
     </AppLayout>
   );
 };
+
+// Add the new styled components for loading overlay
+const LoadingOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 5;
+`;
+
+const LoadingSpinner = styled.div`
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-left-color: #1DB954;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
+const LoadingText = styled.p`
+  color: white;
+  margin-top: 15px;
+  font-size: 16px;
+`;
 
 export default SongsPage; 

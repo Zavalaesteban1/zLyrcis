@@ -376,6 +376,25 @@ const DownloadButton = styled.a`
   }
 `;
 
+// Add NotificationMessage styled component
+const NotificationMessage = styled.div<{ type: 'success' | 'error' }>`
+  background-color: ${props => props.type === 'success' 
+    ? 'rgba(29, 185, 84, 0.1)' 
+    : 'rgba(233, 20, 41, 0.1)'};
+  color: ${props => props.type === 'success' ? '#1DB954' : '#e91429'};
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  &::before {
+    content: '${props => props.type === 'success' ? '✅' : '⚠️'}';
+  }
+`;
+
 const CreateVideoPage: React.FC = () => {
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -385,6 +404,7 @@ const CreateVideoPage: React.FC = () => {
   const [jobStatus, setJobStatus] = useState<VideoStatusResponse | null>(null);
   const [jobDetails, setJobDetails] = useState<VideoJob | null>(null);
   const [statusPolling, setStatusPolling] = useState(false);
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const navigate = useNavigate();
   
   // Use a ref to store the interval ID
@@ -543,6 +563,25 @@ const CreateVideoPage: React.FC = () => {
     }
   };
 
+  // Add a new action when the video is completed
+  useEffect(() => {
+    // Check if the job status has changed to completed
+    if (jobStatus?.status === 'completed') {
+      // Show a success notification
+      setNotification({
+        message: 'Your video is ready! You can find it in your Songs collection.',
+        type: 'success'
+      });
+      
+      // Set a timeout to redirect to songs page after showing the notification
+      const redirectTimer = setTimeout(() => {
+        navigate('/songs');
+      }, 5000); // Redirect after 5 seconds
+      
+      return () => clearTimeout(redirectTimer);
+    }
+  }, [jobStatus, navigate]);
+
   return (
     <AppLayout>
       <Sidebar>
@@ -580,6 +619,12 @@ const CreateVideoPage: React.FC = () => {
             </LogoutButton>
           </UserActions>
         </PageHeader>
+        
+        {notification && (
+          <NotificationMessage type={notification.type}>
+            {notification.message}
+          </NotificationMessage>
+        )}
         
         <ContentWrapper>
           <Card>

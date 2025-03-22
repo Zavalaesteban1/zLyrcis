@@ -1,15 +1,46 @@
 # Lyric Video Generator
 
-A web application that generates lyric videos for songs by combining lyrics with audio.
+This application allows users to generate lyric videos from Spotify tracks, view their collection of videos, and manage them.
+
+## New Feature: Album Artwork Integration
+
+The app now displays album artwork for your generated lyric videos, making your song collection look more like Spotify!
+
+### Setup Instructions for Spotify Album Art
+
+1. **Create a Spotify Developer Account**:
+   - Visit [Spotify Developer Dashboard](https://developer.spotify.com/dashboard/)
+   - Log in with your Spotify account or create one if you don't have it
+   - Create a new application
+
+2. **Get API Credentials**:
+   - After creating an application, you'll receive a Client ID and Client Secret
+   - In your app dashboard, add a redirect URI: `http://localhost:3000`
+
+3. **Configure Environment Variables**:
+   - Open the `frontend/.env` file
+   - Replace the placeholders with your actual Spotify credentials:
+     ```
+     REACT_APP_SPOTIFY_CLIENT_ID=your_actual_client_id
+     REACT_APP_SPOTIFY_CLIENT_SECRET=your_actual_client_secret
+     ```
+
+4. **Restart the Frontend Application**:
+   - After setting the environment variables, restart your React application to apply the changes
 
 ## Features
 
-- Automatically retrieves song information from Spotify
-- Fetches lyrics from Genius or alternative sources
-- Downloads audio from multiple sources (YouTube, Deezer) with fallbacks
-- Supports using local audio files
-- Synchronizes lyrics with audio using beat detection
-- Generates professional-looking lyric videos
+- Generate lyric videos from Spotify tracks
+- View your collection of generated videos
+- Play videos directly in the app
+- Download videos to your device
+- Delete videos you no longer want
+- Display album artwork for each track
+
+## Notes
+
+- If album artwork cannot be fetched from Spotify, the app will generate a colorful placeholder based on the song title
+- The Spotify API has rate limits, so you might see placeholder images if too many requests are made in a short time
 
 ## Using Local Audio Files
 
@@ -113,28 +144,26 @@ If you're running on Ubuntu, follow these additional steps to ensure everything 
    python -m aeneas.diagnostics
    ```
 
-## Running the Application on Ubuntu
-
-1. Start the Redis server:
+6. Start the Redis server:
    ```
    sudo systemctl start redis-server
    # To enable it to start on boot:
    sudo systemctl enable redis-server
    ```
 
-2. Start the Celery worker:
+7. Start the Celery worker:
    ```
    cd backend
    celery -A lyric_video_project worker --loglevel=info
    ```
 
-3. Start the Django development server:
+8. Start the Django development server:
    ```
    cd backend
    python manage.py runserver
    ```
 
-4. Access the application at http://localhost:8000
+9. Access the application at http://localhost:8000
 
 ## Troubleshooting Audio Issues on Ubuntu
 

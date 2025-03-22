@@ -218,4 +218,182 @@ export const isAuthenticated = (): boolean => {
   return !!getAuthToken();
 };
 
+/**
+ * Get all completed videos for the current user
+ * @returns List of completed video jobs with download URLs
+ */
+export const getUserVideos = async (): Promise<VideoJob[]> => {
+  try {
+    const response = await api.get('/videos/?status=completed');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching user videos:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a video by ID
+ * @param videoId The ID of the video to delete
+ */
+export const deleteVideo = async (videoId: string): Promise<void> => {
+  try {
+    await api.delete(`/videos/${videoId}/`);
+  } catch (error) {
+    console.error('Error deleting video:', error);
+    throw error;
+  }
+};
+
+/**
+ * Extract Spotify track ID from a Spotify URL
+ * @param spotifyUrl Spotify track URL
+ * @returns Extracted track ID or null if not found
+ */
+export const extractSpotifyTrackId = (spotifyUrl: string): string | null => {
+  // Handle different Spotify URL formats
+  const regex = /spotify\.com\/track\/([a-zA-Z0-9]+)/;
+  const match = spotifyUrl.match(regex);
+  return match ? match[1] : null;
+};
+
+// Spotify API Client ID and Secret
+const SPOTIFY_CLIENT_ID = process.env.REACT_APP_SPOTIFY_CLIENT_ID || '';
+const SPOTIFY_CLIENT_SECRET = process.env.REACT_APP_SPOTIFY_CLIENT_SECRET || '';
+
+// For debugging - will show in console
+console.log('Environment variables loaded:');
+console.log('- SPOTIFY_CLIENT_ID available:', !!SPOTIFY_CLIENT_ID);
+console.log('- SPOTIFY_CLIENT_SECRET available:', !!SPOTIFY_CLIENT_SECRET);
+
+let spotifyAccessToken: string | null = null;
+let tokenExpiryTime: number = 0;
+
+/**
+ * Get Spotify access token using Client Credentials flow
+ * @returns Spotify access token
+ * @throws Error if token cannot be obtained
+ */
+const getSpotifyAccessToken = async (): Promise<string> => {
+  try {
+    // Check if we already have a valid token
+    if (spotifyAccessToken && Date.now() < tokenExpiryTime) {
+      console.log('Using cached Spotify access token');
+      return spotifyAccessToken;
+    }
+
+    console.log('Requesting new Spotify access token...');
+    
+    // Make sure we have the credentials
+    if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
+      throw new Error('Spotify credentials are not configured');
+    }
+    
+    // Request new token using client credentials flow
+    const params = new URLSearchParams();
+    params.append('grant_type', 'client_credentials');
+    
+    const response = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + btoa(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`)
+      },
+      body: params
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to get Spotify token: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    if (data.access_token) {
+      console.log('Successfully obtained Spotify access token');
+      spotifyAccessToken = data.access_token;
+      // Set token expiry time (subtract 60 seconds to be safe)
+      tokenExpiryTime = Date.now() + (data.expires_in - 60) * 1000;
+      return data.access_token;
+    } else {
+      throw new Error('Spotify token response missing access_token');
+    }
+  } catch (error) {
+    console.error('Failed to get Spotify access token:', error);
+    throw error;
+  }
+};
+
+// Add a cache for album cover URLs
+const albumCoverCache: Record<string, string | null> = {};
+
+/**
+ * Fetch album artwork URL for a Spotify track
+ * @param trackId Spotify track ID
+ * @returns Album artwork URL or null if not found
+ */
+export const getSpotifyAlbumArtwork = async (trackId: string): Promise<string | null> => {
+  try {
+    // Check cache first
+    if (albumCoverCache[trackId] !== undefined) {
+      console.log(`Using cached album cover for track ${trackId}`);
+      return albumCoverCache[trackId];
+    }
+    
+    // Check if we have proper Spotify credentials
+    const credsAvailable = SPOTIFY_CLIENT_ID && 
+                           SPOTIFY_CLIENT_SECRET && 
+                           SPOTIFY_CLIENT_ID !== 'your_spotify_client_id_here' && 
+                           SPOTIFY_CLIENT_SECRET !== 'your_spotify_client_secret_here';
+    
+    console.log(`Album artwork for track ${trackId}: Credentials available = ${credsAvailable}`);
+    
+    if (!credsAvailable) {
+      console.log('Using mock album artwork (Spotify credentials not set)');
+      // Return a mock cover URL based on the trackId for testing
+      const mockUrl = `https://picsum.photos/seed/${trackId}/300/300`;
+      albumCoverCache[trackId] = mockUrl; // Cache the result
+      return mockUrl;
+    }
+    
+    // Skip the backend API attempt and go straight to Spotify API
+    try {
+      const token = await getSpotifyAccessToken();
+      
+      // Make direct request to Spotify API
+      const response = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Spotify API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data && data.album && data.album.images && data.album.images.length > 0) {
+        console.log('Successfully retrieved album artwork from Spotify API');
+        const coverUrl = data.album.images[0].url;
+        albumCoverCache[trackId] = coverUrl; // Cache the result
+        return coverUrl;
+      } else {
+        console.log('No album artwork found in Spotify response');
+        albumCoverCache[trackId] = null; // Cache the null result
+        return null;
+      }
+    } catch (err) {
+      console.error('Error with Spotify API call:', err);
+      // Fall back to mock image in case of API errors
+      const fallbackUrl = `https://picsum.photos/seed/${trackId}/300/300`;
+      albumCoverCache[trackId] = fallbackUrl; // Cache the fallback
+      return fallbackUrl;
+    }
+  } catch (error) {
+    console.error('Error fetching Spotify album artwork:', error);
+    return null;
+  }
+};
+
 export default api; 

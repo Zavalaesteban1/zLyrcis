@@ -1485,7 +1485,7 @@ const SongsPage: React.FC = () => {
                         : new Date(song.created_at).toLocaleDateString()}
                     </SongDuration>
                     <SongActions>
-                      {song.video_file && (
+                      {song.video_file ? (
                         <>
                           <PlayButton 
                             onClick={() => handlePlayPause(song.id)}
@@ -1499,11 +1499,15 @@ const SongsPage: React.FC = () => {
                           <DownloadButton onClick={() => handleDownload(song)}>
                             {MdDownload({ size: 22 })}
                           </DownloadButton>
-                          <DeleteButton onClick={() => handleDeleteClick(song)}>
-                            {MdDelete({ size: 22 })}
-                          </DeleteButton>
                         </>
+                      ) : (
+                        <span style={{ color: '#e91429', fontSize: '14px', fontStyle: 'italic', marginRight: '10px' }}>
+                          Failed to generate
+                        </span>
                       )}
+                      <DeleteButton onClick={() => handleDeleteClick(song)}>
+                        {MdDelete({ size: 22 })}
+                      </DeleteButton>
                     </SongActions>
                   </SongItem>
                 ))

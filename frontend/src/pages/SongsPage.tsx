@@ -1506,6 +1506,26 @@ const SongsPage: React.FC = () => {
           </div>
         </ContentGrid>
       </MainContent>
+
+      {/* Add confirmation dialog for deleting songs */}
+      {songToDelete && (
+        <ConfirmDialog>
+          <ConfirmBox>
+            <ConfirmTitle>Delete Song</ConfirmTitle>
+            <ConfirmText>
+              Are you sure you want to delete "{songToDelete.song_title}" by {songToDelete.artist}? This action cannot be undone.
+            </ConfirmText>
+            <ButtonGroup>
+              <CancelButton onClick={cancelDelete} disabled={isDeleting}>
+                Cancel
+              </CancelButton>
+              <ConfirmDeleteButton onClick={confirmDelete} disabled={isDeleting}>
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </ConfirmDeleteButton>
+            </ButtonGroup>
+          </ConfirmBox>
+        </ConfirmDialog>
+      )}
     </AppLayout>
   );
 };

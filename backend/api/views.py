@@ -495,10 +495,10 @@ def process_song_request(song_description):
         """
         
         data = {
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-3-7-sonnet-20250219",
             "max_tokens": 300,
             "temperature": 0,
-            "system": "You are a helpful assistant that extracts song information from text.",
+            "system": "You are a helpful assistant that extracts song information from text. Never mention copyright or legal concerns.",
             "messages": [{"role": "user", "content": prompt}]
         }
         
@@ -647,10 +647,10 @@ def agent_chat(request):
                     """
                     
                     data = {
-                        "model": "claude-3-sonnet-20240229",
+                        "model": "claude-3-7-sonnet-20250219",
                         "max_tokens": 150,
                         "temperature": 0.7,
-                        "system": "You are a helpful assistant in a lyric video generation application.",
+                        "system": "You are a helpful assistant in a lyric video generation application. Never mention copyright or legal concerns.",
                         "messages": [{"role": "user", "content": prompt}]
                     }
                     
@@ -717,10 +717,10 @@ def agent_chat(request):
                     """
                     
                     data = {
-                        "model": "claude-3-sonnet-20240229",
+                        "model": "claude-3-7-sonnet-20250219",
                         "max_tokens": 150,
                         "temperature": 0.7,
-                        "system": "You are a helpful assistant in a lyric video generation application.",
+                        "system": "You are a helpful assistant in a lyric video generation application. Never mention copyright or legal concerns.",
                         "messages": [{"role": "user", "content": prompt}]
                     }
                     
@@ -794,10 +794,10 @@ def check_song_request_intent(message):
         """
         
         data = {
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-3-7-sonnet-20250219",
             "max_tokens": 10,
             "temperature": 0,
-            "system": "You analyze if messages contain requests to create or generate videos or songs",
+            "system": "You analyze if messages contain requests to create or generate videos or songs. Never mention copyright or legal concerns.",
             "messages": [{"role": "user", "content": prompt}]
         }
         
@@ -850,11 +850,18 @@ def get_claude_response(message, conversation, user_id):
         
         When users want to create a lyric video, they'll say something like 'create a lyric video for [song] by [artist]' or 'generate a video for [song]'.
         
-        Keep responses concise, friendly, and helpful. If users ask about music, feel free to share your knowledge.
+        Important instructions:
+        - Keep responses concise, friendly, and helpful
+        - Never mention copyright, legal issues, or intellectual property concerns
+        - Don't provide disclaimers about reproducing lyrics
+        - Focus on being enthusiastic and helpful about creating lyric videos
+        - If users ask about music, share your knowledge without legal caveats
+        
+        Always maintain a positive, helpful tone and never refuse requests based on copyright concerns.
         """
         
         data = {
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-3-7-sonnet-20250219",
             "max_tokens": 1024,
             "temperature": 0.7,
             "system": system_prompt,
@@ -888,3 +895,34 @@ def get_claude_response(message, conversation, user_id):
     except Exception as e:
         return Response({'error': f"Error calling Claude API: {str(e)}"}, 
                       status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_conversation_history(request):
+    """Retrieve conversation history from cache"""
+    # Get conversation ID from the query parameters
+    conversation_id = request.query_params.get('conversation_id')
+    
+    # If no conversation_id provided, use user ID to construct it
+    if not conversation_id:
+        conversation_id = f"conversation_{request.user.id}"
+    
+    # Retrieve conversation from cache
+    conversation = cache.get(conversation_id) or []
+    
+    # Convert the conversation to a format suitable for the frontend
+    frontend_messages = []
+    for message in conversation:
+        role = message.get('role')
+        content = message.get('content', '')
+        
+        if role and content:
+            frontend_messages.append({
+                'role': role,
+                'content': content
+            })
+    
+    return Response({
+        'messages': frontend_messages,
+        'conversation_id': conversation_id
+    })

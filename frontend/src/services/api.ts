@@ -556,6 +556,36 @@ export interface AgentChatResponse {
   conversation_id: string;
 }
 
+// Interface for conversation history
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+// Interface for conversation history response
+export interface ConversationHistoryResponse {
+  messages: ConversationMessage[];
+  conversation_id: string;
+}
+
+// Function to fetch conversation history
+export const fetchConversationHistory = async (conversation_id: string): Promise<ConversationHistoryResponse> => {
+  const response = await fetch(`${API_URL}/get_conversation_history/?conversation_id=${conversation_id}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Token ${getAuthToken()}`
+    }
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to fetch conversation history');
+  }
+  
+  return response.json();
+};
+
 // Function to chat with the agent (for general conversation)
 export const agent_chat = async (message: string, conversation_id?: string): Promise<AgentChatResponse> => {
   const response = await fetch(`${API_URL}/agent_chat/`, {

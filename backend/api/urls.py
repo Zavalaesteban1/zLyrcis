@@ -9,7 +9,8 @@ from .views import (
     get_user_info,
     google_login,
     agent_song_request,
-    agent_chat
+    agent_chat,
+    get_conversation_history
 )
 from django.conf import settings
 from django.conf.urls.static import static
@@ -28,6 +29,7 @@ urlpatterns = [
     path('auth/google-login/', google_login, name='google_login'),
     path('agent_song_request/', agent_song_request, name='agent-song-request'),
     path('agent_chat/', agent_chat, name='agent_chat'),
+    path('get_conversation_history/', get_conversation_history, name='get_conversation_history'),
 ]
 
 if settings.DEBUG:

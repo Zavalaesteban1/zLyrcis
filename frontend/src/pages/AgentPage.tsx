@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled, { createGlobalStyle } from 'styled-components';
-import { logout, getUserProfile, agent_song_request, agent_chat, getVideoStatus } from '../services/api';
+import { logout, getUserProfile, agent_song_request, agent_chat, getVideoStatus, fetchConversationHistory } from '../services/api';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
@@ -285,12 +285,27 @@ const Dot = styled.div<{ isProcessing?: boolean }>`
 
 const ChatInput = styled.div`
   display: flex;
+  flex-direction: column;
   padding: 20px;
   border-top: 1px solid #eee;
   background-color: white;
 `;
 
-const Input = styled.input`
+const InputRow = styled.div`
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+`;
+
+const HelperText = styled.div`
+  font-size: 12px;
+  color: #888;
+  margin-top: 4px;
+  padding-left: 12px;
+  align-self: flex-start;
+`;
+
+const Textarea = styled.textarea`
   flex: 1;
   padding: 14px 20px;
   border: 1px solid #ddd;
@@ -298,6 +313,12 @@ const Input = styled.input`
   margin-right: 10px;
   font-size: 16px;
   transition: all 0.2s ease;
+  font-family: inherit;
+  resize: none;
+  min-height: 52px;
+  max-height: 120px;
+  overflow-y: auto;
+  line-height: 1.4;
   
   &:focus {
     outline: none;
@@ -366,6 +387,11 @@ interface Message {
   isProcessing?: boolean;
 }
 
+// Constants for localStorage keys
+const CONVERSATION_STORAGE_KEY = 'agent_conversation_messages';
+const CONVERSATION_ID_STORAGE_KEY = 'agent_conversation_id';
+const CURRENT_JOB_ID_STORAGE_KEY = 'agent_current_job_id';
+
 // Small utility component for date formatting
 const formatDate = () => {
   const now = new Date();
@@ -391,6 +417,150 @@ const AgentPage: React.FC = () => {
   const [currentDate] = useState(formatDate());
   // Add a ref to store the interval ID
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isRestoringConversation, setIsRestoringConversation] = useState(true);
+  
+  // Add a ref for the textarea element
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Save conversation to localStorage whenever it changes
+  useEffect(() => {
+    // Don't save if we're in the process of restoring from localStorage/backend
+    if (isRestoringConversation) return;
+    
+    // Only save if there are messages beyond the initial greeting
+    if (messages.length > 1) {
+      localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(messages));
+      console.log('Saved conversation to localStorage:', messages.length, 'messages');
+    }
+  }, [messages, isRestoringConversation]);
+  
+  // Save conversation ID when it changes
+  useEffect(() => {
+    if (conversationId) {
+      localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, conversationId);
+      console.log('Saved conversation ID to localStorage:', conversationId);
+    }
+  }, [conversationId]);
+  
+  // Save current job ID when it changes
+  useEffect(() => {
+    if (currentJobId) {
+      localStorage.setItem(CURRENT_JOB_ID_STORAGE_KEY, currentJobId);
+      console.log('Saved current job ID to localStorage:', currentJobId);
+    } else {
+      // Remove from localStorage when it's null (job completed or failed)
+      localStorage.removeItem(CURRENT_JOB_ID_STORAGE_KEY);
+    }
+  }, [currentJobId]);
+  
+  // Check for ongoing video generations when component mounts
+  useEffect(() => {
+    const checkForOngoingGenerations = () => {
+      const savedJobId = localStorage.getItem(CURRENT_JOB_ID_STORAGE_KEY);
+      if (savedJobId) {
+        console.log('Found ongoing video generation:', savedJobId);
+        setCurrentJobId(savedJobId);
+        
+        // Check if we already have a processing indicator in messages
+        const hasProcessingIndicator = messages.some(msg => msg.isProcessing);
+        
+        if (!hasProcessingIndicator) {
+          setMessages(prev => [...prev, {
+            text: '...',
+            isUser: false,
+            isProcessing: true
+          }]);
+        }
+      }
+    };
+    
+    // Only run after conversation is restored
+    if (!isRestoringConversation) {
+      checkForOngoingGenerations();
+    }
+  }, [isRestoringConversation, messages]);
+  
+  // Attempt to restore conversation when component mounts
+  useEffect(() => {
+    const restoreConversation = async () => {
+      try {
+        // Get saved conversation ID
+        const savedConversationId = localStorage.getItem(CONVERSATION_ID_STORAGE_KEY);
+        
+        if (savedConversationId) {
+          setConversationId(savedConversationId);
+          console.log('Restored conversation ID from localStorage:', savedConversationId);
+          
+          // Try to fetch conversation from backend first
+          try {
+            const history = await fetchConversationHistory(savedConversationId);
+            console.log('Fetched conversation from backend:', history);
+            
+            if (history.messages && history.messages.length > 0) {
+              // Convert backend message format to our frontend format
+              const convertedMessages: Message[] = history.messages.map(msg => ({
+                text: msg.content,
+                isUser: msg.role === 'user',
+                isProcessing: false
+              }));
+              
+              // Add our welcome message at the beginning if it's not there
+              const hasWelcomeMessage = convertedMessages.some(
+                msg => !msg.isUser && msg.text.includes("I'm your lyric video assistant")
+              );
+              
+              const finalMessages = hasWelcomeMessage 
+                ? convertedMessages
+                : [messages[0], ...convertedMessages];
+              
+              setMessages(finalMessages);
+              console.log('Restored conversation from backend:', finalMessages.length, 'messages');
+            } else {
+              // If no messages from backend, try localStorage
+              fallbackToLocalStorage();
+            }
+          } catch (error) {
+            console.error('Error fetching conversation history:', error);
+            // Fallback to localStorage if backend fetch fails
+            fallbackToLocalStorage();
+          }
+        } else {
+          // If no saved conversation ID, still try localStorage
+          fallbackToLocalStorage();
+        }
+      } catch (error) {
+        console.error('Error restoring conversation:', error);
+      } finally {
+        setIsRestoringConversation(false);
+      }
+    };
+    
+    const fallbackToLocalStorage = () => {
+      // Check for saved messages in localStorage
+      const savedMessages = localStorage.getItem(CONVERSATION_STORAGE_KEY);
+      if (savedMessages) {
+        try {
+          const parsedMessages = JSON.parse(savedMessages) as Message[];
+          if (parsedMessages.length > 0) {
+            setMessages(parsedMessages);
+            console.log('Restored conversation from localStorage:', parsedMessages.length, 'messages');
+          }
+        } catch (error) {
+          console.error('Error parsing saved messages:', error);
+        }
+      }
+    };
+    
+    restoreConversation();
+    
+    // Cleanup function to save conversation when component unmounts
+    return () => {
+      if (messages.length > 1) {
+        localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(messages));
+        console.log('Saved conversation to localStorage on unmount');
+      }
+    };
+  }, []);
   
   // Fetch user data on component mount
   useEffect(() => {
@@ -413,9 +583,15 @@ const AgentPage: React.FC = () => {
   
   // Clean up interval on component unmount or when job changes
   useEffect(() => {
+    // Start polling if currentJobId is set
+    if (currentJobId) {
+      startCheckingJobStatus(currentJobId);
+    }
+    
     // Cleanup function
     return () => {
       if (intervalRef.current) {
+        console.log("Cleaning up interval on unmount or job change");
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
@@ -446,18 +622,24 @@ const AgentPage: React.FC = () => {
     
     try {
       // Use the agent_chat endpoint for all conversations
+      console.log('Sending message with conversation ID:', conversationId);
       const response = await agent_chat(userMessage, conversationId);
       
       // Remove typing indicator
       setMessages(prev => prev.slice(0, -1));
       
       // Save the conversation ID for future messages
-      if (response.conversation_id) {
+      if (response.conversation_id && response.conversation_id !== conversationId) {
+        console.log('Updating conversation ID:', response.conversation_id);
         setConversationId(response.conversation_id);
       }
       
       // Handle song request confirmation
       if (response.is_song_request && response.song_request_data) {
+        // First, clear any existing processing indicators to avoid duplicates
+        setMessages(prev => prev.filter(msg => !msg.isProcessing));
+        
+        // Set the new job ID
         setCurrentJobId(response.song_request_data.job_id);
         
         // Add the assistant's response
@@ -473,8 +655,7 @@ const AgentPage: React.FC = () => {
           isProcessing: true  // Mark as processing indicator
         }]);
         
-        // Start polling for job status
-        startCheckingJobStatus(response.song_request_data.job_id);
+        // The polling will start due to the useEffect with currentJobId dependency
       } else {
         // For regular responses
         setMessages(prev => [...prev, { 
@@ -510,11 +691,17 @@ const AgentPage: React.FC = () => {
       intervalRef.current = null;
     }
     
+    // Keep track of whether we're still polling
+    let isPolling = true;
+    
     const checkStatus = async () => {
       try {
         console.log(`Checking status for job: ${jobId}`);
         const statusResponse = await getVideoStatus(jobId);
         console.log(`Job status: ${statusResponse.status}`);
+        
+        // If we stopped polling while the request was in progress, don't update anything
+        if (!isPolling) return;
         
         if (statusResponse.status === 'completed') {
           // Remove the processing indicator
@@ -526,11 +713,16 @@ const AgentPage: React.FC = () => {
             isUser: false 
           }]);
           
-          // Clear the interval
+          // Clear the interval and mark polling as stopped
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
+            isPolling = false;
           }
+          
+          // Clear the job ID to prevent further checks
+          setCurrentJobId(null);
+          
         } else if (statusResponse.status === 'failed') {
           // Remove the processing indicator
           setMessages(prev => prev.filter(msg => !msg.isProcessing));
@@ -542,27 +734,41 @@ const AgentPage: React.FC = () => {
             isUser: false 
           }]);
           
-          // Clear the interval
+          // Clear the interval and mark polling as stopped
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
+            isPolling = false;
           }
+          
+          // Clear the job ID to prevent further checks
+          setCurrentJobId(null);
         }
-        // If still processing, keep the processing indicator
+        // If still processing, keep the processing indicator and continue polling
       } catch (error) {
         console.error('Error checking video status:', error);
+        
+        // If we stopped polling while the request was in progress, don't update anything
+        if (!isPolling) return;
+        
         // Remove the processing indicator on error
         setMessages(prev => prev.filter(msg => !msg.isProcessing));
+        
         // Add error message so user knows something went wrong
         setMessages(prev => [...prev, { 
           text: "I'm having trouble checking on your video status. Please check the My Songs section to see if it's ready.", 
           isUser: false 
         }]);
+        
         // Clear interval on error to prevent infinite errors
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
+          isPolling = false;
         }
+        
+        // Clear the job ID to prevent further checks
+        setCurrentJobId(null);
       }
     };
     
@@ -572,6 +778,34 @@ const AgentPage: React.FC = () => {
     // Make an immediate check
     checkStatus();
   };
+  
+  // Handle key press events for the textarea
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Allow Shift+Enter for line breaks
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); // Prevent the default behavior (new line)
+      handleSend(); // Send the message
+    }
+    // Shift+Enter will add a new line naturally
+  };
+  
+  // Function to auto-resize the textarea based on content
+  const autoResizeTextarea = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+    
+    // Set the height to scrollHeight to fit the content
+    // but cap it at max-height via CSS
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+  };
+  
+  // Listen for input changes to resize the textarea
+  useEffect(() => {
+    autoResizeTextarea();
+  }, [input]);
   
   return (
     <AppLayout>
@@ -659,21 +893,25 @@ const AgentPage: React.FC = () => {
             <div ref={messagesEndRef} />
           </ChatMessages>
           <ChatInput>
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask me about creating a lyric video..."
-              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-              disabled={isLoading}
-            />
-            <SendButton onClick={handleSend} disabled={isLoading}>
-              {isLoading ? 'Sending...' : (
-                <>
-                  Send
-                  {MdSend({ size: 18, style: { marginLeft: '6px' } })}
-                </>
-              )}
-            </SendButton>
+            <InputRow>
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask me about creating a lyric video..."
+                onKeyDown={handleKeyPress}
+                disabled={isLoading}
+                rows={1}
+              />
+              <SendButton onClick={handleSend} disabled={isLoading}>
+                {isLoading ? 'Sending...' : (
+                  <>
+                    Send
+                    {MdSend({ size: 18, style: { marginLeft: '6px' } })}
+                  </>
+                )}
+              </SendButton>
+            </InputRow>
           </ChatInput>
         </ChatContainer>
       </MainContent>

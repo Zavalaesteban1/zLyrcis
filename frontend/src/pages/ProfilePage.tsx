@@ -11,6 +11,7 @@ import { BiChevronDown } from 'react-icons/bi';
 import { BsCamera } from 'react-icons/bs';
 import { BsMusicNoteList } from 'react-icons/bs';
 import { FiTrendingUp } from 'react-icons/fi';
+import { RiRobot2Line } from 'react-icons/ri';
 
 // Styled components for the redesigned profile page
 const AppLayout = styled.div`
@@ -789,7 +790,7 @@ const ProfilePage: React.FC = () => {
         <Sidebar>
           <Logo>zLyrics</Logo>
           <NavMenu>
-            <NavItem to="/" active>
+            <NavItem to="/">
               <NavIcon>{IoHomeOutline({ size: 18 })}</NavIcon> Home
             </NavItem>
             <NavItem to="/profile">
@@ -799,7 +800,10 @@ const ProfilePage: React.FC = () => {
               <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
             </NavItem>
             <NavItem to="/create">
-              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
+              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
+            </NavItem>
+            <NavItem to="/agent">
+              <NavIcon>{RiRobot2Line({ size: 18 })}</NavIcon> Agent
             </NavItem>
           </NavMenu>
         </Sidebar>
@@ -817,7 +821,7 @@ const ProfilePage: React.FC = () => {
         <Sidebar>
           <Logo>zLyrics</Logo>
           <NavMenu>
-            <NavItem to="/" active>
+            <NavItem to="/">
               <NavIcon>{IoHomeOutline({ size: 18 })}</NavIcon> Home
             </NavItem>
             <NavItem to="/profile">
@@ -827,7 +831,10 @@ const ProfilePage: React.FC = () => {
               <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
             </NavItem>
             <NavItem to="/create">
-              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
+              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
+            </NavItem>
+            <NavItem to="/agent">
+              <NavIcon>{RiRobot2Line({ size: 18 })}</NavIcon> Agent
             </NavItem>
           </NavMenu>
         </Sidebar>
@@ -847,17 +854,20 @@ const ProfilePage: React.FC = () => {
       <Sidebar>
         <Logo>zLyrics</Logo>
         <NavMenu>
-          <NavItem to="/" active>
+          <NavItem to="/">
             <NavIcon>{IoHomeOutline({ size: 18 })}</NavIcon> Home
           </NavItem>
-          <NavItem to="/profile">
+          <NavItem to="/profile" active>
             <NavIcon>{CgProfile({ size: 18 })}</NavIcon> Profile
           </NavItem>
           <NavItem to="/songs">
             <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
           </NavItem>
           <NavItem to="/create">
-            <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
+            <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
+          </NavItem>
+          <NavItem to="/agent">
+            <NavIcon>{RiRobot2Line({ size: 18 })}</NavIcon> Agent
           </NavItem>
         </NavMenu>
       </Sidebar>

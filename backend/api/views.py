@@ -21,6 +21,10 @@ import os
 import logging
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+import requests
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+from django.core.cache import cache
 
 # Create your views here.
 
@@ -418,3 +422,469 @@ def get_user_info(request):
         'last_name': user.last_name,
         'profile': profile_data
     })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def agent_song_request(request):
+    """Handle song requests from the conversational agent"""
+    # Extract song description from request
+    song_description = request.data.get('song_description', '')
+    
+    if not song_description:
+        return Response({'error': 'No song description provided'}, 
+                      status=status.HTTP_400_BAD_REQUEST)
+    
+    # Call Claude API to extract song details
+    song_info = process_song_request(song_description)
+    
+    if not song_info or 'error' in song_info:
+        return Response({'error': song_info.get('error', 'Failed to process request')}, 
+                      status=status.HTTP_400_BAD_REQUEST)
+    
+    # Search Spotify for the song
+    spotify_url = search_spotify(song_info['title'], song_info['artist'])
+    
+    if not spotify_url:
+        return Response({
+            'error': f"Could not find '{song_info['title']}' by {song_info['artist']} on Spotify",
+            'title': song_info['title'],
+            'artist': song_info['artist']
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Create a video job using the existing pipeline
+    serializer = VideoJobSerializer(data={'spotify_url': spotify_url})
+    if serializer.is_valid():
+        try:
+            job = serializer.save(status='pending', user=request.user)
+        except:
+            job = serializer.save(status='pending')
+            
+        # Queue the video generation task
+        generate_lyric_video.delay(job.id)
+        
+        return Response({
+            'message': f"Creating lyric video for {song_info['title']} by {song_info['artist']}",
+            'job_id': job.id,
+            'status': 'pending',
+            'title': song_info['title'],
+            'artist': song_info['artist']
+        })
+    else:
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+def process_song_request(song_description):
+    """Use Claude to extract song title and artist from natural language description"""
+    try:
+        # Get API key from environment variable
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            return {"error": "Anthropic API key not found"}
+        
+        headers = {
+            "x-api-key": api_key,
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01"
+        }
+        
+        prompt = f"""
+        Extract the song title and artist from the following request:
+        "{song_description}"
+        
+        Respond with a JSON object containing 'title' and 'artist' fields.
+        If the request doesn't contain a specific song, make your best guess based on the description.
+        """
+        
+        data = {
+            "model": "claude-3-sonnet-20240229",
+            "max_tokens": 300,
+            "temperature": 0,
+            "system": "You are a helpful assistant that extracts song information from text.",
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json=data
+        )
+        
+        if response.status_code != 200:
+            return {"error": f"API request failed with status code {response.status_code}: {response.text}"}
+        
+        result = response.json()
+        content = result.get('content', [{}])[0].get('text', '')
+        
+        # Extract JSON from Claude's response
+        import re
+        
+        json_match = re.search(r'```json\n(.*?)\n```', content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            json_str = content
+        
+        # Clean up any non-JSON text
+        json_str = re.sub(r'^.*?(\{.*\}).*$', r'\1', json_str, flags=re.DOTALL)
+        
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            # Fallback extraction if JSON parsing fails
+            title_match = re.search(r'title["\']?\s*:\s*["\']([^"\']+)["\']', content)
+            artist_match = re.search(r'artist["\']?\s*:\s*["\']([^"\']+)["\']', content)
+            
+            if title_match and artist_match:
+                return {
+                    'title': title_match.group(1),
+                    'artist': artist_match.group(1)
+                }
+            else:
+                return {"error": "Failed to parse response from Claude"}
+            
+    except Exception as e:
+        return {"error": f"Error calling Claude API: {str(e)}"}
+
+def search_spotify(title, artist):
+    """Search Spotify for a song and return the URL"""
+    try:
+        # Get Spotify credentials from environment variables
+        client_id = os.environ.get("SPOTIFY_CLIENT_ID")
+        client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
+        
+        if not client_id or not client_secret:
+            print("Spotify API credentials missing")
+            return None
+        
+        sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+            client_id=client_id,
+            client_secret=client_secret
+        ))
+        
+        # Search Spotify for the song
+        query = f"track:{title} artist:{artist}"
+        results = sp.search(q=query, type='track', limit=1)
+        
+        if results['tracks']['items']:
+            # Return the Spotify URL
+            return results['tracks']['items'][0]['external_urls']['spotify']
+        else:
+            # Try a broader search if the specific one failed
+            query = f"{title} {artist}"
+            results = sp.search(q=query, type='track', limit=1)
+            
+            if results['tracks']['items']:
+                return results['tracks']['items'][0]['external_urls']['spotify']
+        
+        return None
+    except Exception as e:
+        print(f"Error searching Spotify: {str(e)}")
+        return None
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def agent_chat(request):
+    """Handle general conversations with the AI agent"""
+    message = request.data.get('message', '')
+    
+    if not message:
+        return Response({'error': 'No message provided'}, 
+                      status=status.HTTP_400_BAD_REQUEST)
+    
+    # Get conversation history from cache, limited to last 10 messages
+    conversation_key = f"conversation_{request.user.id}"
+    conversation = cache.get(conversation_key) or []
+    
+    # Limit conversation history to last 10 messages to keep context window manageable
+    if len(conversation) > 10:
+        conversation = conversation[-10:]
+    
+    # Check if the message contains a song request intent
+    song_request_keywords = ['create', 'generate', 'make', 'video', 'song', 'lyric', 'music']
+    possible_song_request = any(keyword in message.lower() for keyword in song_request_keywords)
+    
+    # If it sounds like a song request, check with Claude to confirm
+    is_song_request = False
+    if possible_song_request:
+        is_song_request = check_song_request_intent(message)
+    
+    # If confirmed as a song request, process it specially
+    if is_song_request:
+        # Extract song info
+        song_info = process_song_request(message)
+        if not song_info or 'error' in song_info:
+            # If extraction failed, just treat it as a normal message
+            return get_claude_response(message, conversation, request.user.id)
+        
+        # Try to find the song on Spotify
+        spotify_url = search_spotify(song_info['title'], song_info['artist'])
+        
+        if not spotify_url:
+            # Add this exchange to conversation history
+            conversation.append({"role": "user", "content": message})
+            
+            # Generate a conversational response with Claude instead of hardcoded message
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                error_response = f"I couldn't find '{song_info['title']}' by {song_info['artist']} on Spotify. Could you check the spelling or try another song?"
+            else:
+                try:
+                    headers = {
+                        "x-api-key": api_key,
+                        "Content-Type": "application/json",
+                        "anthropic-version": "2023-06-01"
+                    }
+                    
+                    prompt = f"""
+                    You are a helpful assistant in a lyric video generation application.
+                    
+                    The user requested to create a lyric video for a song titled '{song_info['title']}' by the artist {song_info['artist']}.
+                    Unfortunately, you couldn't find this song on Spotify.
+                    
+                    Please respond in a conversational, helpful way letting them know you couldn't find the song
+                    and suggest they try another song or check the spelling. Be empathetic and maintain a friendly tone.
+                    
+                    Keep your response to 1-2 sentences.
+                    """
+                    
+                    data = {
+                        "model": "claude-3-sonnet-20240229",
+                        "max_tokens": 150,
+                        "temperature": 0.7,
+                        "system": "You are a helpful assistant in a lyric video generation application.",
+                        "messages": [{"role": "user", "content": prompt}]
+                    }
+                    
+                    response = requests.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers=headers,
+                        json=data
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        error_response = result.get('content', [{}])[0].get('text', '').strip()
+                    else:
+                        error_response = f"I couldn't find '{song_info['title']}' by {song_info['artist']} on Spotify. Could you check the spelling or try another song?"
+                except:
+                    error_response = f"I couldn't find '{song_info['title']}' by {song_info['artist']} on Spotify. Could you check the spelling or try another song?"
+            
+            # Add the response to conversation history
+            conversation.append({"role": "assistant", "content": error_response})
+            
+            # Save updated conversation
+            cache.set(conversation_key, conversation, 86400)  # 24 hour expiry
+            
+            return Response({
+                'message': error_response,
+                'is_song_request': True,
+                'song_found': False,
+                'conversation_id': conversation_key
+            })
+        
+        # Create a video job
+        serializer = VideoJobSerializer(data={'spotify_url': spotify_url})
+        if serializer.is_valid():
+            try:
+                job = serializer.save(status='pending', user=request.user)
+            except:
+                job = serializer.save(status='pending')
+                
+            # Queue the video generation task
+            generate_lyric_video.delay(job.id)
+            
+            # Generate a conversational response with Claude instead of hardcoded message
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
+            else:
+                try:
+                    headers = {
+                        "x-api-key": api_key,
+                        "Content-Type": "application/json",
+                        "anthropic-version": "2023-06-01"
+                    }
+                    
+                    prompt = f"""
+                    You are a helpful assistant in a lyric video generation application.
+                    
+                    The user requested to create a lyric video for a song titled '{song_info['title']}' by the artist {song_info['artist']}.
+                    You successfully found the song and are now generating a video for it. This will take a few minutes to process.
+                    
+                    Respond in a conversational, enthusiastic way confirming you're creating the video. Let them know that the video
+                    will be available in the 'My Songs' section when it's ready. Express enthusiasm about their song choice if appropriate.
+                    
+                    Keep your response to 2-3 sentences.
+                    """
+                    
+                    data = {
+                        "model": "claude-3-sonnet-20240229",
+                        "max_tokens": 150,
+                        "temperature": 0.7,
+                        "system": "You are a helpful assistant in a lyric video generation application.",
+                        "messages": [{"role": "user", "content": prompt}]
+                    }
+                    
+                    response = requests.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers=headers,
+                        json=data
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        success_response = result.get('content', [{}])[0].get('text', '').strip()
+                    else:
+                        success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
+                except:
+                    success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
+            
+            # Add this exchange to conversation history
+            conversation.append({"role": "user", "content": message})
+            conversation.append({"role": "assistant", "content": success_response})
+            
+            # Save updated conversation
+            cache.set(conversation_key, conversation, 86400)  # 24 hour expiry
+            
+            return Response({
+                'message': success_response,
+                'is_song_request': True,
+                'song_found': True,
+                'song_request_data': {
+                    'job_id': job.id,
+                    'title': song_info['title'],
+                    'artist': song_info['artist'],
+                    'status': 'pending'
+                },
+                'conversation_id': conversation_key
+            })
+        else:
+            # Handle validation errors
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    # If not a song request, handle as normal conversation
+    response = get_claude_response(message, conversation, request.user.id)
+    
+    # Add conversation_id to the response data
+    if isinstance(response, Response):
+        response_data = response.data
+        response_data['conversation_id'] = conversation_key
+        return Response(response_data)
+    else:
+        return response
+
+def check_song_request_intent(message):
+    """Check if the user's message is requesting a song/video creation"""
+    try:
+        # Get API key from environment variable
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            return False  # Default to false if no API key
+        
+        headers = {
+            "x-api-key": api_key,
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01"
+        }
+        
+        prompt = f"""
+        Analyze if the following message is requesting to create or generate a video or song:
+        "{message}"
+        
+        Answer with only "yes" or "no".
+        """
+        
+        data = {
+            "model": "claude-3-sonnet-20240229",
+            "max_tokens": 10,
+            "temperature": 0,
+            "system": "You analyze if messages contain requests to create or generate videos or songs",
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json=data
+        )
+        
+        if response.status_code != 200:
+            return False
+        
+        result = response.json()
+        content = result.get('content', [{}])[0].get('text', '').strip().lower()
+        
+        return 'yes' in content
+    except Exception as e:
+        print(f"Error checking song request intent: {str(e)}")
+        return False
+
+def get_claude_response(message, conversation, user_id):
+    """Get a response from Claude, maintaining conversation history"""
+    try:
+        # Get API key from environment variable
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            return Response({'error': "Anthropic API key not found"}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        headers = {
+            "x-api-key": api_key,
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01"
+        }
+        
+        # Add current message to history
+        conversation.append({"role": "user", "content": message})
+        
+        # Prepare the messages for Claude API
+        messages = conversation.copy()
+        
+        # Generate system prompt
+        system_prompt = """
+        You are a helpful assistant in a lyric video generation application.
+        
+        Your main capabilities:
+        1. Create lyric videos for songs when users request them
+        2. Have normal conversations about music, videos, and other topics
+        3. Answer questions about the application
+        
+        When users want to create a lyric video, they'll say something like 'create a lyric video for [song] by [artist]' or 'generate a video for [song]'.
+        
+        Keep responses concise, friendly, and helpful. If users ask about music, feel free to share your knowledge.
+        """
+        
+        data = {
+            "model": "claude-3-sonnet-20240229",
+            "max_tokens": 1024,
+            "temperature": 0.7,
+            "system": system_prompt,
+            "messages": messages
+        }
+        
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json=data
+        )
+        
+        if response.status_code != 200:
+            return Response({'error': f"API request failed with status code {response.status_code}"}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        result = response.json()
+        assistant_message = result.get('content', [{}])[0].get('text', '')
+        
+        # Add assistant's response to conversation history
+        conversation.append({"role": "assistant", "content": assistant_message})
+        
+        # Save updated conversation
+        conversation_key = f"conversation_{user_id}"
+        cache.set(conversation_key, conversation, 86400)  # 24 hour expiry
+        
+        return Response({
+            'message': assistant_message,
+            'is_song_request': False
+        })
+    except Exception as e:
+        return Response({'error': f"Error calling Claude API: {str(e)}"}, 
+                      status=status.HTTP_500_INTERNAL_SERVER_ERROR)

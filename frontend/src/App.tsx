@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import SongsPage from './pages/SongsPage';
 import CreateVideoPage from './pages/CreateVideoPage';
+import AgentPage from './pages/AgentPage';
 import { isAuthenticated, getCurrentUser } from './services/api';
 import './app.css';
 
@@ -82,6 +83,7 @@ function App() {
             <Route path="/profile" element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
             <Route path="/songs" element={<ProtectedRoute element={<TransitionRoute element={<SongsPage />} />} />} />
             <Route path="/create" element={<ProtectedRoute element={<TransitionRoute element={<CreateVideoPage />} />} />} />
+            <Route path="/agent" element={<ProtectedRoute element={<TransitionRoute element={<AgentPage />} />} />} />
             <Route path="/edit-profile" element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
             <Route path="/change-password" element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
           </Routes>

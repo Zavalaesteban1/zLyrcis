@@ -8,6 +8,7 @@ import { IoHomeOutline } from 'react-icons/io5';
 import { MdMusicNote, MdAdd, MdLogout, MdDownload, MdPlayArrow, MdPause, MdClose, MdDelete, MdCheckCircle, MdStar, MdStarBorder } from 'react-icons/md';
 import { BsMusicNoteList, BsCheckSquare, BsCheckSquareFill } from 'react-icons/bs';
 import { AiFillStar, AiOutlineStar } from 'react-icons/ai';
+import { RiRobot2Line } from 'react-icons/ri';
 
 // Styled components for the songs page (matching profile page style)
 const AppLayout = styled.div`
@@ -1289,7 +1290,10 @@ const SongsPage: React.FC = () => {
               <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
             </NavItem>
             <NavItem to="/create">
-              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
+              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
+            </NavItem>
+            <NavItem to="/agent">
+              <NavIcon>{RiRobot2Line({ size: 18 })}</NavIcon> Agent
             </NavItem>
           </NavMenu>
         </Sidebar>
@@ -1318,7 +1322,10 @@ const SongsPage: React.FC = () => {
               <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
             </NavItem>
             <NavItem to="/create">
-              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
+              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
+            </NavItem>
+            <NavItem to="/agent">
+              <NavIcon>{RiRobot2Line({ size: 18 })}</NavIcon> Agent
             </NavItem>
           </NavMenu>
         </Sidebar>
@@ -1351,7 +1358,10 @@ const SongsPage: React.FC = () => {
             <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
           </NavItem>
           <NavItem to="/create">
-            <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
+            <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
+          </NavItem>
+          <NavItem to="/agent">
+            <NavIcon>{RiRobot2Line({ size: 18 })}</NavIcon> Agent
           </NavItem>
         </NavMenu>
       </Sidebar>
@@ -1471,164 +1481,33 @@ const SongsPage: React.FC = () => {
                             filled={!!song.difficultyRating && star <= song.difficultyRating}
                             onClick={() => setDifficultyRating(song.id, star)}
                             title={`Difficulty: ${star}`}
-                          >
-                            {!!song.difficultyRating && star <= song.difficultyRating 
-                              ? AiFillStar({ size: 16 }) 
-                              : AiOutlineStar({ size: 16 })}
-                          </Star>
+                          />
                         ))}
                       </StarRating>
                     </SongInfo>
-                    <SongDuration>
-                      {song.lastPracticed 
-                        ? `Last practiced: ${new Date(song.lastPracticed).toLocaleDateString()}`
-                        : new Date(song.created_at).toLocaleDateString()}
-                    </SongDuration>
                     <SongActions>
-                      {song.video_file ? (
-                        <>
-                          <PlayButton 
-                            onClick={() => handlePlayPause(song.id)}
-                            className={playingSongId === song.id ? 'playing' : ''}
-                          >
-                            {playingSongId === song.id 
-                              ? MdPause({ size: 22 })
-                              : MdPlayArrow({ size: 22 })
-                            }
-                          </PlayButton>
-                          <DownloadButton onClick={() => handleDownload(song)}>
-                            {MdDownload({ size: 22 })}
-                          </DownloadButton>
-                        </>
-                      ) : (
-                        <span style={{ color: '#e91429', fontSize: '14px', fontStyle: 'italic', marginRight: '10px' }}>
-                          Failed to generate
-                        </span>
-                      )}
-                      <DeleteButton onClick={() => handleDeleteClick(song)}>
-                        {MdDelete({ size: 22 })}
-                      </DeleteButton>
+                      <ActionButton onClick={() => handlePlayPause(song.id)}>
+                        {playingSongId === song.id ? MdPause({ size: 18 }) : MdPlayArrow({ size: 18 })}
+                      </ActionButton>
+                      <ActionButton onClick={() => handleDownload(song)}>
+                        {MdDownload({ size: 18 })}
+                      </ActionButton>
+                      <ActionButton onClick={() => handleDeleteClick(song)}>
+                        {MdDelete({ size: 18 })}
+                      </ActionButton>
                     </SongActions>
                   </SongItem>
                 ))
               )}
             </SongsList>
           </SongsContainer>
-          
           <div>
             {renderLearningStats()}
-            
-            <ComingSoonCard>
-              <ComingSoonTitle>Track Your Progress</ComingSoonTitle>
-              <ComingSoonText>
-                Mark songs as "learned" when you've mastered them. Set difficulty ratings to
-                prioritize your practice sessions. Filter the list to focus on what you're
-                still learning.
-              </ComingSoonText>
-            </ComingSoonCard>
           </div>
         </ContentGrid>
       </MainContent>
-      
-      {/* Video Player Modal */}
-      {playingSongId && (
-        <VideoModal onClick={() => setPlayingSongId(null)}>
-          <VideoContainer onClick={(e) => e.stopPropagation()}>
-            <VideoCloseButton onClick={() => setPlayingSongId(null)}>
-              {MdClose({ size: 20 })}
-            </VideoCloseButton>
-            
-            {videoLoading && (
-              <LoadingOverlay>
-                <LoadingSpinner />
-                <LoadingText>Loading video...</LoadingText>
-              </LoadingOverlay>
-            )}
-            
-            <VideoPlayer 
-              ref={videoRef}
-              controls
-              preload="auto"
-              autoPlay
-              onEnded={() => setPlayingSongId(null)}
-            />
-            
-            <VideoInfoBar>
-              {(() => {
-                const playingSong = songs.find(s => s.id === playingSongId);
-                return playingSong ? (
-                  <>
-                    <VideoTitle>{playingSong.song_title}</VideoTitle>
-                    <VideoArtist>{playingSong.artist}</VideoArtist>
-                  </>
-                ) : null;
-              })()}
-            </VideoInfoBar>
-          </VideoContainer>
-        </VideoModal>
-      )}
-      
-      {/* Confirm Delete Dialog */}
-      {songToDelete && (
-        <ConfirmDialog>
-          <ConfirmBox>
-            <ConfirmTitle>Delete Song</ConfirmTitle>
-            <ConfirmText>
-              Are you sure you want to delete "{songToDelete.song_title}" by {songToDelete.artist}? 
-              This action cannot be undone.
-            </ConfirmText>
-            <ButtonGroup>
-              <CancelButton onClick={cancelDelete} disabled={isDeleting}>
-                Cancel
-              </CancelButton>
-              <ConfirmDeleteButton onClick={confirmDelete} disabled={isDeleting}>
-                {isDeleting ? 'Deleting...' : 'Delete'}
-              </ConfirmDeleteButton>
-            </ButtonGroup>
-          </ConfirmBox>
-        </ConfirmDialog>
-      )}
     </AppLayout>
   );
 };
 
-// Add the new styled components for loading overlay
-const LoadingOverlay = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  z-index: 5;
-`;
-
-const LoadingSpinner = styled.div`
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  border-left-color: #1DB954;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-`;
-
-const LoadingText = styled.p`
-  color: white;
-  margin-top: 15px;
-  font-size: 16px;
-`;
-
-export default SongsPage; 
+export default SongsPage;

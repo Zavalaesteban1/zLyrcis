@@ -9,6 +9,7 @@ import { MdMusicNote, MdAdd, MdLogout, MdCheckCircle } from 'react-icons/md';
 import { BsMusicNoteList, BsSpotify } from 'react-icons/bs';
 import { FiTrendingUp } from 'react-icons/fi';
 import { AiOutlineClockCircle } from 'react-icons/ai';
+import { RiRobot2Line } from 'react-icons/ri';
 
 // Styled components for the home page (matching profile page style)
 const AppLayout = styled.div`
@@ -647,7 +648,7 @@ const HomePage: React.FC = () => {
               <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
             </NavItem>
             <NavItem to="/create">
-              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
+              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
             </NavItem>
           </NavMenu>
         </Sidebar>
@@ -675,7 +676,10 @@ const HomePage: React.FC = () => {
             <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
           </NavItem>
           <NavItem to="/create">
-            <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Video
+            <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
+          </NavItem>
+          <NavItem to="/agent">
+            <NavIcon>{RiRobot2Line({ size: 18 })}</NavIcon> Agent
           </NavItem>
         </NavMenu>
       </Sidebar>
@@ -771,7 +775,7 @@ const HomePage: React.FC = () => {
               <QuickActionsList>
                 <QuickActionButton to="/create">
                   <QuickActionIcon>{MdAdd({ size: 24 })}</QuickActionIcon>
-                  <QuickActionText>Create Video</QuickActionText>
+                  <QuickActionText>Create Lyrics</QuickActionText>
                 </QuickActionButton>
                 <QuickActionButton to="/songs">
                   <QuickActionIcon>{BsMusicNoteList({ size: 24 })}</QuickActionIcon>

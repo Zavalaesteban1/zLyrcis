@@ -515,4 +515,67 @@ export const getSpotifyAlbumArtwork = async (trackId: string): Promise<string | 
   }
 };
 
+// Add this interface for the agent response
+export interface AgentSongResponse {
+  message: string;
+  job_id: string;
+  status: string;
+  title: string;
+  artist: string;
+}
+
+// Add the agent_song_request function
+export const agent_song_request = async (song_description: string): Promise<AgentSongResponse> => {
+  const response = await fetch(`${API_URL}/agent_song_request/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Token ${getAuthToken()}`
+    },
+    body: JSON.stringify({ song_description })
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to process song request');
+  }
+  
+  return response.json();
+};
+
+// Interface for agent chat response
+export interface AgentChatResponse {
+  message: string;
+  is_song_request: boolean;
+  song_request_data?: {
+    job_id: string;
+    status: string;
+    title: string;
+    artist: string;
+  };
+  conversation_id: string;
+}
+
+// Function to chat with the agent (for general conversation)
+export const agent_chat = async (message: string, conversation_id?: string): Promise<AgentChatResponse> => {
+  const response = await fetch(`${API_URL}/agent_chat/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Token ${getAuthToken()}`
+    },
+    body: JSON.stringify({ 
+      message,
+      conversation_id: conversation_id || null
+    })
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to process chat message');
+  }
+  
+  return response.json();
+};
+
 export default api; 

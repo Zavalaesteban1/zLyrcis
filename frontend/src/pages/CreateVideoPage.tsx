@@ -7,6 +7,7 @@ import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
 import { MdMusicNote, MdAdd, MdLogout } from 'react-icons/md';
 import { FiUser } from 'react-icons/fi';
+import { RiRobot2Line } from 'react-icons/ri';
 
 // Styled components for the create video page (matching profile page style)
 const AppLayout = styled.div`
@@ -598,6 +599,9 @@ const CreateVideoPage: React.FC = () => {
           </NavItem>
           <NavItem to="/create" active>
             <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
+          </NavItem>
+          <NavItem to="/agent">
+            <NavIcon>{RiRobot2Line({ size: 18 })}</NavIcon> Agent
           </NavItem>
         </NavMenu>
       </Sidebar>

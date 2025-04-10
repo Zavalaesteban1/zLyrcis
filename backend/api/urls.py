@@ -7,7 +7,9 @@ from .views import (
     user_signup,
     user_logout,
     get_user_info,
-    google_login
+    google_login,
+    agent_song_request,
+    agent_chat
 )
 from django.conf import settings
 from django.conf.urls.static import static
@@ -24,6 +26,8 @@ urlpatterns = [
     path('auth/logout/', user_logout, name='logout'),
     path('auth/user/', get_user_info, name='user_info'),
     path('auth/google-login/', google_login, name='google_login'),
+    path('agent_song_request/', agent_song_request, name='agent-song-request'),
+    path('agent_chat/', agent_chat, name='agent_chat'),
 ]
 
 if settings.DEBUG:

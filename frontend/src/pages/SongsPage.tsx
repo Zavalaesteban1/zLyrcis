@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import styled from 'styled-components';
+import styled, { createGlobalStyle } from 'styled-components';
 import { getUserProfile, logout, getUserVideos, deleteVideo, VideoJob, extractSpotifyTrackId, getSpotifyAlbumArtwork } from '../services/api';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
@@ -9,6 +9,20 @@ import { MdMusicNote, MdAdd, MdLogout, MdDownload, MdPlayArrow, MdPause, MdClose
 import { BsMusicNoteList, BsCheckSquare, BsCheckSquareFill } from 'react-icons/bs';
 import { AiFillStar, AiOutlineStar } from 'react-icons/ai';
 import { RiRobot2Line } from 'react-icons/ri';
+
+// Add global style to hide all scrollbars
+const GlobalStyle = createGlobalStyle`
+  body, div {
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    
+    /* Hide scrollbar for IE, Edge and Firefox */
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+`;
 
 // Styled components for the songs page (matching profile page style)
 const AppLayout = styled.div`
@@ -88,6 +102,16 @@ const MainContent = styled.main`
   padding: 30px;
   width: calc(100% - 240px);
   transition: all 0.2s ease;
+  overflow-y: auto;
+  
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Hide scrollbar for IE, Edge and Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
   
   @media (max-width: 1200px) {
     padding: 30px 40px;
@@ -186,27 +210,17 @@ const SongsHeaderTitle = styled.h2`
 
 const SongsList = styled.div`
   padding: 0;
-  max-height: calc(100vh - 250px);
+  max-height: calc(100vh - 300px);
   overflow-y: auto;
   
-  /* Custom scrollbar for better UX */
+  /* Hide scrollbar for Chrome, Safari and Opera */
   &::-webkit-scrollbar {
-    width: 10px;
+    display: none;
   }
   
-  &::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-  }
-  
-  &::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 4px;
-  }
-  
-  &::-webkit-scrollbar-thumb:hover {
-    background: #1DB954;
-  }
+  /* Hide scrollbar for IE, Edge and Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 `;
 
 const SongItem = styled.div`
@@ -1277,6 +1291,7 @@ const SongsPage: React.FC = () => {
   if (loading) {
     return (
       <AppLayout>
+        <GlobalStyle />
         <Sidebar>
           <Logo>zLyrics</Logo>
           <NavMenu>
@@ -1309,6 +1324,7 @@ const SongsPage: React.FC = () => {
   if (error) {
     return (
       <AppLayout>
+        <GlobalStyle />
         <Sidebar>
           <Logo>zLyrics</Logo>
           <NavMenu>
@@ -1345,6 +1361,7 @@ const SongsPage: React.FC = () => {
   
   return (
     <AppLayout>
+      <GlobalStyle />
       <Sidebar>
         <Logo>zLyrics</Logo>
         <NavMenu>

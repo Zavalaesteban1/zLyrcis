@@ -1,11 +1,26 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import styled from 'styled-components';
+import styled, { createGlobalStyle } from 'styled-components';
 import { login, googleLogin, LoginCredentials } from '../services/api';
 import { MdMusicNote, MdVideoLibrary, MdLyrics, MdClose } from 'react-icons/md';
 import { BsSpotify } from 'react-icons/bs';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
+import { RiRobot2Line } from 'react-icons/ri';
+
+// Global style to hide scrollbars
+const GlobalStyle = createGlobalStyle`
+  body, div {
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    
+    /* Hide scrollbar for IE, Edge and Firefox */
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+`;
 
 // Styled components
 const PageContainer = styled.div`
@@ -550,6 +565,7 @@ const LandingPage: React.FC = () => {
   
   return (
     <PageContainer>
+      <GlobalStyle />
       {/* Header with login/signup buttons */}
       <Header>
         <HeaderLogo>
@@ -567,7 +583,7 @@ const LandingPage: React.FC = () => {
       <HeroSection>
         <HeroTitle>Generate Beautiful Lyric Videos from Your Favorite Songs</HeroTitle>
         <HeroSubtitle>
-          Turn any Spotify track into a stunning lyric video with just a few clicks.
+          Turn any Song track into a stunning lyric video with just a few clicks.
           Learn songs faster, share with friends, or enhance your music experience.
         </HeroSubtitle>
         <PrimaryButton onClick={openSignupModal}>Get Started for Free</PrimaryButton>
@@ -580,10 +596,10 @@ const LandingPage: React.FC = () => {
         
         <FeatureList>
           <FeatureItem>
-            <FeatureIcon>{BsSpotify({ size: 36 })}</FeatureIcon>
-            <FeatureTitle>Spotify Integration</FeatureTitle>
+            <FeatureIcon>{RiRobot2Line({ size: 36 })}</FeatureIcon>
+            <FeatureTitle>AI Lyric Agent</FeatureTitle>
             <FeatureDescription>
-              Connect with Spotify to access millions of tracks. Just paste a Spotify link to get started.
+              Our intelligent AI agent helps you create lyric videos effortlessly. Just describe what you want, and the AI does the rest.
             </FeatureDescription>
           </FeatureItem>
           

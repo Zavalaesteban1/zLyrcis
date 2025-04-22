@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import styled, { createGlobalStyle } from 'styled-components';
 import { login, googleLogin, LoginCredentials } from '../services/api';
-import { MdMusicNote, MdVideoLibrary, MdLyrics, MdClose } from 'react-icons/md';
+import { MdMusicNote, MdVideoLibrary, MdLyrics, MdClose, MdBusinessCenter, MdSchool } from 'react-icons/md';
 import { BsSpotify } from 'react-icons/bs';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { RiRobot2Line } from 'react-icons/ri';
+import { FaGuitar, FaTicketAlt, FaHandshake } from 'react-icons/fa';
 
 // Global style to hide scrollbars
 const GlobalStyle = createGlobalStyle`
@@ -249,6 +250,70 @@ const FeatureTitle = styled.h3`
 `;
 
 const FeatureDescription = styled.p`
+  font-size: 16px;
+  color: #666;
+  line-height: 1.6;
+  max-width: 300px;
+  margin: 0 auto;
+`;
+
+const PartnershipSection = styled.section`
+  padding: 80px 40px;
+  background-color: white;
+  
+  @media (max-width: 768px) {
+    padding: 60px 20px;
+  }
+`;
+
+const PartnerList = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+  
+  @media (max-width: 768px) {
+    gap: 30px;
+  }
+`;
+
+const PartnerItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 30px;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    transform: translateY(-5px);
+  }
+`;
+
+const PartnerIcon = styled.div`
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background-color: rgba(29, 185, 84, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  color: #1DB954;
+  margin-bottom: 20px;
+`;
+
+const PartnerTitle = styled.h3`
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12px;
+`;
+
+const PartnerDescription = styled.p`
   font-size: 16px;
   color: #666;
   line-height: 1.6;
@@ -584,7 +649,7 @@ const LandingPage: React.FC = () => {
         <HeroTitle>Generate Beautiful Lyric Videos from Your Favorite Songs</HeroTitle>
         <HeroSubtitle>
           Turn any Song track into a stunning lyric video with just a few clicks.
-          Learn songs faster, share with friends, or enhance your music experience.
+          Learn songs faster, prepare for concerts, or enhance your music experience.
         </HeroSubtitle>
         <PrimaryButton onClick={openSignupModal}>Get Started for Free</PrimaryButton>
       </HeroSection>
@@ -620,6 +685,38 @@ const LandingPage: React.FC = () => {
           </FeatureItem>
         </FeatureList>
       </FeatureSection>
+      
+      {/* Partnerships section */}
+      <PartnershipSection>
+        <SectionTitle>Business Partnerships</SectionTitle>
+        <SectionSubtitle>Discover how our lyric video platform can help grow your business</SectionSubtitle>
+        
+        <PartnerList>
+          <PartnerItem>
+            <PartnerIcon>{FaGuitar({ size: 36 })}</PartnerIcon>
+            <PartnerTitle>Artist Partnerships</PartnerTitle>
+            <PartnerDescription>
+              Special packages for artists and labels to create official lyric videos for releases. Increase engagement with your fans through high-quality, branded content.
+            </PartnerDescription>
+          </PartnerItem>
+          
+          <PartnerItem>
+            <PartnerIcon>{MdSchool({ size: 36 })}</PartnerIcon>
+            <PartnerTitle>Music Learning Platforms</PartnerTitle>
+            <PartnerDescription>
+              Seamlessly integrate with your existing music education platform. Help students learn lyrics and improve comprehension with our synchronized video technology.
+            </PartnerDescription>
+          </PartnerItem>
+          
+          <PartnerItem>
+            <PartnerIcon>{FaTicketAlt({ size: 36 })}</PartnerIcon>
+            <PartnerTitle>Concert Promoters</PartnerTitle>
+            <PartnerDescription>
+              Partner with us for pre-concert promotion. Create excitement and familiarity with an artist's catalog through engaging lyric videos before live events.
+            </PartnerDescription>
+          </PartnerItem>
+        </PartnerList>
+      </PartnershipSection>
       
       {/* Call to action section */}
       <CTASection>

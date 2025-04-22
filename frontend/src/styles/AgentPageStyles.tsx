@@ -358,7 +358,8 @@ export const EditForm = styled.form`
 export const ChatSidebarToggle = styled.button`
   position: fixed;
   top: 20px;
-  left: 260px; /* Always position next to the main sidebar */
+  /* Position at the right edge of the sidebar when open */
+  left: ${props => props.theme.chatSidebarOpen ? 'calc(240px + 300px + 10px)' : '260px'};
   z-index: 95;
   background-color: #fff;
   color: #1DB954;
@@ -379,7 +380,7 @@ export const ChatSidebarToggle = styled.button`
   }
   
   @media (max-width: 768px) {
-    left: 20px;
+    left: ${props => props.theme.chatSidebarOpen ? 'calc(280px + 10px)' : '20px'};
   }
 `;
 

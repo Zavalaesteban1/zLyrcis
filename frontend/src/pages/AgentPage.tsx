@@ -61,48 +61,38 @@ const getConversationTitle = (messages: Message[]): string => {
 };
 
 const AgentPage: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    { text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false }
-  ]);
+  // Component state
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messages, setMessages] = useState<Message[]>([{
+    text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?",
+    isUser: false
+  }]);
+  const [userMessage, setUserMessage] = useState<string>('');
+  const [isCompactMode, setIsCompactMode] = useState<boolean>(false);
+  const [conversationId, setConversationId] = useState<string>('');
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
+  const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [newestMessageIdx, setNewestMessageIdx] = useState<number>(-1);
+  const [isRestoringConversation, setIsRestoringConversation] = useState(true);
+  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [isLoadingConversation, setIsLoadingConversation] = useState<boolean>(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [userData, setUserData] = useState<any>(null);
-  const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [currentDate] = useState(formatDate());
   // Add a ref to store the interval ID
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [isRestoringConversation, setIsRestoringConversation] = useState(true);
   
   // Add a ref for the textarea element
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Add state for showing/hiding scrollbars
   const [showScrollbars, setShowScrollbars] = useState<boolean>(false);
-  
-  // Initialize window width state
-  const [windowWidth, setWindowWidth] = useState<number>(window.innerWidth);
-  
-  // Add state for sidebar toggle - always true by default to keep the sidebar visible
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
-  
-  // Add state for conversation history sidebar toggle
-  const [chatSidebarOpen, setChatSidebarOpen] = useState<boolean>(false);
-  
-  // Add state for conversation list
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  
-  // Add this new state variable
-  const [isCompactMode, setIsCompactMode] = useState<boolean>(true);
-  
-  // Add state to track newest message for animation
-  const [newestMessageIdx, setNewestMessageIdx] = useState<number>(-1);
-  
-  // Add state to track which conversation is being edited
-  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState<string>('');
   
   // Reference for the editing input field
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -145,6 +135,12 @@ const AgentPage: React.FC = () => {
     // Don't save if we're in the process of restoring from localStorage/backend
     if (isRestoringConversation) return;
     
+    // Don't save if we're loading a conversation (avoid overwriting with temporary loading messages)
+    if (isLoadingConversation) {
+      console.log('Skipping message save - conversation is being loaded');
+      return;
+    }
+    
     // Only save if there are messages beyond the initial greeting
     if (messages.length > 1) {
       if (conversationId) {
@@ -152,13 +148,17 @@ const AgentPage: React.FC = () => {
         localStorage.setItem(getConversationMessagesKey(conversationId), JSON.stringify(messages));
         console.log(`Saved ${messages.length} messages for conversation ${conversationId} to localStorage`);
         
-        // Update conversations list
-        updateConversationsList(conversationId, messages);
+        // Only update conversations list if we have meaningful content
+        // This prevents unnecessary state updates
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage && !lastMessage.isProcessing && lastMessage.text !== '...') {
+          updateConversationsList(conversationId, messages);
+        }
       } else {
         console.warn('Tried to save messages but no conversation ID is set');
       }
     }
-  }, [messages, isRestoringConversation, conversationId]);
+  }, [messages, isRestoringConversation, conversationId, isLoadingConversation]);
   
   // Save conversation ID when it changes
   useEffect(() => {
@@ -170,12 +170,9 @@ const AgentPage: React.FC = () => {
       const activeConv = conversations.find(c => c.id === conversationId);
       console.log('Current active conversation:', activeConv ? activeConv.title : 'Not found in list');
       
-      // Force re-render of conversation list to ensure active state is reflected
-      if (conversations.length > 0) {
-        setConversations([...conversations]);
-      }
+      // Don't force re-render of conversation list - this would cause an infinite loop
     }
-  }, [conversationId, conversations]);
+  }, [conversationId]); // Removed conversations from the dependency array
   
   // Save current job ID when it changes
   useEffect(() => {
@@ -213,16 +210,27 @@ const AgentPage: React.FC = () => {
     // Skip empty conversations or those with just the welcome message
     if (msgs.length <= 1) return;
     
+    // Get the last non-processing message for display
+    const lastNonProcessingMessage = [...msgs].reverse().find(msg => !msg.isProcessing && msg.text !== '...');
+    if (!lastNonProcessingMessage) return;
+    
     // Check if conversation already exists in list
     const existingIndex = conversations.findIndex(c => c.id === id);
     
     if (existingIndex >= 0) {
+      // Only update if the last message has changed
+      const existingConversation = conversations[existingIndex];
+      if (existingConversation.lastMessage === lastNonProcessingMessage.text) {
+        console.log('Skipping update - conversation lastMessage unchanged');
+        return;
+      }
+      
       // Update existing conversation
       const updatedConversations = [...conversations];
       updatedConversations[existingIndex] = {
         ...updatedConversations[existingIndex],
         title: updatedConversations[existingIndex].title || getConversationTitle(msgs),
-        lastMessage: msgs[msgs.length - 1].text,
+        lastMessage: lastNonProcessingMessage.text,
         date: new Date()
       };
       
@@ -242,7 +250,7 @@ const AgentPage: React.FC = () => {
       const newConversation: Conversation = {
         id,
         title: getConversationTitle(msgs),
-        lastMessage: msgs[msgs.length - 1].text,
+        lastMessage: lastNonProcessingMessage.text,
         date: new Date()
       };
       const updatedConversations = [newConversation, ...conversations];
@@ -279,7 +287,7 @@ const AgentPage: React.FC = () => {
     if (!isRestoringConversation) {
       checkForOngoingGenerations();
     }
-  }, [isRestoringConversation, messages]);
+  }, [isRestoringConversation]); // Removed messages from dependency array
   
   // Attempt to restore conversation when component mounts
   useEffect(() => {
@@ -479,6 +487,20 @@ const AgentPage: React.FC = () => {
     
     // Add a typing indicator
     setMessages(prev => [...prev, { text: '...', isUser: false }]);
+    
+    // Before calling the API, save the user message to the conversation
+    // This ensures messages are preserved if the user switches away before response arrives
+    if (conversationId && conversationId.startsWith('temp-')) {
+      // Save the user's message to localStorage even before we get a response
+      const currentMessagesBeforeResponse = [...messages.filter(msg => msg.text !== '...'), 
+                                           { text: userMessage, isUser: true }];
+      
+      console.log(`Saving temporary message to localStorage for temp conversation ${conversationId}`);
+      localStorage.setItem(getConversationMessagesKey(conversationId), JSON.stringify(currentMessagesBeforeResponse));
+      
+      // Also update the conversation list
+      updateConversationsList(conversationId, currentMessagesBeforeResponse);
+    }
     
     try {
       // Use the agent_chat endpoint for all conversations
@@ -804,71 +826,66 @@ const AgentPage: React.FC = () => {
     }
   }, []);
   
-  // Modify the handleNewChat function to automatically go into edit mode for the new conversation
+  // Function to create a new chat
   const handleNewChat = () => {
     console.log('Creating new chat...');
     
-    // Save current conversation if it has messages and a valid ID
+    // Don't allow creating a new chat if we're already loading a conversation
+    if (isLoadingConversation) {
+      console.log('BLOCKED: Cannot create new chat while loading a conversation');
+      return;
+    }
+    
+    // Save current conversation if it has messages
     if (messages.length > 1 && conversationId) {
       console.log(`Saving current conversation (${conversationId}) before creating new one`);
       updateConversationsList(conversationId, messages);
     }
     
-    // Generate a temporary conversation ID (will be replaced when the API responds)
-    const tempConversationId = `temp-${Date.now()}`;
-    console.log(`Generated temporary ID for new conversation: ${tempConversationId}`);
+    // Generate a temporary ID for this conversation until the backend assigns one
+    const tempId = `temp-${Date.now()}`;
+    console.log(`Generated temporary ID for new conversation: ${tempId}`);
     
-    // Reset conversation state
-    const initialMessage = { 
-      text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", 
-      isUser: false 
-    };
+    // Start with just the welcome message
+    const initialMessages = [
+      { text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false }
+    ];
     
-    // Create a new conversation in the list FIRST (for UI consistency)
+    // Create a new conversation entry
     const newConversation: Conversation = {
-      id: tempConversationId,
-      title: "New conversation",
-      lastMessage: initialMessage.text,
+      id: tempId,
+      title: 'New conversation',
+      lastMessage: initialMessages[0].text,
       date: new Date()
     };
     
-    // Add to the beginning of the list
+    // Add to top of conversations list
     const updatedConversations = [newConversation, ...conversations];
+    
+    // Update UI with new data
     setConversations(updatedConversations);
+    setConversationId(tempId);
+    setMessages(initialMessages);
+    
+    // Save to localStorage
     localStorage.setItem(CONVERSATIONS_LIST_STORAGE_KEY, JSON.stringify(updatedConversations));
+    localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, tempId);
+    localStorage.setItem(getConversationMessagesKey(tempId), JSON.stringify(initialMessages));
     
-    // Now update messages and conversation ID
-    setMessages([initialMessage]);
-    setConversationId(tempConversationId);
+    // Expand the chat interface if it's in compact mode
+    setIsCompactMode(false);
     
-    // Update localStorage with the temp ID and initial message
-    localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, tempConversationId);
-    localStorage.setItem(getConversationMessagesKey(tempConversationId), JSON.stringify([initialMessage]));
-    
-    // Reset to compact mode to start fresh
-    setIsCompactMode(true);
-    
-    // Open chat sidebar if on desktop
-    if (windowWidth > 768) {
-      setChatSidebarOpen(true);
+    // Close the sidebar on mobile
+    if (windowWidth <= 768) {
+      setChatSidebarOpen(false);
     }
     
-    // Put the conversation in edit mode immediately
-    setEditingConversationId(tempConversationId);
-    setEditingTitle(""); // Clear the edit field to show the placeholder
-    
-    // Focus on the input field with a slight delay to allow transition
+    // Focus the input after a short delay to allow the component to render
     setTimeout(() => {
-      if (windowWidth > 768) {
-        // Focus on edit input if sidebar is open
-        if (editInputRef.current) {
-          editInputRef.current.focus();
-        }
-      } else {
-        // Focus on chat input on mobile
-        textareaRef.current?.focus();
+      if (textareaRef.current) {
+        textareaRef.current.focus();
       }
-    }, 200);
+    }, 100);
     
     console.log('New chat created successfully');
   };
@@ -887,46 +904,107 @@ const AgentPage: React.FC = () => {
   
   // Update the handleLoadConversation function to ensure it switches to expanded mode
   const handleLoadConversation = (id: string) => {
-    console.log(`Loading conversation: ${id}, current conversationId: ${conversationId}`);
+    console.log(`===== CONVERSATION CLICK DEBUG =====`);
+    console.log(`Clicking conversation: ${id}`);
+    const conversation = conversations.find(c => c.id === id);
+    console.log(`Conversation title: ${conversation?.title || 'Unknown'}`);
+    console.log(`Current conversationId: ${conversationId || 'none'}`);
+    console.log(`===== END CLICK DEBUG =====`);
+    
+    // Don't allow loading if we're already loading a conversation
+    if (isLoadingConversation) {
+      console.log('BLOCKED: Already loading a conversation, ignoring click');
+      return;
+    }
     
     // Don't reload if we're already viewing this conversation
     if (id === conversationId) {
       console.log('Already viewing this conversation, just closing sidebar on mobile');
-      // Just close the sidebar on mobile
       if (windowWidth <= 768) {
         setChatSidebarOpen(false);
       }
       return;
     }
     
-    // Save current conversation if it has messages
+    // Skip trying to load temp conversations from backend - they're just placeholders
+    if (id.startsWith('temp-')) {
+      console.log(`Selected temporary conversation (${id}), setting as active without loading`);
+      
+      // First check if we have saved messages for this temporary conversation
+      try {
+        const savedMessages = localStorage.getItem(getConversationMessagesKey(id));
+        if (savedMessages) {
+          const parsedMessages = JSON.parse(savedMessages) as Message[];
+          if (parsedMessages.length > 0) {
+            console.log(`Found saved messages for temporary conversation ${id}, using those`);
+            // Just switch to the saved conversation
+            setConversationId(id);
+            setMessages(parsedMessages);
+            
+            // Move this conversation to the top of the list if needed
+            const updatedConversations = [...conversations];
+            const existingIndex = updatedConversations.findIndex(c => c.id === id);
+            if (existingIndex > 0) {
+              const conversation = updatedConversations.splice(existingIndex, 1)[0];
+              updatedConversations.unshift(conversation);
+              setConversations(updatedConversations);
+              localStorage.setItem(CONVERSATIONS_LIST_STORAGE_KEY, JSON.stringify(updatedConversations));
+            }
+            
+            // Close sidebar on mobile
+            if (windowWidth <= 768) {
+              setChatSidebarOpen(false);
+            }
+            
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error checking localStorage for temp conversation:', err);
+      }
+      
+      // If no saved messages, just start fresh
+      setConversationId(id);
+      setMessages([
+        { text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false }
+      ]);
+      
+      // Close sidebar on mobile
+      if (windowWidth <= 768) {
+        setChatSidebarOpen(false);
+      }
+      
+      return;
+    }
+    
+    // Set loading lock BEFORE changing any state
+    setIsLoadingConversation(true);
+    
+    // Save current conversation if needed
     if (messages.length > 1 && conversationId && conversationId !== id) {
       console.log('Saving current conversation before loading new one');
       updateConversationsList(conversationId, messages);
     }
     
-    // Check if the conversation exists in our list
+    // Check if conversation exists
     const conversationExists = conversations.some(c => c.id === id);
     if (!conversationExists) {
       console.error(`Attempted to load non-existent conversation ID: ${id}`);
+      setIsLoadingConversation(false);
       return;
     }
     
-    // First update the UI to make conversation visibly active immediately
-    const conversation = conversations.find(c => c.id === id);
-    console.log(`Setting active conversation ID to: ${id} (${conversation?.title})`);
+    // CHANGE: Show loading state but don't change the active conversation yet
+    console.log(`Loading conversation: ${id} (${conversation?.title})`);
     
-    // Switch to expanded mode when loading a conversation
+    // Just show a loading indicator in the current conversation
+    setMessages(prev => [
+      prev[0], // Keep the welcome message
+      { text: `Loading conversation "${conversation?.title || 'Unknown'}"...`, isUser: false }
+    ]);
+    
+    // Switch to expanded mode
     setIsCompactMode(false);
-    
-    // Clear current messages and show loading state
-    const loadingMessages = [
-      { text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false },
-      { text: "Loading conversation...", isUser: false }
-    ];
-    
-    // Update active conversation with loading state
-    updateActiveConversation(id, loadingMessages);
     
     // Close chat sidebar on mobile
     if (windowWidth <= 768) {
@@ -938,21 +1016,16 @@ const AgentPage: React.FC = () => {
       .then(history => {
         console.log(`Successfully loaded conversation ${id} from backend:`, history);
         
-        // Double-check we're still on the same conversation (user might have changed during fetch)
-        if (id !== conversationId) {
-          console.log(`Conversation changed during fetch, aborting load of ${id}`);
-          return;
-        }
-        
+        // Only now that we have the data, set the conversation as active
         if (history.messages && history.messages.length > 0) {
           // Convert backend message format to our frontend format
-          const convertedMessages: Message[] = history.messages.map(msg => ({
+          const convertedMessages = history.messages.map(msg => ({
             text: msg.content,
             isUser: msg.role === 'user',
             isProcessing: false
           }));
           
-          // Add our welcome message at the beginning if it's not there
+          // Add welcome message if needed
           const hasWelcomeMessage = convertedMessages.some(
             msg => !msg.isUser && msg.text.includes("I'm your lyric video assistant")
           );
@@ -961,44 +1034,69 @@ const AgentPage: React.FC = () => {
             ? convertedMessages
             : [{ text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false }, ...convertedMessages];
           
-          // Update the active conversation with the loaded messages
-          updateActiveConversation(id, finalMessages);
+          // CRITICAL CHANGE: Only now update the conversationId and messages
+          setConversationId(id);
+          localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, id);
+          setMessages(finalMessages);
+          localStorage.setItem(getConversationMessagesKey(id), JSON.stringify(finalMessages));
+          
+          // Move this conversation to the top of the list
+          const updatedConversations = [...conversations];
+          const existingIndex = updatedConversations.findIndex(c => c.id === id);
+          if (existingIndex > 0) {
+            const conversation = updatedConversations.splice(existingIndex, 1)[0];
+            updatedConversations.unshift(conversation);
+            setConversations(updatedConversations);
+            localStorage.setItem(CONVERSATIONS_LIST_STORAGE_KEY, JSON.stringify(updatedConversations));
+          }
+          
           console.log('Loaded conversation from backend:', finalMessages.length, 'messages');
         } else {
-          // No messages from backend
-          console.warn('No messages in conversation history from backend');
+          // No messages from backend, just set the welcome message
           const defaultMessages = [
             { text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false }
           ];
-          updateActiveConversation(id, defaultMessages);
+          
+          // Update state
+          setConversationId(id);
+          localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, id);
+          setMessages(defaultMessages);
+          localStorage.setItem(getConversationMessagesKey(id), JSON.stringify(defaultMessages));
         }
+        
+        // Release the loading lock
+        setIsLoadingConversation(false);
       })
       .catch(error => {
         console.error('Error loading conversation:', error);
         
-        // Still ensure this conversation remains selected even if loading failed
-        // We'll try loading from localStorage instead
-        console.log('Trying to load conversation from localStorage as fallback');
+        // Try localStorage fallback
         try {
           const savedMessages = localStorage.getItem(getConversationMessagesKey(id));
           if (savedMessages) {
             const parsedMessages = JSON.parse(savedMessages) as Message[];
             if (parsedMessages.length > 0) {
-              updateActiveConversation(id, parsedMessages);
-              console.log('Successfully loaded conversation from localStorage fallback');
-              return;
+              // Update state with fallback data
+              setConversationId(id);
+              localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, id);
+              setMessages(parsedMessages);
+              console.log('Loaded conversation from localStorage fallback');
             }
           }
         } catch (err) {
           console.error('Failed to load from localStorage fallback:', err);
+          
+          // If all fails, just set as active with minimal data
+          setConversationId(id);
+          localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, id);
+          setMessages([
+            { text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false },
+            { text: "I couldn't load the previous conversation. Let's start a new one!", isUser: false }
+          ]);
         }
         
-        // Show error message if all attempts failed
-        const errorMessages = [
-          { text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false },
-          { text: "I couldn't load the previous conversation. Let's start a new one!", isUser: false }
-        ];
-        updateActiveConversation(id, errorMessages);
+        // Release the loading lock
+        setIsLoadingConversation(false);
       });
     
     // Scroll to bottom of messages
@@ -1062,7 +1160,7 @@ const AgentPage: React.FC = () => {
           });
       } else {
         // If no conversations left, reset to initial state
-        setConversationId(undefined);
+        setConversationId('');
         localStorage.removeItem(CONVERSATION_ID_STORAGE_KEY);
         localStorage.removeItem(getConversationMessagesKey(id));
         
@@ -1149,7 +1247,17 @@ const AgentPage: React.FC = () => {
   
   // Helper function to ensure consistent conversation state updates
   const updateActiveConversation = (id: string, newMessages?: Message[]) => {
+    console.log(`===== UPDATE ACTIVE CONVERSATION =====`);
     console.log(`Updating active conversation to: ${id}`);
+    console.log(`Previous active conversation: ${conversationId || 'none'}`);
+    console.log(`Messages provided: ${newMessages ? newMessages.length : 'none'}`);
+    console.log(`isLoadingConversation: ${isLoadingConversation}`);
+    
+    // Check if we're in the middle of loading - only allow if we're loading THIS conversation
+    if (isLoadingConversation && id !== conversationId) {
+      console.log(`BLOCKED: Can't update conversation to ${id} while loading ${conversationId}`);
+      return;
+    }
     
     // Update conversation ID in state and localStorage
     setConversationId(id);
@@ -1157,73 +1265,153 @@ const AgentPage: React.FC = () => {
     
     // If messages are provided, update them
     if (newMessages) {
+      console.log(`Setting ${newMessages.length} messages for conversation ${id}`);
       setMessages(newMessages);
       // Use conversation-specific key instead of generic key
       localStorage.setItem(getConversationMessagesKey(id), JSON.stringify(newMessages));
+    } else {
+      console.log(`No messages provided, keeping current ${messages.length} messages`);
     }
     
-    // Ensure this conversation is at the top of the list
-    const updatedConversations = [...conversations];
-    const existingIndex = updatedConversations.findIndex(c => c.id === id);
-    
-    if (existingIndex >= 0) {
-      if (existingIndex > 0) { // Only reorder if not already at the top
-        const conversation = updatedConversations.splice(existingIndex, 1)[0];
-        updatedConversations.unshift(conversation);
-        setConversations(updatedConversations);
-        localStorage.setItem(CONVERSATIONS_LIST_STORAGE_KEY, JSON.stringify(updatedConversations));
+    // Ensure this conversation is at the top of the list - but only if it's not a temporary loading state
+    if (!newMessages || !newMessages.some(msg => msg.text === "Loading conversation...")) {
+      const updatedConversations = [...conversations];
+      const existingIndex = updatedConversations.findIndex(c => c.id === id);
+      
+      if (existingIndex >= 0) {
+        console.log(`Found conversation at index ${existingIndex} in conversations list`);
+        if (existingIndex > 0) { // Only reorder if not already at the top
+          console.log(`Moving conversation from position ${existingIndex} to top of list`);
+          const conversation = updatedConversations.splice(existingIndex, 1)[0];
+          updatedConversations.unshift(conversation);
+          setConversations(updatedConversations);
+          localStorage.setItem(CONVERSATIONS_LIST_STORAGE_KEY, JSON.stringify(updatedConversations));
+        } else {
+          console.log(`Conversation already at top of list, no reordering needed`);
+        }
+      } else {
+        console.warn(`Tried to set active conversation to ${id}, but it wasn't found in the list`);
       }
     } else {
-      console.warn(`Tried to set active conversation to ${id}, but it wasn't found in the list`);
+      console.log(`Skipping list reordering for temporary loading state`);
     }
+    
+    console.log(`===== END UPDATE ACTIVE CONVERSATION =====`);
   };
   
   // Add a useEffect to make sure the correct messages are loaded when conversation ID changes 
   useEffect(() => {
     if (!isRestoringConversation && conversationId) {
+      // Skip if we're already in the process of loading a conversation
+      if (isLoadingConversation) {
+        console.log(`Skipping automatic message load - already loading conversation ${conversationId}`);
+        return;
+      }
+      
+      // Skip loading for temporary conversation IDs (they'll be replaced soon)
+      if (conversationId.startsWith('temp-')) {
+        console.log(`Skipping message load for temporary conversation ID: ${conversationId}`);
+        return;
+      }
+      
       // When conversationId changes (after initial mount), try to load messages for that specific conversation
       const loadConversationMessages = async () => {
         try {
           // First check if we already have messages loaded
           if (messages.length > 1) {
             // We already have messages, check if they match the current conversation
-            // (This is just a basic check to avoid unnecessary backend calls)
-            return;
+            const lastUserMessage = messages.find(msg => msg.isUser);
+            if (lastUserMessage && !lastUserMessage.text.includes('Loading')) {
+              console.log(`Already have ${messages.length} messages loaded for ${conversationId}, skipping backend call`);
+              return;
+            }
           }
           
+          console.log(`===== LOAD MESSAGES FOR CONVERSATION ID CHANGE =====`);
           console.log(`Loading messages for conversation ${conversationId}`);
           
-          // Try to fetch from backend
-          const history = await fetchConversationHistory(conversationId);
+          // Set loading state to prevent other load operations
+          setIsLoadingConversation(true);
           
-          if (history.messages && history.messages.length > 0) {
-            // Convert backend message format to our frontend format
-            const convertedMessages: Message[] = history.messages.map(msg => ({
-              text: msg.content,
-              isUser: msg.role === 'user',
-              isProcessing: false
-            }));
+          // Show a loading state
+          setMessages(prev => [
+            prev[0], // Keep the welcome message
+            { text: `Loading messages...`, isUser: false }
+          ]);
+          
+          // Try to fetch from backend
+          try {
+            const history = await fetchConversationHistory(conversationId);
             
-            // Add our welcome message at the beginning if it's not there
-            const hasWelcomeMessage = convertedMessages.some(
-              msg => !msg.isUser && msg.text.includes("I'm your lyric video assistant")
-            );
+            if (history.messages && history.messages.length > 0) {
+              // Convert backend message format to our frontend format
+              const convertedMessages: Message[] = history.messages.map(msg => ({
+                text: msg.content,
+                isUser: msg.role === 'user',
+                isProcessing: false
+              }));
+              
+              // Add our welcome message at the beginning if it's not there
+              const hasWelcomeMessage = convertedMessages.some(
+                msg => !msg.isUser && msg.text.includes("I'm your lyric video assistant")
+              );
+              
+              const finalMessages = hasWelcomeMessage 
+                ? convertedMessages
+                : [{ text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false }, ...convertedMessages];
+              
+              // Update the messages
+              setMessages(finalMessages);
+              localStorage.setItem(getConversationMessagesKey(conversationId), JSON.stringify(finalMessages));
+              console.log(`Loaded ${finalMessages.length} messages for conversation ${conversationId}`);
+            } else {
+              console.log(`No messages found for conversation ${conversationId}`);
+              // Set default message if no history found
+              const defaultMessages = [
+                { text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false }
+              ];
+              setMessages(defaultMessages);
+              localStorage.setItem(getConversationMessagesKey(conversationId), JSON.stringify(defaultMessages));
+            }
+          } catch (fetchError) {
+            console.error(`Error fetching messages from backend:`, fetchError);
             
-            const finalMessages = hasWelcomeMessage 
-              ? convertedMessages
-              : [{ text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false }, ...convertedMessages];
-            
-            setMessages(finalMessages);
-            console.log(`Loaded ${finalMessages.length} messages for conversation ${conversationId}`);
+            // Try localStorage fallback
+            try {
+              const savedMessages = localStorage.getItem(getConversationMessagesKey(conversationId));
+              if (savedMessages) {
+                const parsedMessages = JSON.parse(savedMessages) as Message[];
+                if (parsedMessages.length > 0) {
+                  setMessages(parsedMessages);
+                  console.log(`Loaded ${parsedMessages.length} messages from localStorage fallback`);
+                }
+              } else {
+                // Set default welcome message if all else fails
+                setMessages([
+                  { text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false }
+                ]);
+              }
+            } catch (localStorageError) {
+              console.error('Failed to load from localStorage fallback:', localStorageError);
+              setMessages([
+                { text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?", isUser: false }
+              ]);
+            }
           }
+          
+          console.log(`===== END LOAD MESSAGES FOR CONVERSATION ID CHANGE =====`);
+          
+          // Release loading lock
+          setIsLoadingConversation(false);
         } catch (error) {
-          console.error(`Error loading messages for conversation ${conversationId}:`, error);
+          console.error(`Error in loadConversationMessages:`, error);
+          setIsLoadingConversation(false); // Make sure to release lock even on error
         }
       };
       
       loadConversationMessages();
     }
-  }, [conversationId, isRestoringConversation]);
+  }, [conversationId, isRestoringConversation, isLoadingConversation]);
   
   // Add useEffect to focus the textarea when isCompactMode changes from true to false
   useEffect(() => {
@@ -1320,7 +1508,15 @@ const AgentPage: React.FC = () => {
                 <Styles.ChatItem 
                   key={conv.id} 
                   active={isActive}
-                  onClick={(e: MouseEvent<HTMLDivElement>) => handleLoadConversation(conv.id)}
+                  onClick={(e: MouseEvent<HTMLDivElement>) => {
+                    // Add debug information before calling handler
+                    console.log(`******* CHAT ITEM CLICK *******`);
+                    console.log(`ChatItem clicked for: ${conv.id}`);
+                    console.log(`ChatItem title: ${conv.title}`);
+                    console.log(`State BEFORE click - activeConversation: ${conversationId}`);
+                    console.log(`******************************`);
+                    handleLoadConversation(conv.id);
+                  }}
                   style={isActive ? { 
                     backgroundColor: 'rgba(29, 185, 84, 0.1)',
                     borderLeft: '3px solid #1DB954'

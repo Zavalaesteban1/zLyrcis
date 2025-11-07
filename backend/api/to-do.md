@@ -19,3 +19,5 @@ dont be afaird to care
 sort of an animation so users can follow the lyrcis carefully. this is my vision but i need to do a simplier way 
 
 theres deepgram API to pull in audio and transcribe it in real time. right i have the audio coming from local files so we need to figure out that. we need to figure a new approach. for this your going to have to understand how @task.py works 
+
+

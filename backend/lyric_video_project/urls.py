@@ -18,12 +18,21 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.static import serve
+import os
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
 ]
 
-# Serve media files in development
+# Always serve media files, regardless of DEBUG setting
+urlpatterns += [
+    path('media/<path:path>', serve, {
+        'document_root': os.path.join(settings.BASE_DIR, 'media'),
+    }),
+]
+
+# Also keep the Django static way of serving media files in development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

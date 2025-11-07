@@ -1,0 +1,1 @@
+okay we made the changes but theres way to many things in my @tasks.py that has a lot of fuctions and honeslty its consfusing to get i dont queite understnad it i need ou to explain me whats needed and isnt because that really bothering me its hard to unerstnad what my rrgam is doing if i dont understandi it myseld 

@@ -1,0 +1,458 @@
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import styled from 'styled-components';
+import { signup, SignupCredentials } from '../services/api';
+import { MdMusicNote } from 'react-icons/md';
+
+// Define interface for form data
+interface SignupFormData extends SignupCredentials {
+  confirmPassword: string;
+}
+
+// Styled components
+const SignupContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  background-color: white;
+  background-image: linear-gradient(rgba(29, 185, 84, 0.03) 1px, transparent 1px), 
+                    linear-gradient(90deg, rgba(29, 185, 84, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+  color: #333;
+  overflow-x: hidden;
+  padding: 40px;
+`;
+
+const Logo = styled.div`
+  font-size: 42px;
+  font-weight: 700;
+  margin-bottom: 50px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  color: #1DB954;
+  
+  @media (min-width: 1600px) {
+    font-size: 48px;
+    margin-bottom: 60px;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 32px;
+    margin-bottom: 30px;
+  }
+`;
+
+const LogoIcon = styled.span`
+  display: flex;
+  align-items: center;
+  font-size: 48px;
+  
+  @media (min-width: 1600px) {
+    font-size: 54px;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 36px;
+  }
+`;
+
+const SignupCard = styled.div`
+  background-color: white;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 650px;
+  padding: 60px 80px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  
+  @media (min-width: 1600px) {
+    max-width: 750px;
+    padding: 70px 90px;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 30px;
+    max-width: 100%;
+    border-radius: 10px;
+  }
+`;
+
+const SignupHeader = styled.div`
+  margin-bottom: 50px;
+  text-align: center;
+  
+  @media (min-width: 1600px) {
+    margin-bottom: 60px;
+  }
+  
+  @media (max-width: 768px) {
+    margin-bottom: 30px;
+  }
+`;
+
+const SignupTitle = styled.h2`
+  font-size: 36px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+  
+  @media (min-width: 1600px) {
+    font-size: 42px;
+    margin-bottom: 18px;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 28px;
+    margin-bottom: 10px;
+  }
+`;
+
+const SignupSubtitle = styled.p`
+  color: #666;
+  font-size: 20px;
+  
+  @media (min-width: 1600px) {
+    font-size: 22px;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
+`;
+
+const Form = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+  
+  @media (min-width: 1600px) {
+    gap: 32px;
+  }
+  
+  @media (max-width: 768px) {
+    gap: 20px;
+  }
+`;
+
+const InputContainer = styled.div`
+  position: relative;
+  width: 100%;
+`;
+
+const Label = styled.label`
+  font-size: 18px;
+  margin-bottom: 12px;
+  display: block;
+  color: #444;
+  font-weight: 500;
+  
+  @media (min-width: 1600px) {
+    font-size: 20px;
+    margin-bottom: 14px;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+`;
+
+const Input = styled.input`
+  width: 100%;
+  padding: 16px 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  background-color: white;
+  color: #333;
+  font-size: 18px;
+  transition: all 0.3s ease;
+  
+  @media (min-width: 1600px) {
+    padding: 18px 22px;
+    font-size: 20px;
+    border-radius: 12px;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 12px 15px;
+    font-size: 16px;
+    border-radius: 8px;
+  }
+  
+  &:focus {
+    outline: none;
+    border-color: #1DB954;
+    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.1);
+  }
+  
+  &::placeholder {
+    color: #999;
+  }
+`;
+
+const Button = styled.button`
+  padding: 18px;
+  border: none;
+  border-radius: 10px;
+  background-color: #1DB954;
+  color: white;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 15px;
+  
+  @media (min-width: 1600px) {
+    padding: 20px;
+    font-size: 22px;
+    margin-top: 20px;
+    border-radius: 12px;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 14px;
+    font-size: 16px;
+    margin-top: 5px;
+    border-radius: 8px;
+  }
+  
+  &:hover {
+    background-color: #169c46;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(29, 185, 84, 0.2);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+  
+  &:disabled {
+    background-color: #a0a0a0;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+`;
+
+const ErrorMessage = styled.div`
+  background-color: rgba(233, 20, 41, 0.1);
+  color: #e91429;
+  padding: 16px 20px;
+  border-radius: 10px;
+  font-size: 18px;
+  border-left: 4px solid #e91429;
+  
+  @media (min-width: 1600px) {
+    padding: 18px 22px;
+    font-size: 20px;
+    border-radius: 12px;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 12px 15px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+`;
+
+const LinkContainer = styled.div`
+  margin-top: 35px;
+  text-align: center;
+  color: #666;
+  font-size: 18px;
+  
+  @media (min-width: 1600px) {
+    margin-top: 40px;
+    font-size: 20px;
+  }
+  
+  @media (max-width: 768px) {
+    margin-top: 25px;
+    font-size: 14px;
+  }
+  
+  a {
+    color: #1DB954;
+    text-decoration: none;
+    font-weight: 600;
+    
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`;
+
+const LoadingSpinner = styled.div`
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s ease-in-out infinite;
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  @media (min-width: 1600px) {
+    width: 28px;
+    height: 28px;
+    border-width: 3px;
+  }
+  
+  @media (max-width: 768px) {
+    width: 20px;
+    height: 20px;
+    border-width: 2px;
+  }
+`;
+
+const SignupPage: React.FC = () => {
+  const [formData, setFormData] = useState<SignupFormData>({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev: SignupFormData) => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate form
+    if (!formData.username || !formData.email || !formData.password || !formData.confirmPassword) {
+      setError('All fields are required');
+      return;
+    }
+    
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Extract the credentials without confirmPassword
+      const { confirmPassword, ...credentials } = formData;
+      await signup(credentials);
+      navigate('/login');
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'Signup failed. Please try again.';
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  return (
+    <SignupContainer>
+      <Logo>
+        <LogoIcon>{MdMusicNote({ size: 48 })}</LogoIcon>
+        zLyrics
+      </Logo>
+      
+      <SignupCard>
+        <SignupHeader>
+          <SignupTitle>Create Account</SignupTitle>
+          <SignupSubtitle>Sign up to start creating amazing lyric videos</SignupSubtitle>
+        </SignupHeader>
+        
+        <Form onSubmit={handleSubmit}>
+          <InputContainer>
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              name="username"
+              type="text"
+              placeholder="Choose a username"
+              value={formData.username}
+              onChange={handleChange}
+              disabled={isLoading}
+            />
+          </InputContainer>
+          
+          <InputContainer>
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="Enter your email"
+              value={formData.email}
+              onChange={handleChange}
+              disabled={isLoading}
+            />
+          </InputContainer>
+          
+          <InputContainer>
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              placeholder="Create a password"
+              value={formData.password}
+              onChange={handleChange}
+              disabled={isLoading}
+            />
+          </InputContainer>
+          
+          <InputContainer>
+            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              placeholder="Confirm your password"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              disabled={isLoading}
+            />
+          </InputContainer>
+          
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? (
+              <>
+                Creating Account
+                <LoadingSpinner />
+              </>
+            ) : (
+              'Sign Up'
+            )}
+          </Button>
+          
+          {error && <ErrorMessage>{error}</ErrorMessage>}
+        </Form>
+        
+        <LinkContainer>
+          Already have an account? <Link to="/login">Sign in</Link>
+        </LinkContainer>
+      </SignupCard>
+    </SignupContainer>
+  );
+};
+
+export default SignupPage; 

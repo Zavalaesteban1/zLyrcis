@@ -1,6 +1,7 @@
 from django.db import models
 import uuid
 import os
+from django.contrib.auth.models import User
 
 def video_upload_path(instance, filename):
     """Generate a unique path for uploaded videos"""
@@ -18,6 +19,7 @@ class VideoJob(models.Model):
     )
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey('auth.User', related_name='videos', on_delete=models.CASCADE, null=True)
     spotify_url = models.URLField(max_length=255)
     song_title = models.CharField(max_length=255, blank=True)
     artist = models.CharField(max_length=255, blank=True)
@@ -29,3 +31,11 @@ class VideoJob(models.Model):
     
     def __str__(self):
         return f"{self.song_title} by {self.artist} ({self.status})"
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
+    role = models.CharField(max_length=50, default='Standard User')
+    
+    def __str__(self):
+        return f"{self.user.username}'s Profile"

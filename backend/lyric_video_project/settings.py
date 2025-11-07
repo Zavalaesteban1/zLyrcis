@@ -10,12 +10,18 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
-from pathlib import Path
 import os
-from dotenv import load_dotenv
+from pathlib import Path
+import dotenv
+import mimetypes
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from .env file
+dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+if os.path.exists(dotenv_path):
+    dotenv.load_dotenv(dotenv_path)
+    print(f"Loaded .env file from: {dotenv_path}")
+else:
+    print(f"Warning: .env file not found at {dotenv_path}")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -46,6 +52,7 @@ INSTALLED_APPS = [
     # Third-party apps
     'rest_framework',
     'corsheaders',
+    'rest_framework.authtoken',  # Add token authentication
     
     # Local apps
     'api',
@@ -60,6 +67,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'api.middleware.ContentTypeMiddleware',  # Custom middleware for Content-Type headers
 ]
 
 ROOT_URLCONF = 'lyric_video_project.urls'
@@ -88,8 +96,12 @@ WSGI_APPLICATION = 'lyric_video_project.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        # get the corresponding information from the .env file
+        'ENGINE': 'django.db.backends.mysql',  # Specify the engine (mysql, postgresql, etc.)
+        'NAME': os.environ.get('DATABASE_NAME'),
+        'USER': os.environ.get('DATABASE_USER'),
+        'PASSWORD': os.environ.get('DATABASE_PASS'),
+        'HOST': os.environ.get('DB_HOST'),
     }
 }
 
@@ -118,7 +130,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Chicago'
 
 USE_I18N = True
 
@@ -137,10 +149,36 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = True  # For development only, restrict in production
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # Media files
-MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/'
+
+# Add correct MIME types
+if not mimetypes.inited:
+    mimetypes.init()
+mimetypes.add_type("video/mp4", ".mp4")
+mimetypes.add_type("audio/mpeg", ".mp3")
 
 # Celery settings
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
@@ -153,3 +191,25 @@ CELERY_RESULT_SERIALIZER = 'json'
 SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID', '')
 SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET', '')
 GENIUS_ACCESS_TOKEN = os.getenv('GENIUS_ACCESS_TOKEN', '')
+
+# Debug information about loaded credentials (remove in production)
+print(f"Environment setup - SPOTIFY_CLIENT_ID loaded: {'Yes' if SPOTIFY_CLIENT_ID else 'No'}")
+print(f"Environment setup - SPOTIFY_CLIENT_SECRET loaded: {'Yes' if SPOTIFY_CLIENT_SECRET else 'No'}")
+print(f"Environment setup - GENIUS_ACCESS_TOKEN loaded: {'Yes' if GENIUS_ACCESS_TOKEN else 'No'}")
+
+# Explicitly set Spotipy environment variables
+if SPOTIFY_CLIENT_ID:
+    os.environ['SPOTIPY_CLIENT_ID'] = SPOTIFY_CLIENT_ID
+if SPOTIFY_CLIENT_SECRET:
+    os.environ['SPOTIPY_CLIENT_SECRET'] = SPOTIFY_CLIENT_SECRET
+
+# Django REST Framework settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}

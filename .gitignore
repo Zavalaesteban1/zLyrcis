@@ -1,9 +1,29 @@
-# Ignore MP3 files
+# Environment variables (IMPORTANT: Never commit these!)
+.env
+backend/.env
+frontend/.env
+
+# Keep example files
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+# Audio/Video files
 *.mp3
+*.mp4
+*.wav
+*.avi
+*.mov
 
 # Ignore audio_files directory content but keep the directory
 audio_files/*
 !audio_files/.gitkeep
+
+# Media files (generated videos, images)
+backend/media/videos/*
+backend/media/profile_pictures/*
+!backend/media/videos/.gitkeep
+!backend/media/profile_pictures/.gitkeep
 
 # Python
 __pycache__/
@@ -12,6 +32,9 @@ __pycache__/
 *.so
 .Python
 env/
+venv/
+backend/venv/
+ENV/
 build/
 develop-eggs/
 dist/
@@ -26,12 +49,26 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+*.pyc
+db.sqlite3
+*.db
+
+# Django
+*.log
+local_settings.py
+staticfiles/
+backend/staticfiles/
 
 # Node.js
 node_modules/
 npm-debug.log
 yarn-debug.log
 yarn-error.log
+frontend/build/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
 
 # Editor and OS files
 .DS_Store
@@ -39,4 +76,18 @@ yarn-error.log
 .vscode/
 *.swp
 *.swo
-*~ 
+*~
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Redis dump
+dump.rdb 

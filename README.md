@@ -5,7 +5,6 @@ Generate synchronized lyric videos from Spotify tracks with AI-powered timing an
 ## Features
 
 - **AI-Powered Synchronization** - Advanced lyric-to-audio alignment using Deepgram + audio analysis
-- **Spotify Integration** - Paste any Spotify link to generate videos
 - **AI Chat Agent** - Conversational interface to request songs naturally
 - **Video Library** - Manage your collection with album artwork
 - **User Profiles** - Authentication with Google OAuth or username/password
@@ -41,6 +40,7 @@ cd lyric_video_generator
 
 # 2. Backend setup
 cd backend
+
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt

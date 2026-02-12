@@ -1,0 +1,54 @@
+import { useState, useCallback } from 'react';
+import { agent_chat, AgentChatResponse } from '../services/api';
+import { Message } from './useConversationManager';
+
+interface UseAgentChatOptions {
+  onSongRequest?: (jobId: string, title: string, artist: string) => void;
+  onConversationIdReceived?: (conversationId: string) => void;
+}
+
+export const useAgentChat = (options: UseAgentChatOptions = {}) => {
+  const { onSongRequest, onConversationIdReceived } = options;
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const sendMessage = useCallback(async (
+    message: string, 
+    conversationId?: string
+  ): Promise<AgentChatResponse | null> => {
+    if (!message.trim()) return null;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await agent_chat(message, conversationId);
+
+      // Notify about conversation ID
+      if (response.conversation_id) {
+        onConversationIdReceived?.(response.conversation_id);
+      }
+
+      // Handle song request
+      if (response.is_song_request && response.song_request_data) {
+        const { job_id, title, artist } = response.song_request_data;
+        onSongRequest?.(job_id, title, artist);
+      }
+
+      return response;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
+      setError(errorMessage);
+      console.error('Error sending message:', err);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [onSongRequest, onConversationIdReceived]);
+
+  return {
+    sendMessage,
+    isLoading,
+    error
+  };
+};

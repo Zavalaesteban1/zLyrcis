@@ -5,8 +5,8 @@ import shutil
 from unittest.mock import patch, MagicMock
 
 from django.test import TestCase
-from api.lyric_video.audio import AudioProcessor
-from api.lyric_video.exceptions import AudioDownloadError
+from core.audio import AudioProcessor
+from core.exceptions import AudioDownloadError
 
 
 class AudioProcessorTest(TestCase):

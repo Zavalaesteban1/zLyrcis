@@ -26,7 +26,7 @@ if not settings.configured:
 
 # Import synchronization modules
 try:
-    from api.lyric_video.advanced_synchronization import AdvancedLyricSynchronizer
+    from core.synchronization import AdvancedLyricSynchronizer
     from api.tasks import (
         get_lyrics, clean_lyrics, remove_metadata_from_lyrics,
         synchronize_with_deepgram, create_basic_synchronization,

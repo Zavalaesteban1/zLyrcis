@@ -16,9 +16,9 @@ from .models import VideoJob
 from pathlib import Path
 from difflib import SequenceMatcher
 
-# Import advanced synchronization
+# Import advanced synchronization from core module
 try:
-    from .lyric_video.advanced_synchronization import synchronize_lyrics_advanced
+    from core.synchronization import synchronize_lyrics_advanced
     ADVANCED_SYNC_AVAILABLE = True
 except ImportError:
     ADVANCED_SYNC_AVAILABLE = False
@@ -26,7 +26,7 @@ except ImportError:
 
 # Import Deepgram SDK
 try:
-    from deepgram import DeepgramClient, PrerecordedOptions
+    from deepgram import DeepgramClient
     DEEPGRAM_AVAILABLE = True
 except ImportError:
     DEEPGRAM_AVAILABLE = False
@@ -199,7 +199,7 @@ def get_spotify_track_info(track_id):
 
 
 def get_lyrics(title, artist):
-    """Get lyrics from Genius API"""
+    """Get lyrics from Genius API with verification"""
     # Get Genius API token
     genius_token = settings.GENIUS_ACCESS_TOKEN
     
@@ -211,17 +211,66 @@ def get_lyrics(title, artist):
     genius = lyricsgenius.Genius(genius_token)
     genius.verbose = False  # Turn off status messages
     
+    def normalize_for_comparison(s):
+        """Normalize string for fuzzy matching"""
+        return re.sub(r'[^\w\s]', '', s.lower()).strip()
+    
+    def titles_match(title1, title2, threshold=0.7):
+        """Check if two titles are similar enough"""
+        norm1 = normalize_for_comparison(title1)
+        norm2 = normalize_for_comparison(title2)
+        
+        # Exact match
+        if norm1 == norm2:
+            return True
+        
+        # Check if one contains the other (for feat. versions)
+        if norm1 in norm2 or norm2 in norm1:
+            return True
+        
+        # Fuzzy similarity
+        similarity = SequenceMatcher(None, norm1, norm2).ratio()
+        return similarity >= threshold
+    
     try:
+        print(f"Searching Genius for: '{title}' by '{artist}'")
+        
         # Search for the song
         song = genius.search_song(title, artist)
         
         if song:
+            print(f"Genius returned: '{song.title}' by '{song.artist}'")
+            
+            # Verify the returned song matches what we requested
+            if not titles_match(song.title, title):
+                print(f"⚠️ WARNING: Genius returned wrong song!")
+                print(f"  Requested: '{title}'")
+                print(f"  Got: '{song.title}'")
+                
+                # Try again with simplified title (remove feat., parentheses, etc.)
+                simplified_title = re.sub(r'\(.*?\)', '', title).strip()
+                simplified_title = re.sub(r'\[.*?\]', '', simplified_title).strip()
+                simplified_title = re.sub(r'feat\..*', '', simplified_title, flags=re.IGNORECASE).strip()
+                
+                if simplified_title != title:
+                    print(f"Retrying with simplified title: '{simplified_title}'")
+                    song = genius.search_song(simplified_title, artist)
+                    
+                    if song and titles_match(song.title, title):
+                        print(f"✓ Found correct song with simplified title: '{song.title}'")
+                    else:
+                        print(f"✗ Still wrong song, using anyway (may have sync issues)")
+            else:
+                print(f"✓ Correct song found!")
+            
             # Preprocess lyrics to remove Genius explanations and annotations
             return preprocess_genius_lyrics(song.lyrics)
         
+        print("✗ No lyrics found on Genius")
         return None
     except Exception as e:
         print(f"Error fetching lyrics: {e}")
+        traceback.print_exc()
         return None
 
 
@@ -365,19 +414,21 @@ def get_local_audio(song_title, artist, output_path):
     best_match = None
     best_score = 0
     
+    print(f"Searching for: '{song_title}' by '{artist}'")
+    print(f"Normalized: title='{normalized_title}', artist='{normalized_artist}'")
+    
     # Check various audio file extensions
     for ext in ['.mp3', '.m4a', '.wav', '.flac', '.ogg']:
         for file_path in audio_dir.glob(f'**/*{ext}'):
             filename = file_path.stem
+            normalized_filename = normalize_string(filename)
             
-            # Check different filename formats:
-            # 1. "Artist - Title.mp3"
-            # 2. "Title - Artist.mp3"
-            # 3. "Title.mp3"
+            # Try multiple matching strategies
+            score = 0
             
-            # Calculate similarity score
+            # Strategy 1: Check for " - " separator (best case)
             if ' - ' in filename:
-                parts = filename.split(' - ')
+                parts = filename.split(' - ', 1)  # Split only on first occurrence
                 if len(parts) == 2:
                     # Try both "Artist - Title" and "Title - Artist" formats
                     score1 = (string_similarity(normalize_string(parts[0]), normalized_artist) * 0.5 +
@@ -387,25 +438,53 @@ def get_local_audio(song_title, artist, output_path):
                               string_similarity(normalize_string(parts[1]), normalized_artist) * 0.5)
                     
                     score = max(score1, score2)
-                else:
-                    score = 0
+            
+            # Strategy 2: No separator - try matching "title artist" or "artist title"
             else:
-                # Just compare with title
-                score = string_similarity(normalize_string(filename), normalized_title)
+                # Create expected filename patterns
+                title_artist = f"{normalized_title} {normalized_artist}"
+                artist_title = f"{normalized_artist} {normalized_title}"
+                
+                # Compare with both patterns
+                score1 = string_similarity(normalized_filename, title_artist)
+                score2 = string_similarity(normalized_filename, artist_title)
+                score3 = string_similarity(normalized_filename, normalized_title)  # Title only
+                
+                score = max(score1, score2, score3)
+            
+            # Strategy 3: Partial matching - check if both artist and title appear in filename
+            if score < 0.7:  # Only if previous strategies didn't work well
+                contains_title = normalized_title in normalized_filename
+                contains_artist = normalized_artist in normalized_filename
+                
+                if contains_title and contains_artist:
+                    # Both are present, give it a decent score
+                    score = 0.75
+                elif contains_title:
+                    # Only title present
+                    title_words = normalized_title.split()
+                    if len(title_words) > 0:
+                        # Calculate what percentage of title words are in filename
+                        matches = sum(1 for word in title_words if word in normalized_filename)
+                        score = 0.6 + (matches / len(title_words) * 0.2)
+            
+            # Log candidates with decent scores for debugging
+            if score > 0.5:
+                print(f"  Candidate: '{filename}' - score: {score:.2f}")
             
             # Update best match if better score
-            if score > best_score and score > 0.7:  # Threshold for match
+            if score > best_score and score > 0.65:  # Slightly lower threshold (0.65 instead of 0.7)
                 best_score = score
                 best_match = file_path
     
     # If a good match is found, copy to output_path
     if best_match:
-        print(f"Found local audio file: {best_match} (match score: {best_score:.2f})")
+        print(f"✓ Found local audio file: {best_match} (match score: {best_score:.2f})")
         import shutil
         shutil.copy2(best_match, output_path)
         return True
     
-    print("No suitable local audio file found.")
+    print("✗ No suitable local audio file found.")
     return False
 
 
@@ -442,24 +521,24 @@ async def _process_deepgram(api_key, audio_file_path):
         
         # Read audio file
         with open(audio_file_path, 'rb') as audio:
-            payload = audio.read()
+            payload = {"buffer": audio.read()}
         
-        # Set options for transcription
-        options = PrerecordedOptions(
-            model="nova-2",
-            language="en",
-            detect_language=True,
-            diarize=False,
-            smart_format=True,
-            utterances=True
-        )
+        # Set options for transcription - base model includes word timestamps
+        options = {
+            "model": "nova-2",
+            "language": "en",
+            "smart_format": True,
+            "utterances": True,
+            "diarize": False
+        }
         
         # Send request to Deepgram
-        response = await deepgram.listen.prerecorded.v("1").transcribe_file(payload, options)
+        response = await deepgram.listen.asyncprerecorded.v("1").transcribe_file(payload, options)
         
         return response
     except Exception as e:
         print(f"Deepgram processing error: {e}")
+        traceback.print_exc()
         return None
 
 

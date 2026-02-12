@@ -476,6 +476,11 @@ def agent_song_request(request):
 def process_song_request(song_description):
     """Use Claude to extract song title and artist from natural language description"""
     try:
+        print(f"\n{'='*60}")
+        print(f"PROCESSING SONG REQUEST")
+        print(f"User said: '{song_description}'")
+        print(f"{'='*60}\n")
+        
         # Get API key from environment variable
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
@@ -514,6 +519,8 @@ def process_song_request(song_description):
 
         result = response.json()
         content = result.get('content', [{}])[0].get('text', '')
+        
+        print(f"Claude's raw response:\n{content}\n")
 
         # Extract JSON from Claude's response
         import re
@@ -528,7 +535,12 @@ def process_song_request(song_description):
         json_str = re.sub(r'^.*?(\{.*\}).*$', r'\1', json_str, flags=re.DOTALL)
 
         try:
-            return json.loads(json_str)
+            extracted_info = json.loads(json_str)
+            print(f"Claude extracted:")
+            print(f"  Title: '{extracted_info.get('title')}'")
+            print(f"  Artist: '{extracted_info.get('artist')}'")
+            print(f"{'='*60}\n")
+            return extracted_info
         except json.JSONDecodeError:
             # Fallback extraction if JSON parsing fails
             title_match = re.search(r'title["\']?\s*:\s*["\']([^"\']+)["\']', content)
@@ -548,6 +560,11 @@ def process_song_request(song_description):
 def search_spotify(title, artist):
     """Search Spotify for a song and return the URL"""
     try:
+        print(f"\n{'='*60}")
+        print(f"SEARCHING SPOTIFY")
+        print(f"Looking for: '{title}' by '{artist}'")
+        print(f"{'='*60}\n")
+        
         # Get Spotify credentials from environment variables
         client_id = os.environ.get("SPOTIFY_CLIENT_ID")
         client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
@@ -563,19 +580,41 @@ def search_spotify(title, artist):
 
         # Search Spotify for the song
         query = f"track:{title} artist:{artist}"
-        results = sp.search(q=query, type='track', limit=1)
+        print(f"Spotify query (specific): {query}")
+        results = sp.search(q=query, type='track', limit=5)  # Get top 5 to see options
 
         if results['tracks']['items']:
-            # Return the Spotify URL
-            return results['tracks']['items'][0]['external_urls']['spotify']
+            print(f"\nSpotify returned {len(results['tracks']['items'])} results:")
+            for i, track in enumerate(results['tracks']['items'], 1):
+                print(f"  {i}. '{track['name']}' by {track['artists'][0]['name']}")
+            
+            # Return the first result
+            chosen_track = results['tracks']['items'][0]
+            spotify_url = chosen_track['external_urls']['spotify']
+            print(f"\n✓ Chose: '{chosen_track['name']}' by {chosen_track['artists'][0]['name']}")
+            print(f"  URL: {spotify_url}")
+            print(f"{'='*60}\n")
+            return spotify_url
         else:
             # Try a broader search if the specific one failed
             query = f"{title} {artist}"
-            results = sp.search(q=query, type='track', limit=1)
+            print(f"\nSpecific search failed. Trying broader search: {query}")
+            results = sp.search(q=query, type='track', limit=5)
 
             if results['tracks']['items']:
-                return results['tracks']['items'][0]['external_urls']['spotify']
+                print(f"\nSpotify returned {len(results['tracks']['items'])} results:")
+                for i, track in enumerate(results['tracks']['items'], 1):
+                    print(f"  {i}. '{track['name']}' by {track['artists'][0]['name']}")
+                
+                chosen_track = results['tracks']['items'][0]
+                spotify_url = chosen_track['external_urls']['spotify']
+                print(f"\n✓ Chose: '{chosen_track['name']}' by {chosen_track['artists'][0]['name']}")
+                print(f"  URL: {spotify_url}")
+                print(f"{'='*60}\n")
+                return spotify_url
 
+        print("✗ No results found on Spotify")
+        print(f"{'='*60}\n")
         return None
     except Exception as e:
         print(f"Error searching Spotify: {str(e)}")

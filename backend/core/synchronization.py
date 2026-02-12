@@ -19,7 +19,7 @@ from difflib import SequenceMatcher
 
 # Import configuration
 try:
-    from .sync_config import SynchronizationConfig, get_default_config
+    from .config import SynchronizationConfig, get_default_config
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -36,7 +36,7 @@ except ImportError:
 
 # Deepgram imports
 try:
-    from deepgram import DeepgramClient, PrerecordedOptions
+    from deepgram import DeepgramClient
     DEEPGRAM_AVAILABLE = True
 except ImportError:
     DEEPGRAM_AVAILABLE = False
@@ -91,6 +91,12 @@ class AdvancedLyricSynchronizer:
             tempo, beat_times = librosa.beat.beat_track(y=self.y, sr=self.sample_rate, units='time')
             onset_times = librosa.onset.onset_detect(y=self.y, sr=self.sample_rate, units='time')
             
+            # Ensure tempo is a scalar (librosa can return array or scalar depending on version)
+            if hasattr(tempo, '__len__'):
+                tempo = float(tempo[0]) if len(tempo) > 0 else 120.0
+            else:
+                tempo = float(tempo)
+            
             # Energy and spectral features
             spectral_centroid = librosa.feature.spectral_centroid(y=self.y, sr=self.sample_rate)[0]
             zero_crossing_rate = librosa.feature.zero_crossing_rate(self.y)[0]
@@ -101,6 +107,11 @@ class AdvancedLyricSynchronizer:
             
             # Detect vocal segments using spectral features
             vocal_segments = self._detect_vocal_segments(spectral_centroid, energy_profile)
+            
+            print(f"DEBUG: Detected {len(vocal_segments)} vocal segments using audio analysis")
+            if vocal_segments:
+                for i, (start, end) in enumerate(vocal_segments[:3]):  # Show first 3
+                    print(f"DEBUG:   Vocal segment {i+1}: {start:.2f}s - {end:.2f}s (duration: {end-start:.2f}s)")
             
             self.audio_features = AudioFeatures(
                 tempo=tempo,
@@ -195,30 +206,81 @@ class AdvancedLyricSynchronizer:
     def _synchronize_with_enhanced_deepgram(self, lyrics_lines: List[str]) -> Optional[List[SyncedLyric]]:
         """Enhanced Deepgram synchronization using audio features"""
         if not DEEPGRAM_AVAILABLE:
+            print("Deepgram not available - skipping")
             return None
             
         try:
             api_key = os.environ.get("DEEPGRAM_API_KEY")
             if not api_key:
+                print("No Deepgram API key found")
                 return None
             
+            print("Calling Deepgram API for transcription...")
             # Get Deepgram transcription with word-level timestamps
             response = asyncio.run(self._process_deepgram_enhanced(api_key))
             if not response or not hasattr(response, 'results'):
+                print("No valid response from Deepgram")
                 return None
+            
+            # DEBUG: Print response structure
+            print(f"DEBUG: Response type: {type(response)}")
+            print(f"DEBUG: Response has results: {hasattr(response, 'results')}")
+            if hasattr(response, 'results'):
+                print(f"DEBUG: Results type: {type(response.results)}")
+                print(f"DEBUG: Results has channels: {hasattr(response.results, 'channels')}")
+                if hasattr(response.results, 'channels'):
+                    print(f"DEBUG: Number of channels: {len(response.results.channels)}")
+                    if len(response.results.channels) > 0:
+                        channel = response.results.channels[0]
+                        print(f"DEBUG: Channel type: {type(channel)}")
+                        print(f"DEBUG: Channel has alternatives: {hasattr(channel, 'alternatives')}")
+                        if hasattr(channel, 'alternatives') and len(channel.alternatives) > 0:
+                            alt = channel.alternatives[0]
+                            print(f"DEBUG: Alternative type: {type(alt)}")
+                            print(f"DEBUG: Alternative attributes: {dir(alt)}")
+                            print(f"DEBUG: Alternative has words: {hasattr(alt, 'words')}")
             
             # Extract words with timestamps
             words = []
             if hasattr(response.results, 'channels') and response.results.channels:
                 for alternative in response.results.channels[0].alternatives:
                     if hasattr(alternative, 'words'):
-                        words.extend(alternative.words)
+                        print(f"DEBUG: alternative.words type: {type(alternative.words)}")
+                        print(f"DEBUG: alternative.words is None: {alternative.words is None}")
+                        print(f"DEBUG: alternative.words length: {len(alternative.words) if alternative.words else 0}")
+                        
+                        if alternative.words and len(alternative.words) > 0:
+                            print(f"DEBUG: First word sample: {alternative.words[0]}")
+                            words.extend(alternative.words)
+                        else:
+                            print(f"DEBUG: alternative.words is empty or None")
+                            # Check if there's a transcript even without word-level timing
+                            if hasattr(alternative, 'transcript'):
+                                print(f"DEBUG: Has transcript: '{alternative.transcript[:100] if alternative.transcript else 'None'}'")
             
             if not words:
+                print("No words extracted from Deepgram response")
                 return None
+            
+            print(f"Deepgram returned {len(words)} words with timestamps")
+            
+            # DEBUG: Show time range of transcribed words
+            if words:
+                first_word = words[0]
+                last_word = words[-1]
+                if isinstance(first_word, dict):
+                    first_time = first_word.get('start', 0)
+                    last_time = last_word.get('end', 0)
+                else:
+                    first_time = first_word.start if hasattr(first_word, 'start') else 0
+                    last_time = last_word.end if hasattr(last_word, 'end') else 0
+                print(f"DEBUG: Transcribed words span from {first_time:.2f}s to {last_time:.2f}s")
             
             # Match lyrics to word sequences using improved algorithm
             synced_lyrics = self._match_lyrics_to_words(lyrics_lines, words)
+            
+            if synced_lyrics:
+                print(f"Successfully synced {len(synced_lyrics)} lyric lines using Deepgram")
             
             # Validate and adjust timing using audio features
             if self.audio_features:
@@ -228,6 +290,7 @@ class AdvancedLyricSynchronizer:
             
         except Exception as e:
             print(f"Error in enhanced Deepgram synchronization: {e}")
+            traceback.print_exc()
             return None
     
     async def _process_deepgram_enhanced(self, api_key: str):
@@ -236,25 +299,24 @@ class AdvancedLyricSynchronizer:
             deepgram = DeepgramClient(api_key)
             
             with open(self.audio_path, 'rb') as audio:
-                payload = audio.read()
+                payload = {"buffer": audio.read()}
             
-            options = PrerecordedOptions(
-                model="nova-2",
-                language="en",
-                detect_language=True,
-                smart_format=True,
-                punctuate=True,
-                paragraphs=True,
-                utterances=True,
-                words=True,  # Enable word-level timestamps
-                diarize=False
-            )
+            # Deepgram SDK v3.x API - base model includes word timestamps by default
+            options = {
+                "model": "nova-2",
+                "language": "en",
+                "smart_format": True,
+                "punctuate": True,
+                "utterances": True,
+                "diarize": False
+            }
             
-            response = await deepgram.listen.prerecorded.v("1").transcribe_file(payload, options)
+            response = await deepgram.listen.asyncprerecorded.v("1").transcribe_file(payload, options)
             return response
             
         except Exception as e:
             print(f"Enhanced Deepgram processing error: {e}")
+            traceback.print_exc()
             return None
     
     def _match_lyrics_to_words(self, lyrics_lines: List[str], words: List) -> List[SyncedLyric]:
@@ -262,7 +324,7 @@ class AdvancedLyricSynchronizer:
         synced_lyrics = []
         word_idx = 0
         
-        for line in lyrics_lines:
+        for line_num, line in enumerate(lyrics_lines, 1):
             if not line.strip():
                 continue
             
@@ -271,29 +333,54 @@ class AdvancedLyricSynchronizer:
             if not line_words:
                 continue
             
+            # Get previous end time for proximity constraint
+            previous_end_time = synced_lyrics[-1].end_time if synced_lyrics else 0
+            
             # Find the best matching sequence in transcribed words
-            best_match = self._find_best_word_sequence(line_words, words, word_idx)
+            best_match = self._find_best_word_sequence(line_words, words, word_idx, previous_end_time)
             
             if best_match:
                 start_idx, end_idx, confidence = best_match
-                start_time = words[start_idx].start if hasattr(words[start_idx], 'start') else 0
-                end_time = words[end_idx].end if hasattr(words[end_idx], 'end') else start_time + 2.0
+                
+                # Extract start/end times - handle both dict and object formats
+                start_word = words[start_idx]
+                end_word = words[end_idx]
+                
+                if isinstance(start_word, dict):
+                    start_time = start_word.get('start', 0)
+                    end_time = end_word.get('end', start_time + 2.0)
+                else:
+                    start_time = start_word.start if hasattr(start_word, 'start') else 0
+                    end_time = end_word.end if hasattr(end_word, 'end') else start_time + 2.0
+                
+                duration = end_time - start_time
+                
+                # CRITICAL SAFETY CHECK: If duration is still too long (shouldn't happen with our fix, but just in case)
+                MAX_DURATION = 12.0
+                if duration > MAX_DURATION:
+                    print(f"  WARNING: Line {line_num} has excessive duration ({duration:.2f}s), capping at {MAX_DURATION}s")
+                    end_time = start_time + MAX_DURATION
+                    duration = MAX_DURATION
+                    confidence = confidence * 0.5  # Reduce confidence
+                
+                print(f"  Line {line_num}: '{line[:50]}...' → {start_time:.2f}s-{end_time:.2f}s (confidence: {confidence:.2f})")
                 
                 synced_lyrics.append(SyncedLyric(
                     text=line,
                     start_time=start_time,
                     end_time=end_time,
-                    duration=end_time - start_time,
+                    duration=duration,
                     confidence=confidence,
                     method="enhanced_deepgram"
                 ))
                 
                 word_idx = end_idx + 1
             else:
-                # No match found - estimate based on previous timing
+                # No match found - estimate based on previous timing and ADVANCE word_idx
+                print(f"  Line {line_num}: No match found, using estimation")
                 if synced_lyrics:
                     last_end = synced_lyrics[-1].end_time
-                    estimated_duration = max(2.0, len(line) * 0.05)
+                    estimated_duration = max(2.0, min(len(line) * 0.05, 5.0))  # Cap at 5 seconds
                     
                     synced_lyrics.append(SyncedLyric(
                         text=line,
@@ -303,6 +390,11 @@ class AdvancedLyricSynchronizer:
                         confidence=0.3,
                         method="estimated"
                     ))
+                    
+                    # CRITICAL FIX: Advance word_idx to avoid getting stuck
+                    # Skip ahead by estimated number of words for this line
+                    estimated_words = max(3, len(line_words))
+                    word_idx = min(word_idx + estimated_words, len(words) - 1)
                 else:
                     synced_lyrics.append(SyncedLyric(
                         text=line,
@@ -312,6 +404,10 @@ class AdvancedLyricSynchronizer:
                         confidence=0.2,
                         method="default"
                     ))
+                    word_idx = min(5, len(words) - 1)  # Skip first few words
+        
+        # POST-PROCESSING: Validate and fix any remaining timing issues
+        synced_lyrics = self._post_process_timing(synced_lyrics)
         
         return synced_lyrics
     
@@ -321,24 +417,173 @@ class AdvancedLyricSynchronizer:
         normalized = re.sub(r'[^\w\s]', '', text.lower())
         return [word for word in normalized.split() if len(word) > 1]
     
-    def _find_best_word_sequence(self, target_words: List[str], transcribed_words: List, start_idx: int) -> Optional[Tuple[int, int, float]]:
-        """Find the best matching word sequence"""
+    def _post_process_timing(self, synced_lyrics: List[SyncedLyric]) -> List[SyncedLyric]:
+        """Post-process synchronized lyrics to fix timing issues"""
+        if not synced_lyrics:
+            return synced_lyrics
+        
+        # First pass: identify problematic sections
+        problem_start_idx = None
+        consecutive_large_gaps = 0
+        MAX_DURATION = 12.0
+        MIN_GAP = 0.1
+        MAX_GAP = 10.0
+        
+        # Detect cascading failures (many consecutive large gaps)
+        for i in range(1, len(synced_lyrics)):
+            gap = synced_lyrics[i].start_time - synced_lyrics[i-1].end_time
+            if gap > MAX_GAP:
+                consecutive_large_gaps += 1
+                if problem_start_idx is None:
+                    problem_start_idx = i
+            else:
+                if consecutive_large_gaps > 3:
+                    # We have a cascading failure - need to redistribute
+                    print(f"  POST-PROCESS: Detected cascading failure starting at line {problem_start_idx+1} ({consecutive_large_gaps} bad gaps)")
+                    break
+                consecutive_large_gaps = 0
+                problem_start_idx = None
+        
+        # If we detected cascading failure, redistribute those lines
+        if consecutive_large_gaps > 3 and problem_start_idx is not None:
+            processed = synced_lyrics[:problem_start_idx]
+            failed_lines = synced_lyrics[problem_start_idx:]
+            
+            # Redistribute failed lines starting from last good position
+            last_good_end = processed[-1].end_time if processed else 5.0
+            print(f"  POST-PROCESS: Redistributing {len(failed_lines)} lines starting from {last_good_end:.2f}s")
+            
+            for i, lyric in enumerate(failed_lines):
+                estimated_duration = max(2.0, min(len(lyric.text) * 0.04, 5.0))
+                new_start = last_good_end + 0.5
+                new_end = new_start + estimated_duration
+                
+                processed.append(SyncedLyric(
+                    text=lyric.text,
+                    start_time=new_start,
+                    end_time=new_end,
+                    duration=estimated_duration,
+                    confidence=0.35,
+                    method="redistributed"
+                ))
+                last_good_end = new_end
+            
+            return processed
+        
+        # Normal processing: fix individual issues
+        processed = []
+        
+        for i, lyric in enumerate(synced_lyrics):
+            # Fix 1: Cap excessive durations
+            duration = lyric.end_time - lyric.start_time
+            if duration > MAX_DURATION:
+                print(f"  POST-PROCESS: Capping line {i+1} duration from {duration:.2f}s to {MAX_DURATION}s")
+                lyric = SyncedLyric(
+                    text=lyric.text,
+                    start_time=lyric.start_time,
+                    end_time=lyric.start_time + MAX_DURATION,
+                    duration=MAX_DURATION,
+                    confidence=lyric.confidence * 0.7,
+                    method=f"{lyric.method}_capped"
+                )
+            
+            # Fix 2: Detect and fix large gaps between consecutive lines
+            if i > 0:
+                prev_lyric = processed[-1]
+                gap = lyric.start_time - prev_lyric.end_time
+                
+                # If gap is too large, it suggests a matching error
+                if gap > MAX_GAP:
+                    print(f"  POST-PROCESS: Large gap detected ({gap:.2f}s) between lines {i} and {i+1}")
+                    # Adjust current line to start closer to previous line
+                    new_start = prev_lyric.end_time + 1.0
+                    new_duration = min(lyric.duration, 5.0)
+                    lyric = SyncedLyric(
+                        text=lyric.text,
+                        start_time=new_start,
+                        end_time=new_start + new_duration,
+                        duration=new_duration,
+                        confidence=0.4,
+                        method="gap_adjusted"
+                    )
+                
+                # If lines overlap, fix it
+                elif gap < 0:
+                    overlap = -gap
+                    print(f"  POST-PROCESS: Fixing {overlap:.2f}s overlap between lines {i} and {i+1}")
+                    lyric = SyncedLyric(
+                        text=lyric.text,
+                        start_time=prev_lyric.end_time + MIN_GAP,
+                        end_time=prev_lyric.end_time + MIN_GAP + lyric.duration,
+                        duration=lyric.duration,
+                        confidence=lyric.confidence,
+                        method=lyric.method
+                    )
+            
+            processed.append(lyric)
+        
+        return processed
+    
+    def _find_best_word_sequence(self, target_words: List[str], transcribed_words: List, start_idx: int, previous_end_time: float = 0) -> Optional[Tuple[int, int, float]]:
+        """Find the best matching word sequence with time duration and proximity constraints"""
         if not target_words or start_idx >= len(transcribed_words):
             return None
         
         best_match = None
         best_score = 0.0
-        search_window = min(100, len(transcribed_words) - start_idx)  # Limit search window
+        search_window = min(50, len(transcribed_words) - start_idx)  # Reduced search window
+        
+        # Maximum duration for a single lyric line (in seconds)
+        MAX_LINE_DURATION = 15.0
+        
+        # CRITICAL: Maximum time distance from previous line (prevents jumping too far)
+        MAX_TIME_DISTANCE = 20.0  # Don't search more than 20 seconds ahead
         
         for i in range(start_idx, start_idx + search_window):
+            # Get start time of potential match
+            start_word = transcribed_words[i]
+            if isinstance(start_word, dict):
+                start_time = start_word.get('start', 0)
+            else:
+                start_time = start_word.start if hasattr(start_word, 'start') else 0
+            
+            # CRITICAL: Skip if this word is too far from the previous line
+            if previous_end_time > 0 and (start_time - previous_end_time) > MAX_TIME_DISTANCE:
+                # Stop searching - we've gone too far
+                break
+            
             for j in range(i + 1, min(i + len(target_words) * 3, len(transcribed_words))):
+                # CRITICAL: Check time duration FIRST before doing expensive string matching
+                end_word = transcribed_words[j]
+                
+                # Extract timestamps
+                if isinstance(end_word, dict):
+                    end_time = end_word.get('end', start_time + 2.0)
+                else:
+                    end_time = end_word.end if hasattr(end_word, 'end') else start_time + 2.0
+                
+                duration = end_time - start_time
+                
+                # Skip if duration exceeds maximum
+                if duration > MAX_LINE_DURATION:
+                    continue
+                
                 # Extract sequence of transcribed words
                 sequence = []
                 for k in range(i, j + 1):
-                    if hasattr(transcribed_words[k], 'word'):
-                        word = re.sub(r'[^\w\s]', '', transcribed_words[k].word.lower())
-                        if word:
-                            sequence.append(word)
+                    word_obj = transcribed_words[k]
+                    
+                    # Handle both dict and object formats
+                    if isinstance(word_obj, dict):
+                        word_text = word_obj.get('word', '')
+                    elif hasattr(word_obj, 'word'):
+                        word_text = word_obj.word
+                    else:
+                        continue
+                    
+                    word = re.sub(r'[^\w\s]', '', word_text.lower())
+                    if word:
+                        sequence.append(word)
                 
                 if not sequence:
                     continue
@@ -350,13 +595,140 @@ class AdvancedLyricSynchronizer:
                 
                 # Bonus for word count match
                 length_bonus = 1.0 - abs(len(target_words) - len(sequence)) / max(len(target_words), len(sequence))
-                score = similarity * 0.7 + length_bonus * 0.3
                 
-                if score > best_score and score > 0.6:
+                # Duration penalty: prefer shorter matches when similarity is similar
+                # Ideal duration is 2-6 seconds per line
+                if duration < 2.0:
+                    duration_penalty = 0.9  # Slightly penalize very short
+                elif duration <= 6.0:
+                    duration_penalty = 1.0  # Perfect range
+                elif duration <= 10.0:
+                    duration_penalty = 0.95  # Slightly penalize longer
+                else:
+                    duration_penalty = 0.85  # Penalize very long
+                
+                # Proximity bonus: prefer matches closer to previous line
+                if previous_end_time > 0:
+                    time_gap = start_time - previous_end_time
+                    if time_gap < 0:
+                        proximity_bonus = 0.8  # Penalize overlaps
+                    elif time_gap <= 2.0:
+                        proximity_bonus = 1.0  # Perfect gap
+                    elif time_gap <= 5.0:
+                        proximity_bonus = 0.95  # Good gap
+                    elif time_gap <= 10.0:
+                        proximity_bonus = 0.85  # Acceptable gap
+                    else:
+                        proximity_bonus = 0.7  # Large gap penalty
+                else:
+                    proximity_bonus = 1.0
+                
+                # Combined score with duration and proximity consideration
+                score = (similarity * 0.7 + length_bonus * 0.3) * duration_penalty * proximity_bonus
+                
+                # Lower threshold to 0.5 for better matching with slang/variations
+                if score > best_score and score > 0.5:
                     best_score = score
                     best_match = (i, j, score)
         
         return best_match
+    
+    def _synchronize_with_utterances(self, response, lyrics_lines: List[str]) -> Optional[List[SyncedLyric]]:
+        """Fallback: Use Deepgram utterances instead of word-level matching"""
+        try:
+            # Extract utterances from response
+            utterances = []
+            if hasattr(response.results, 'utterances') and response.results.utterances:
+                utterances = response.results.utterances
+            
+            if not utterances:
+                print("No utterances found in Deepgram response")
+                return None
+            
+            print(f"Using utterance-based sync with {len(utterances)} utterances for {len(lyrics_lines)} lyrics")
+            
+            # Match lyrics to utterances
+            synced_lyrics = []
+            utterance_idx = 0
+            
+            for line_num, line in enumerate(lyrics_lines, 1):
+                if not line.strip():
+                    continue
+                
+                # Find best matching utterance
+                best_match = None
+                best_score = 0
+                
+                # Search next 3 utterances
+                for i in range(min(3, len(utterances) - utterance_idx)):
+                    if utterance_idx + i >= len(utterances):
+                        break
+                    
+                    utterance = utterances[utterance_idx + i]
+                    
+                    # Get utterance text
+                    if isinstance(utterance, dict):
+                        utt_text = utterance.get('transcript', '')
+                        utt_start = utterance.get('start', 0)
+                        utt_end = utterance.get('end', utt_start + 2.0)
+                    else:
+                        utt_text = utterance.transcript if hasattr(utterance, 'transcript') else ''
+                        utt_start = utterance.start if hasattr(utterance, 'start') else 0
+                        utt_end = utterance.end if hasattr(utterance, 'end') else utt_start + 2.0
+                    
+                    # Calculate similarity
+                    similarity = SequenceMatcher(None, line.lower(), utt_text.lower()).ratio()
+                    
+                    if similarity > best_score:
+                        best_score = similarity
+                        best_match = (utterance_idx + i, utt_start, utt_end, similarity)
+                
+                if best_match and best_score > 0.4:
+                    idx, start_time, end_time, confidence = best_match
+                    print(f"  Line {line_num}: '{line[:50]}...' → {start_time:.2f}s-{end_time:.2f}s (confidence: {confidence:.2f})")
+                    
+                    synced_lyrics.append(SyncedLyric(
+                        text=line,
+                        start_time=start_time,
+                        end_time=end_time,
+                        duration=end_time - start_time,
+                        confidence=confidence,
+                        method="utterance_based"
+                    ))
+                    utterance_idx = idx + 1
+                else:
+                    # Estimate timing
+                    if synced_lyrics:
+                        last_end = synced_lyrics[-1].end_time
+                        estimated_duration = max(2.0, len(line) * 0.05)
+                        synced_lyrics.append(SyncedLyric(
+                            text=line,
+                            start_time=last_end + 0.5,
+                            end_time=last_end + 0.5 + estimated_duration,
+                            duration=estimated_duration,
+                            confidence=0.3,
+                            method="estimated"
+                        ))
+                        utterance_idx = min(utterance_idx + 1, len(utterances) - 1)
+                    else:
+                        synced_lyrics.append(SyncedLyric(
+                            text=line,
+                            start_time=5.0,
+                            end_time=7.0,
+                            duration=2.0,
+                            confidence=0.2,
+                            method="default"
+                        ))
+            
+            if synced_lyrics:
+                print(f"Successfully synced {len(synced_lyrics)} lyric lines using utterances")
+            
+            return synced_lyrics
+            
+        except Exception as e:
+            print(f"Error in utterance-based sync: {e}")
+            traceback.print_exc()
+            return None
     
     def _synchronize_with_audio_analysis(self, lyrics_lines: List[str]) -> Optional[List[SyncedLyric]]:
         """Synchronize using audio analysis features"""
@@ -550,9 +922,26 @@ class AdvancedLyricSynchronizer:
             # Use first vocal segment as start
             intro_time = self.audio_features.vocal_segments[0][0]
             available_time = self.audio_features.vocal_segments[-1][1] - intro_time
+            print(f"DEBUG: Using vocal segments - first segment starts at {intro_time:.2f}s")
         else:
-            # Fallback to heuristic
-            intro_time = min(15, duration * 0.15)
+            # Try to detect vocal start using onset analysis
+            if self.audio_features and self.audio_features.onset_times is not None and len(self.audio_features.onset_times) > 0:
+                # Look for sustained activity (likely vocal start)
+                onset_times = self.audio_features.onset_times
+                print(f"DEBUG: Found {len(onset_times)} onsets, first at {onset_times[0]:.2f}s")
+                
+                # Find first cluster of onsets (likely vocal start)
+                intro_time = 5.0  # Default
+                for i in range(len(onset_times) - 5):
+                    # Check if we have sustained activity (5+ onsets within 10 seconds)
+                    if onset_times[i+4] - onset_times[i] < 10.0:
+                        intro_time = max(5.0, onset_times[i] - 2.0)  # Start slightly before
+                        print(f"DEBUG: Vocal start detected from onset analysis: {onset_times[i]:.2f}s")
+                        break
+            else:
+                intro_time = min(15, duration * 0.15)
+                print(f"DEBUG: Using fallback intro time: {intro_time:.2f}s")
+            
             available_time = duration - intro_time - 5
         
         print(f"Improved sync: intro={intro_time:.2f}s, available={available_time:.2f}s")
@@ -561,10 +950,12 @@ class AdvancedLyricSynchronizer:
         time_per_line = available_time / len(non_empty_lines)
         time_per_line = max(1.5, min(time_per_line, 4.0))
         
+        print(f"DEBUG: Distributing {len(non_empty_lines)} lines over {available_time:.2f}s (~{time_per_line:.2f}s per line)")
+        
         synced_lyrics = []
         current_time = intro_time
         
-        for line in non_empty_lines:
+        for i, line in enumerate(non_empty_lines, 1):
             # Adjust duration based on line characteristics
             line_length_factor = len(line) / 30
             duration = max(1.5, min(time_per_line * line_length_factor, 5.0))
@@ -574,6 +965,8 @@ class AdvancedLyricSynchronizer:
                 duration = max(1.0, duration * 0.6)
             elif len(line) > 50:
                 duration = min(6.0, duration * 1.2)
+            
+            print(f"DEBUG: Line {i}: '{line[:40]}...' → {current_time:.2f}s-{current_time + duration:.2f}s (duration: {duration:.2f}s)")
             
             synced_lyrics.append(SyncedLyric(
                 text=line,

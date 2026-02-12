@@ -30,16 +30,17 @@ const AppLayout = styled.div`
 `;
 
 const Sidebar = styled.div`
-  width: 240px;
+  width: 100px;
   background-color: #1DB954;
   color: white;
-  padding: 30px 0;
+  padding: 24px 0;
   display: flex;
   flex-direction: column;
   position: fixed;
   height: 100vh;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
   z-index: 100;
+  align-items: center;
   
   @media (max-width: 768px) {
     display: none;
@@ -47,49 +48,75 @@ const Sidebar = styled.div`
 `;
 
 const Logo = styled.div`
-  font-size: 24px;
+  font-size: 36px;
   font-weight: 700;
-  padding: 0 20px 30px;
+  padding: 0 0 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
 `;
 
 const NavMenu = styled.nav`
   display: flex;
   flex-direction: column;
   flex: 1;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
 `;
 
 const NavItem = styled(Link)<{ active?: boolean }>`
-  padding: 12px 20px;
+  padding: 16px;
   color: white;
   text-decoration: none;
   display: flex;
   align-items: center;
+  justify-content: center;
   font-weight: ${props => props.active ? '600' : '400'};
   background-color: ${props => props.active ? 'rgba(0, 0, 0, 0.2)' : 'transparent'};
-  border-left: ${props => props.active ? '4px solid white' : '4px solid transparent'};
+  border-radius: 16px;
   transition: all 0.2s ease;
+  position: relative;
+  width: 60px;
+  height: 60px;
   
   &:hover {
     background-color: rgba(255, 255, 255, 0.2);
     color: white;
-    border-left: 4px solid rgba(255, 255, 255, 0.7);
+  }
+  
+  &:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 85px;
+    background-color: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 10px 14px;
+    border-radius: 8px;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
 `;
 
 const NavIcon = styled.span`
-  margin-right: 10px;
-  font-size: 18px;
+  font-size: 28px;
   display: flex;
   align-items: center;
+  justify-content: center;
 `;
 
 const MainContent = styled.main`
   flex: 1;
-  margin-left: 240px;
+  margin-left: 100px;
   padding: 30px;
-  width: calc(100% - 240px);
+  width: calc(100% - 100px);
   transition: all 0.2s ease;
   
   @media (max-width: 1200px) {
@@ -788,22 +815,19 @@ const ProfilePage: React.FC = () => {
     return (
       <AppLayout>
         <Sidebar>
-          <Logo>zLyrics</Logo>
+          <Logo>🎵</Logo>
           <NavMenu>
-            <NavItem to="/">
-              <NavIcon>{IoHomeOutline({ size: 18 })}</NavIcon> Home
+            <NavItem to="/" data-tooltip="Home">
+              <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
             </NavItem>
-            <NavItem to="/profile">
-              <NavIcon>{CgProfile({ size: 18 })}</NavIcon> Profile
+            <NavItem to="/profile" data-tooltip="Profile">
+              <NavIcon>{CgProfile({ size: 28 })}</NavIcon>
             </NavItem>
-            <NavItem to="/songs">
-              <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
+            <NavItem to="/songs" data-tooltip="My Songs">
+              <NavIcon>{MdMusicNote({ size: 28 })}</NavIcon>
             </NavItem>
-            <NavItem to="/create">
-              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
-            </NavItem>
-            <NavItem to="/agent">
-              <NavIcon>{RiRobot2Line({ size: 18 })}</NavIcon> Agent
+            <NavItem to="/agent" data-tooltip="AI Agent">
+              <NavIcon>{RiRobot2Line({ size: 28 })}</NavIcon>
             </NavItem>
           </NavMenu>
         </Sidebar>
@@ -819,22 +843,19 @@ const ProfilePage: React.FC = () => {
     return (
       <AppLayout>
         <Sidebar>
-          <Logo>zLyrics</Logo>
+          <Logo>🎵</Logo>
           <NavMenu>
-            <NavItem to="/">
-              <NavIcon>{IoHomeOutline({ size: 18 })}</NavIcon> Home
+            <NavItem to="/" data-tooltip="Home">
+              <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
             </NavItem>
-            <NavItem to="/profile">
-              <NavIcon>{CgProfile({ size: 18 })}</NavIcon> Profile
+            <NavItem to="/profile" data-tooltip="Profile">
+              <NavIcon>{CgProfile({ size: 28 })}</NavIcon>
             </NavItem>
-            <NavItem to="/songs">
-              <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
+            <NavItem to="/songs" data-tooltip="My Songs">
+              <NavIcon>{MdMusicNote({ size: 28 })}</NavIcon>
             </NavItem>
-            <NavItem to="/create">
-              <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
-            </NavItem>
-            <NavItem to="/agent">
-              <NavIcon>{RiRobot2Line({ size: 18 })}</NavIcon> Agent
+            <NavItem to="/agent" data-tooltip="AI Agent">
+              <NavIcon>{RiRobot2Line({ size: 28 })}</NavIcon>
             </NavItem>
           </NavMenu>
         </Sidebar>
@@ -852,22 +873,19 @@ const ProfilePage: React.FC = () => {
   return (
     <AppLayout>
       <Sidebar>
-        <Logo>zLyrics</Logo>
+        <Logo>🎵</Logo>
         <NavMenu>
-          <NavItem to="/">
-            <NavIcon>{IoHomeOutline({ size: 18 })}</NavIcon> Home
+          <NavItem to="/" data-tooltip="Home">
+            <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
           </NavItem>
-          <NavItem to="/profile" active>
-            <NavIcon>{CgProfile({ size: 18 })}</NavIcon> Profile
+          <NavItem to="/profile" active data-tooltip="Profile">
+            <NavIcon>{CgProfile({ size: 28 })}</NavIcon>
           </NavItem>
-          <NavItem to="/songs">
-            <NavIcon>{MdMusicNote({ size: 18 })}</NavIcon> My Songs
+          <NavItem to="/songs" data-tooltip="My Songs">
+            <NavIcon>{MdMusicNote({ size: 28 })}</NavIcon>
           </NavItem>
-          <NavItem to="/create">
-            <NavIcon>{MdAdd({ size: 18 })}</NavIcon> Create Lyrics
-          </NavItem>
-          <NavItem to="/agent">
-            <NavIcon>{RiRobot2Line({ size: 18 })}</NavIcon> Agent
+          <NavItem to="/agent" data-tooltip="AI Agent">
+            <NavIcon>{RiRobot2Line({ size: 28 })}</NavIcon>
           </NavItem>
         </NavMenu>
       </Sidebar>

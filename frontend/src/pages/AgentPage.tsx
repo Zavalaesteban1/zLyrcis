@@ -254,40 +254,26 @@ const AgentPage: React.FC = () => {
       {/* Main navigation sidebar - always visible on desktop, toggleable on mobile */}
       <Styles.Sidebar isOpen={sidebarOpen}>
         <Styles.Logo>
-          zLyrics
+          🎵
         </Styles.Logo>
         <Styles.NavMenu>
-          <Styles.NavItem to="/">
-            <Styles.NavIcon>{IoHomeOutline({ size: 18 })}</Styles.NavIcon> Home
+          <Styles.NavItem to="/" data-tooltip="Home">
+            <Styles.NavIcon>{IoHomeOutline({ size: 28 })}</Styles.NavIcon>
+            <Styles.NavText>Home</Styles.NavText>
           </Styles.NavItem>
-          <Styles.NavItem to="/profile">
-            <Styles.NavIcon>{CgProfile({ size: 18 })}</Styles.NavIcon> Profile
+          <Styles.NavItem to="/profile" data-tooltip="Profile">
+            <Styles.NavIcon>{CgProfile({ size: 28 })}</Styles.NavIcon>
+            <Styles.NavText>Profile</Styles.NavText>
           </Styles.NavItem>
-          <Styles.NavItem to="/songs">
-            <Styles.NavIcon>{MdMusicNote({ size: 18 })}</Styles.NavIcon> My Songs
+          <Styles.NavItem to="/songs" data-tooltip="My Songs">
+            <Styles.NavIcon>{MdMusicNote({ size: 28 })}</Styles.NavIcon>
+            <Styles.NavText>My Songs</Styles.NavText>
           </Styles.NavItem>
-          <Styles.NavItem to="/create">
-            <Styles.NavIcon>{MdAdd({ size: 18 })}</Styles.NavIcon> Create Lyrics
-          </Styles.NavItem>
-          <Styles.NavItem to="/agent" active>
-            <Styles.NavIcon>{RiRobot2Line({ size: 18 })}</Styles.NavIcon> Agent
+          <Styles.NavItem to="/agent" active data-tooltip="AI Agent">
+            <Styles.NavIcon>{RiRobot2Line({ size: 28 })}</Styles.NavIcon>
+            <Styles.NavText>Agent</Styles.NavText>
           </Styles.NavItem>
         </Styles.NavMenu>
-        
-        {/* User info at bottom of sidebar */}
-        {userData && (
-          <div style={{ padding: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', marginTop: 'auto' }}>
-            <Styles.UserInfo>
-              <Styles.UserAvatar 
-                src={userData.profile_picture || "https://via.placeholder.com/40x40?text=User"} 
-                alt={userData.name} 
-              />
-              <div>
-                <Styles.UserName style={{ color: 'white' }}>{userData.name}</Styles.UserName>
-              </div>
-            </Styles.UserInfo>
-          </div>
-        )}
       </Styles.Sidebar>
       
       {/* Toggle for sidebar on mobile */}

@@ -11,21 +11,23 @@ export const AppLayout = styled.div`
 `;
 
 export const Sidebar = styled.div<{ isOpen: boolean }>`
-  width: 240px;
+  width: 100px;
   background-color: #1DB954;
   color: white;
-  padding: 30px 0;
+  padding: 24px 0;
   display: flex;
   flex-direction: column;
   position: fixed;
   height: 100vh;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
   z-index: 100;
-  transition: transform 0.3s ease;
+  transition: all 0.3s ease;
+  align-items: center;
   
   @media (max-width: 768px) {
     width: 280px;
     transform: translateX(${props => props.isOpen ? '0' : '-100%'});
+    align-items: stretch;
   }
 `;
 
@@ -59,50 +61,109 @@ export const SidebarToggle = styled.button`
 `;
 
 export const Logo = styled.div`
-  font-size: 24px;
+  font-size: 36px;
   font-weight: 700;
-  padding: 0 20px 30px;
+  padding: 0 0 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 100%;
+  
+  @media (max-width: 768px) {
+    padding: 0 20px 20px;
+    justify-content: flex-start;
+  }
 `;
 
 export const NavMenu = styled.nav`
   display: flex;
   flex-direction: column;
   flex: 1;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  
+  @media (max-width: 768px) {
+    align-items: stretch;
+    gap: 0;
+  }
 `;
 
 export const NavItem = styled(Link)<{ active?: boolean }>`
-  padding: 12px 20px;
+  padding: 16px;
   color: white;
   text-decoration: none;
   display: flex;
   align-items: center;
+  justify-content: center;
   font-weight: ${props => props.active ? '600' : '400'};
   background-color: ${props => props.active ? 'rgba(0, 0, 0, 0.2)' : 'transparent'};
-  border-left: ${props => props.active ? '4px solid white' : '4px solid transparent'};
+  border-radius: 16px;
   transition: all 0.2s ease;
+  position: relative;
+  width: 60px;
+  height: 60px;
   
   &:hover {
     background-color: rgba(255, 255, 255, 0.2);
     color: white;
-    border-left: 4px solid rgba(255, 255, 255, 0.7);
+  }
+  
+  &:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 85px;
+    background-color: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 10px 14px;
+    border-radius: 8px;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 12px 20px;
+    justify-content: flex-start;
+    border-radius: 0;
+    border-left: ${props => props.active ? '4px solid white' : '4px solid transparent'};
+    
+    &:hover::after {
+      display: none;
+    }
   }
 `;
 
 export const NavIcon = styled.span`
-  margin-right: 10px;
-  font-size: 18px;
+  font-size: 28px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  
+  @media (max-width: 768px) {
+    margin-right: 10px;
+    font-size: 18px;
+  }
+`;
+
+export const NavText = styled.span`
+  display: none;
+  
+  @media (max-width: 768px) {
+    display: inline;
+  }
 `;
 
 export const MainContent = styled.main<{ sidebarOpen: boolean }>`
   flex: 1;
-  margin-left: 240px; /* Always align with sidebar on desktop */
-  width: calc(100% - 240px);
+  margin-left: 100px; /* Always align with sidebar on desktop */
+  width: calc(100% - 100px);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -127,7 +188,7 @@ export const ChatSidebar = styled.div<{ isOpen: boolean }>`
   flex-direction: column;
   transition: transform 0.3s ease, left 0.3s ease;
   position: fixed;
-  left: 240px; /* Always position next to the main sidebar */
+  left: 100px; /* Always position next to the main sidebar */
   z-index: 90;
   transform: translateX(${props => props.isOpen ? '0' : '-100%'});
   overflow-y: auto;

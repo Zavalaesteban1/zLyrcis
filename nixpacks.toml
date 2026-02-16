@@ -1,8 +1,8 @@
 [phases.setup]
-nixPkgs = ["python312", "ffmpeg"]
+nixPkgs = ["python312", "python312Packages.pip", "ffmpeg"]
 
 [phases.install]
-cmds = ["pip install -r backend/requirements.txt"]
+cmds = ["python3 -m pip install -r backend/requirements.txt"]
 
 [start]
-cmd = "cd backend && gunicorn lyric_video_project.wsgi:application --bind 0.0.0.0:$PORT"
+cmd = "cd backend && python3 -m gunicorn lyric_video_project.wsgi:application --bind 0.0.0.0:$PORT"

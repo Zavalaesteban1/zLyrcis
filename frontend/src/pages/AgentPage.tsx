@@ -123,16 +123,22 @@ const AgentPage: React.FC = () => {
       const newWidth = window.innerWidth;
       setWindowWidth(newWidth);
       
-      if (newWidth <= 768 && sidebarOpen) {
-        setSidebarOpen(false);
+      // Use functional update to avoid depending on sidebarOpen
+      if (newWidth <= 768) {
+        setSidebarOpen(prev => prev ? false : prev);
       }
     };
     
     window.addEventListener('resize', handleResize);
-    handleResize();
+    // Only run handleResize on mount, not on every re-render
+    const initialWidth = window.innerWidth;
+    setWindowWidth(initialWidth);
+    if (initialWidth <= 768) {
+      setSidebarOpen(false);
+    }
     
     return () => window.removeEventListener('resize', handleResize);
-  }, [sidebarOpen]);
+  }, []); // Empty dependency array - only run once on mount
   
   // Auto-save messages when they change
   useEffect(() => {

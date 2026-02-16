@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import styled from 'styled-components';
+import styled, { createGlobalStyle } from 'styled-components';
 import { logout } from '../services/api';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
@@ -16,6 +16,27 @@ import { useProfileStats } from '../hooks/useProfileStats';
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 import { ProfileEditForm } from '../components/profile/ProfileEditForm';
 import { ProfileStatsCards } from '../components/profile/ProfileStatsCards';
+
+// Global style for consistent styling across pages
+const GlobalStyle = createGlobalStyle`
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 0.8;
+    }
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+`;
 
 // Styled components
 const AppLayout = styled.div`
@@ -69,7 +90,7 @@ const NavMenu = styled.nav`
   flex: 1;
   width: 100%;
   align-items: center;
-  gap: 12px;
+  gap: 24px;
 `;
 
 const NavItem = styled(Link)<{ active?: boolean }>`
@@ -266,37 +287,42 @@ const ProfilePage: React.FC = () => {
   // Loading state
   if (loading) {
     return (
-      <AppLayout>
-        <Sidebar>
-          <Logo>🎵</Logo>
-          <NavMenu>
-            <NavItem to="/" data-tooltip="Home">
-              <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
-            </NavItem>
-            <NavItem to="/profile" active data-tooltip="Profile">
-              <NavIcon>{CgProfile({ size: 28 })}</NavIcon>
-            </NavItem>
-            <NavItem to="/songs" data-tooltip="My Songs">
-              <NavIcon>{MdMusicNote({ size: 28 })}</NavIcon>
-            </NavItem>
-            <NavItem to="/agent" data-tooltip="AI Agent">
-              <NavIcon>{RiRobot2Line({ size: 28 })}</NavIcon>
-            </NavItem>
-          </NavMenu>
-        </Sidebar>
-        <MainContent>
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-            {/* Loading state */}
-          </div>
-        </MainContent>
-      </AppLayout>
+      <>
+        <GlobalStyle />
+        <AppLayout>
+          <Sidebar>
+            <Logo>🎵</Logo>
+            <NavMenu>
+              <NavItem to="/" data-tooltip="Home">
+                <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
+              </NavItem>
+              <NavItem to="/profile" active data-tooltip="Profile">
+                <NavIcon>{CgProfile({ size: 28 })}</NavIcon>
+              </NavItem>
+              <NavItem to="/songs" data-tooltip="My Songs">
+                <NavIcon>{MdMusicNote({ size: 28 })}</NavIcon>
+              </NavItem>
+              <NavItem to="/agent" data-tooltip="AI Agent">
+                <NavIcon>{RiRobot2Line({ size: 28 })}</NavIcon>
+              </NavItem>
+            </NavMenu>
+          </Sidebar>
+          <MainContent>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+              {/* Loading state */}
+            </div>
+          </MainContent>
+        </AppLayout>
+      </>
     );
   }
 
   // Error state
   if (error || !profileData) {
     return (
-      <AppLayout>
+      <>
+        <GlobalStyle />
+        <AppLayout>
         <Sidebar>
           <Logo>🎵</Logo>
           <NavMenu>
@@ -322,6 +348,7 @@ const ProfilePage: React.FC = () => {
           </div>
         </MainContent>
       </AppLayout>
+      </>
     );
   }
 
@@ -329,7 +356,9 @@ const ProfilePage: React.FC = () => {
   const mostRecentSong = getMostRecentSong();
 
   return (
-    <AppLayout>
+    <>
+      <GlobalStyle />
+      <AppLayout>
       <Sidebar>
         <Logo>🎵</Logo>
         <NavMenu>
@@ -390,6 +419,7 @@ const ProfilePage: React.FC = () => {
         </ContentGrid>
       </MainContent>
     </AppLayout>
+    </>
   );
 };
 

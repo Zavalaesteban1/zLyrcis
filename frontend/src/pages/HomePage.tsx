@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, createGlobalStyle } from 'styled-components';
 import { getUserVideos, extractSpotifyTrackId, getSpotifyAlbumArtwork, VideoJob } from '../services/api';
 import { useUser } from '../contexts/UserContext';
 // Import icons
@@ -13,6 +13,27 @@ import { AiOutlineClockCircle } from 'react-icons/ai';
 import { RiRobot2Line } from 'react-icons/ri';
 // Import ProfileDropdown component
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
+
+// Global style for consistent styling across pages
+const GlobalStyle = createGlobalStyle`
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 0.8;
+    }
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+`;
 
 // Styled components for the home page (matching profile page style)
 const AppLayout = styled.div`
@@ -66,7 +87,7 @@ const NavMenu = styled.nav`
   flex: 1;
   width: 100%;
   align-items: center;
-  gap: 12px;
+  gap: 24px;
 `;
 
 const NavItem = styled(Link)<{ active?: boolean }>`
@@ -612,32 +633,37 @@ const HomePage: React.FC = () => {
 
   if (loading) {
     return (
-      <AppLayout>
-        <Sidebar>
-          <Logo>🎵</Logo>
-          <NavMenu>
-            <NavItem to="/" active data-tooltip="Home">
-              <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
-            </NavItem>
-            <NavItem to="/profile" data-tooltip="Profile">
-              <NavIcon>{CgProfile({ size: 28 })}</NavIcon>
-            </NavItem>
-            <NavItem to="/songs" data-tooltip="My Songs">
-              <NavIcon>{MdMusicNote({ size: 28 })}</NavIcon>
-            </NavItem>
-          </NavMenu>
-        </Sidebar>
-        <MainContent>
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-            {/* Loading state */}
-          </div>
-        </MainContent>
-      </AppLayout>
+      <>
+        <GlobalStyle />
+        <AppLayout>
+          <Sidebar>
+            <Logo>🎵</Logo>
+            <NavMenu>
+              <NavItem to="/" active data-tooltip="Home">
+                <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
+              </NavItem>
+              <NavItem to="/profile" data-tooltip="Profile">
+                <NavIcon>{CgProfile({ size: 28 })}</NavIcon>
+              </NavItem>
+              <NavItem to="/songs" data-tooltip="My Songs">
+                <NavIcon>{MdMusicNote({ size: 28 })}</NavIcon>
+              </NavItem>
+            </NavMenu>
+          </Sidebar>
+          <MainContent>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+              {/* Loading state */}
+            </div>
+          </MainContent>
+        </AppLayout>
+      </>
     );
   }
 
   return (
-    <AppLayout>
+    <>
+      <GlobalStyle />
+      <AppLayout>
       <Sidebar>
         <Logo>🎵</Logo>
           <NavMenu>
@@ -756,6 +782,7 @@ const HomePage: React.FC = () => {
         </HomeContainer>
       </MainContent>
     </AppLayout>
+    </>
   );
 };
 

@@ -83,7 +83,7 @@ export const NavMenu = styled.nav`
   flex: 1;
   width: 100%;
   align-items: center;
-  gap: 12px;
+  gap: 24px;
   
   @media (max-width: 768px) {
     align-items: stretch;

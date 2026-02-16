@@ -32,6 +32,20 @@ except ImportError:
     DEEPGRAM_AVAILABLE = False
     print("Deepgram SDK not installed. Install with: pip install deepgram-sdk")
 
+# Import Cloudinary
+try:
+    import cloudinary
+    import cloudinary.api
+    cloudinary.config(
+        cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+        api_key=os.getenv('CLOUDINARY_API_KEY'),
+        api_secret=os.getenv('CLOUDINARY_API_SECRET')
+    )
+    CLOUDINARY_AVAILABLE = True
+except ImportError:
+    CLOUDINARY_AVAILABLE = False
+    print("Cloudinary not installed. Audio files will use local storage only.")
+
 
 @shared_task
 def generate_lyric_video(job_id):
@@ -82,8 +96,8 @@ def generate_lyric_video(job_id):
             # 3. Get audio file (from local files or Spotify)
             audio_path = os.path.join(temp_dir, 'audio.mp3')
             
-            # Try local audio first
-            audio_found = get_local_audio(song_info['title'], song_info['artist'], audio_path)
+            # Try to get audio (Cloudinary first, then local fallback)
+            audio_found = get_audio(song_info['title'], song_info['artist'], audio_path)
             
             # If no local audio, download from Spotify
             if not audio_found:
@@ -410,15 +424,14 @@ def download_audio(track_id, output_path):
         return None
 
 
-def get_local_audio(song_title, artist, output_path):
-    """Find matching audio file in local audio_files directory"""
-    # Get path to audio_files directory (expected to be in project root)
-    project_root = Path(__file__).resolve().parent.parent.parent
-    audio_dir = project_root / 'audio_files'
+def get_audio(song_title, artist, output_path):
+    """
+    Find matching audio file from Cloudinary (primary) or local audio_files directory (fallback).
     
-    if not audio_dir.exists():
-        print(f"Local audio directory not found: {audio_dir}")
-        return False
+    Priority:
+    1. Cloudinary audio-library folder (production)
+    2. Local audio_files directory (development)
+    """
     
     # Normalize song title and artist for comparison
     def normalize_string(s):
@@ -432,12 +445,111 @@ def get_local_audio(song_title, artist, output_path):
     normalized_title = normalize_string(song_title)
     normalized_artist = normalize_string(artist)
     
-    # Look for matching files
+    print(f"Searching for audio: '{song_title}' by '{artist}'")
+    print(f"Normalized: title='{normalized_title}', artist='{normalized_artist}'")
+    
+    # TRY CLOUDINARY FIRST (Production)
+    if CLOUDINARY_AVAILABLE:
+        try:
+            print("Checking Cloudinary audio-library...")
+            
+            # List all resources in audio-library folder
+            result = cloudinary.api.resources(
+                resource_type='video',
+                type='upload',
+                prefix='audio-library/',
+                max_results=500
+            )
+            
+            best_match = None
+            best_score = 0
+            
+            for resource in result.get('resources', []):
+                public_id = resource['public_id']
+                filename = public_id.replace('audio-library/', '')
+                normalized_filename = normalize_string(filename)
+                
+                # Try multiple matching strategies
+                score = 0
+                
+                # Strategy 1: Check for " - " separator (best case)
+                if ' - ' in filename:
+                    parts = filename.split(' - ', 1)
+                    if len(parts) == 2:
+                        # Try both "Artist - Title" and "Title - Artist" formats
+                        score1 = (string_similarity(normalize_string(parts[0]), normalized_artist) * 0.5 +
+                                  string_similarity(normalize_string(parts[1]), normalized_title) * 0.5)
+                        
+                        score2 = (string_similarity(normalize_string(parts[0]), normalized_title) * 0.5 +
+                                  string_similarity(normalize_string(parts[1]), normalized_artist) * 0.5)
+                        
+                        score = max(score1, score2)
+                
+                # Strategy 2: No separator - try matching patterns
+                else:
+                    title_artist = f"{normalized_title} {normalized_artist}"
+                    artist_title = f"{normalized_artist} {normalized_title}"
+                    
+                    score1 = string_similarity(normalized_filename, title_artist)
+                    score2 = string_similarity(normalized_filename, artist_title)
+                    score3 = string_similarity(normalized_filename, normalized_title)
+                    
+                    score = max(score1, score2, score3)
+                
+                # Strategy 3: Partial matching
+                if score < 0.7:
+                    contains_title = normalized_title in normalized_filename
+                    contains_artist = normalized_artist in normalized_filename
+                    
+                    if contains_title and contains_artist:
+                        score = 0.75
+                    elif contains_title:
+                        title_words = normalized_title.split()
+                        if len(title_words) > 0:
+                            matches = sum(1 for word in title_words if word in normalized_filename)
+                            score = 0.6 + (matches / len(title_words) * 0.2)
+                
+                if score > 0.5:
+                    print(f"  Cloudinary candidate: '{filename}' - score: {score:.2f}")
+                
+                if score > best_score and score > 0.65:
+                    best_score = score
+                    best_match = resource
+            
+            # If found on Cloudinary, download it
+            if best_match:
+                print(f"✓ Found on Cloudinary: {best_match['public_id']} (score: {best_score:.2f})")
+                
+                # Download the file
+                audio_url = best_match['secure_url']
+                response = requests.get(audio_url)
+                
+                if response.status_code == 200:
+                    with open(output_path, 'wb') as f:
+                        f.write(response.content)
+                    print(f"✓ Downloaded audio from Cloudinary to {output_path}")
+                    return True
+                else:
+                    print(f"✗ Failed to download from Cloudinary: {response.status_code}")
+            else:
+                print("✗ No matching audio found on Cloudinary")
+                
+        except Exception as e:
+            print(f"⚠️  Cloudinary error: {e}")
+            print("Falling back to local audio search...")
+    
+    # FALLBACK TO LOCAL DIRECTORY (Development)
+    project_root = Path(__file__).resolve().parent.parent.parent
+    audio_dir = project_root / 'audio_files'
+    
+    if not audio_dir.exists():
+        print(f"Local audio directory not found: {audio_dir}")
+        return False
+    
+    print("Checking local audio_files directory...")
+    
     best_match = None
     best_score = 0
-    
-    print(f"Searching for: '{song_title}' by '{artist}'")
-    print(f"Normalized: title='{normalized_title}', artist='{normalized_artist}'")
     
     # Check various audio file extensions
     for ext in ['.mp3', '.m4a', '.wav', '.flac', '.ogg']:
@@ -445,14 +557,12 @@ def get_local_audio(song_title, artist, output_path):
             filename = file_path.stem
             normalized_filename = normalize_string(filename)
             
-            # Try multiple matching strategies
             score = 0
             
-            # Strategy 1: Check for " - " separator (best case)
+            # Strategy 1: Check for " - " separator
             if ' - ' in filename:
-                parts = filename.split(' - ', 1)  # Split only on first occurrence
+                parts = filename.split(' - ', 1)
                 if len(parts) == 2:
-                    # Try both "Artist - Title" and "Title - Artist" formats
                     score1 = (string_similarity(normalize_string(parts[0]), normalized_artist) * 0.5 +
                               string_similarity(normalize_string(parts[1]), normalized_title) * 0.5)
                     
@@ -461,52 +571,45 @@ def get_local_audio(song_title, artist, output_path):
                     
                     score = max(score1, score2)
             
-            # Strategy 2: No separator - try matching "title artist" or "artist title"
+            # Strategy 2: No separator
             else:
-                # Create expected filename patterns
                 title_artist = f"{normalized_title} {normalized_artist}"
                 artist_title = f"{normalized_artist} {normalized_title}"
                 
-                # Compare with both patterns
                 score1 = string_similarity(normalized_filename, title_artist)
                 score2 = string_similarity(normalized_filename, artist_title)
-                score3 = string_similarity(normalized_filename, normalized_title)  # Title only
+                score3 = string_similarity(normalized_filename, normalized_title)
                 
                 score = max(score1, score2, score3)
             
-            # Strategy 3: Partial matching - check if both artist and title appear in filename
-            if score < 0.7:  # Only if previous strategies didn't work well
+            # Strategy 3: Partial matching
+            if score < 0.7:
                 contains_title = normalized_title in normalized_filename
                 contains_artist = normalized_artist in normalized_filename
                 
                 if contains_title and contains_artist:
-                    # Both are present, give it a decent score
                     score = 0.75
                 elif contains_title:
-                    # Only title present
                     title_words = normalized_title.split()
                     if len(title_words) > 0:
-                        # Calculate what percentage of title words are in filename
                         matches = sum(1 for word in title_words if word in normalized_filename)
                         score = 0.6 + (matches / len(title_words) * 0.2)
             
-            # Log candidates with decent scores for debugging
             if score > 0.5:
-                print(f"  Candidate: '{filename}' - score: {score:.2f}")
+                print(f"  Local candidate: '{filename}' - score: {score:.2f}")
             
-            # Update best match if better score
-            if score > best_score and score > 0.65:  # Slightly lower threshold (0.65 instead of 0.7)
+            if score > best_score and score > 0.65:
                 best_score = score
                 best_match = file_path
     
-    # If a good match is found, copy to output_path
+    # If found locally, copy to output_path
     if best_match:
-        print(f"✓ Found local audio file: {best_match} (match score: {best_score:.2f})")
+        print(f"✓ Found local audio file: {best_match} (score: {best_score:.2f})")
         import shutil
         shutil.copy2(best_match, output_path)
         return True
     
-    print("✗ No suitable local audio file found.")
+    print("✗ No suitable audio file found (Cloudinary or local).")
     return False
 
 

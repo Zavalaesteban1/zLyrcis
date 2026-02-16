@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled, { createGlobalStyle } from 'styled-components';
-import { getUserProfile, logout } from '../services/api';
+import { useUser } from '../contexts/UserContext';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
-import { MdMusicNote, MdAdd, MdLogout } from 'react-icons/md';
+import { MdMusicNote, MdAdd } from 'react-icons/md';
 import { BsMusicNoteList } from 'react-icons/bs';
 import { RiRobot2Line } from 'react-icons/ri';
 
@@ -15,11 +15,12 @@ import { useLearningManager } from '../hooks/useLearningManager';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
 
 // Import components
-import { SongCard } from '../components/songs/SongCard';
 import { FilterBar } from '../components/songs/FilterBar';
 import { LearningStatsCard } from '../components/songs/LearningStatsCard';
 import { VideoPlayerModal } from '../components/songs/VideoPlayerModal';
 import { DeleteConfirmationModal } from '../components/songs/DeleteConfirmationModal';
+import { HorizontalSongGallery } from '../components/songs/HorizontalSongGallery';
+import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 
 // Add global style to hide all scrollbars
 const GlobalStyle = createGlobalStyle`
@@ -184,42 +185,6 @@ const UserActions = styled.div`
   gap: 15px;
 `;
 
-const UserInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-`;
-
-const UserAvatar = styled.img`
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #1DB954;
-`;
-
-const UserName = styled.span`
-  font-weight: 500;
-`;
-
-const LogoutButton = styled.button`
-  background-color: transparent;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background-color: #f0f0f0;
-    color: #e91429;
-  }
-`;
-
 const ContentGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 350px;
@@ -235,10 +200,9 @@ const SongsContainer = styled.div`
   border-radius: 10px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   overflow: hidden;
-  padding: 0;
+  padding: 0 0 20px;
   width: 100%;
   max-width: 100%;
-  margin-bottom: 30px;
 `;
 
 const SongsHeader = styled.div`
@@ -256,19 +220,8 @@ const SongsHeaderTitle = styled.h2`
   gap: 10px;
 `;
 
-const SongsList = styled.div`
-  padding: 0;
-  max-height: calc(100vh - 300px);
-  overflow-y: auto;
-  
-  /* Hide scrollbar for Chrome, Safari and Opera */
-  &::-webkit-scrollbar {
-    display: none;
-  }
-  
-  /* Hide scrollbar for IE, Edge and Firefox */
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+const SongsContent = styled.div`
+  padding-top: 20px;
 `;
 
 const EmptyState = styled.div`
@@ -329,7 +282,7 @@ const NotificationMessage = styled.div<{ type: 'success' | 'error' }>`
 `;
 
 const SongsPage: React.FC = () => {
-  const [userData, setUserData] = useState<any>(null);
+  const { userData } = useUser();
   const [filter, setFilter] = useState<'all' | 'learned' | 'not-learned'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [songToDelete, setSongToDelete] = useState<Song | null>(null);
@@ -373,20 +326,6 @@ const SongsPage: React.FC = () => {
     handleVideoLoaded 
   } = useVideoPlayer();
 
-  // Fetch user profile data
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const data = await getUserProfile();
-        setUserData(data);
-      } catch (err) {
-        console.error('Error fetching user data:', err);
-      }
-    };
-    
-    fetchUserData();
-  }, []);
-
   // Handle video playback effect
   useEffect(() => {
     if (playingSongId && videoRef.current) {
@@ -394,8 +333,15 @@ const SongsPage: React.FC = () => {
       if (song && song.video_file) {
         videoRef.current.src = song.video_file;
         
+        // Set a timeout to remove loading state after 3 seconds regardless
+        const loadingTimeout = setTimeout(() => {
+          console.log('Video loading timeout - removing loading state');
+          handleVideoLoaded();
+        }, 3000);
+        
         const handleError = (e: Event) => {
           console.error('Error loading video:', e);
+          clearTimeout(loadingTimeout);
           handleVideoLoaded();
           setNotification({
             message: 'Error loading video. Please try again.',
@@ -403,11 +349,21 @@ const SongsPage: React.FC = () => {
           });
         };
         
-        videoRef.current.addEventListener('loadeddata', handleVideoLoaded);
+        const handleCanPlay = () => {
+          console.log('Video can play - removing loading state');
+          clearTimeout(loadingTimeout);
+          handleVideoLoaded();
+        };
+        
+        // Add multiple event listeners for better reliability
+        videoRef.current.addEventListener('loadeddata', handleCanPlay);
+        videoRef.current.addEventListener('canplay', handleCanPlay);
+        videoRef.current.addEventListener('playing', handleCanPlay);
         videoRef.current.addEventListener('error', handleError);
         
         videoRef.current.play().catch(err => {
           console.error('Error playing video:', err);
+          clearTimeout(loadingTimeout);
           handleVideoLoaded();
           setNotification({
             message: 'Error playing video. Please try again.',
@@ -416,45 +372,37 @@ const SongsPage: React.FC = () => {
         });
         
         return () => {
+          clearTimeout(loadingTimeout);
           if (videoRef.current) {
-            videoRef.current.removeEventListener('loadeddata', handleVideoLoaded);
+            videoRef.current.removeEventListener('loadeddata', handleCanPlay);
+            videoRef.current.removeEventListener('canplay', handleCanPlay);
+            videoRef.current.removeEventListener('playing', handleCanPlay);
             videoRef.current.removeEventListener('error', handleError);
           }
         };
+      } else {
+        // No video file, clear loading immediately
+        handleVideoLoaded();
       }
     }
   }, [playingSongId, songs, videoRef, handleVideoLoaded, setNotification]);
 
-  // Filter songs
-  const getFilteredSongs = () => {
-    return songs.filter(song => {
-      // Apply filter
-      if (filter === 'all' && song.learned) return false;
-      if (filter === 'learned' && !song.learned) return false;
-      if (filter === 'not-learned' && song.learned) return false;
-      
-      // Apply search
-      if (searchTerm.trim() !== '') {
-        const term = searchTerm.toLowerCase();
-        return song.song_title.toLowerCase().includes(term) || 
-               song.artist.toLowerCase().includes(term);
-      }
-      
-      return true;
-    });
+  // Filter songs by category
+  const unlearnedSongs = songs.filter(song => !song.learned);
+  const learnedSongs = songs.filter(song => song.learned);
+  
+  // Apply search filter
+  const filterBySearch = (songList: Song[]) => {
+    if (searchTerm.trim() === '') return songList;
+    const term = searchTerm.toLowerCase();
+    return songList.filter(song => 
+      song.song_title.toLowerCase().includes(term) || 
+      song.artist.toLowerCase().includes(term)
+    );
   };
-
-  // Handle logout
-  const handleLogout = async () => {
-    try {
-      await logout();
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user_id');
-      navigate('/login');
-    } catch (error) {
-      console.error('Error logging out:', error);
-    }
-  };
+  
+  const filteredUnlearnedSongs = filterBySearch(unlearnedSongs);
+  const filteredLearnedSongs = filterBySearch(learnedSongs);
 
   // Handle play/pause
   const handlePlayPause = (songId: string) => {
@@ -514,7 +462,10 @@ const SongsPage: React.FC = () => {
 
   // Get learning statistics
   const stats = getLearningStats(songs);
-  const filteredSongs = getFilteredSongs();
+  
+  // Determine which galleries to show based on filter
+  const showUnlearned = filter === 'all' || filter === 'not-learned';
+  const showLearned = filter === 'learned';
 
   // Loading state
   if (loading) {
@@ -606,18 +557,7 @@ const SongsPage: React.FC = () => {
         <PageHeader>
           <PageTitle>My Songs</PageTitle>
           <UserActions>
-            {userData && (
-              <UserInfo>
-                <UserAvatar 
-                  src={userData.profile_picture || "https://via.placeholder.com/40x40?text=User"} 
-                  alt={userData.name} 
-                />
-                <UserName>{userData.name}</UserName>
-              </UserInfo>
-            )}
-            <LogoutButton onClick={handleLogout}>
-              {MdLogout({ size: 18 })} Logout
-            </LogoutButton>
+            <ProfileDropdown userData={userData} />
           </UserActions>
         </PageHeader>
         
@@ -644,7 +584,7 @@ const SongsPage: React.FC = () => {
               />
             )}
             
-            <SongsList>
+            <SongsContent>
               {songs.length === 0 ? (
                 <EmptyState>
                   <EmptyStateIcon>
@@ -655,27 +595,44 @@ const SongsPage: React.FC = () => {
                     {MdAdd({ size: 18 })} Create Your First Video
                   </Button>
                 </EmptyState>
-              ) : filteredSongs.length === 0 ? (
-                <EmptyState>
-                  <EmptyStateText>No songs match your current filter.</EmptyStateText>
-                  <Button onClick={() => { setFilter('all'); setSearchTerm(''); }}>
-                    Clear Filters
-                  </Button>
-                </EmptyState>
               ) : (
-                filteredSongs.map(song => (
-                  <SongCard
-                    key={song.id}
-                    song={song}
-                    isPlaying={playingSongId === song.id}
-                    onToggleLearned={() => toggleLearnedStatus(song)}
-                    onPlay={() => handlePlayPause(song.id)}
-                    onDownload={() => handleDownload(song)}
-                    onDelete={() => handleDeleteClick(song)}
-                  />
-                ))
+                <>
+                  {showUnlearned && filteredUnlearnedSongs.length > 0 && (
+                    <HorizontalSongGallery
+                      title="Unlearned Songs"
+                      songs={filteredUnlearnedSongs}
+                      playingSongId={playingSongId}
+                      onToggleLearned={toggleLearnedStatus}
+                      onPlay={handlePlayPause}
+                      onDownload={handleDownload}
+                      onDelete={handleDeleteClick}
+                    />
+                  )}
+                  
+                  {showLearned && filteredLearnedSongs.length > 0 && (
+                    <HorizontalSongGallery
+                      title="Learned Songs"
+                      songs={filteredLearnedSongs}
+                      playingSongId={playingSongId}
+                      onToggleLearned={toggleLearnedStatus}
+                      onPlay={handlePlayPause}
+                      onDownload={handleDownload}
+                      onDelete={handleDeleteClick}
+                    />
+                  )}
+                  
+                  {((showUnlearned && filteredUnlearnedSongs.length === 0) && 
+                    (showLearned && filteredLearnedSongs.length === 0)) && (
+                    <EmptyState>
+                      <EmptyStateText>No songs match your current filter.</EmptyStateText>
+                      <Button onClick={() => { setFilter('all'); setSearchTerm(''); }}>
+                        Clear Filters
+                      </Button>
+                    </EmptyState>
+                  )}
+                </>
               )}
-            </SongsList>
+            </SongsContent>
           </SongsContainer>
           
           <div>

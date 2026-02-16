@@ -1,19 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { getUserProfile, updateProfilePicture, updateProfile, UserProfile, logout, getUserVideos, VideoJob } from '../services/api';
+import { logout } from '../services/api';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
-import { IoSettingsOutline, IoHomeOutline } from 'react-icons/io5';
-import { MdOutlineWorkspacePremium, MdMusicNote, MdAdd, MdEdit, MdLogout, MdCheckCircle } from 'react-icons/md';
-import { FiLogOut, FiUser } from 'react-icons/fi';
-import { BiChevronDown } from 'react-icons/bi';
-import { BsCamera } from 'react-icons/bs';
-import { BsMusicNoteList } from 'react-icons/bs';
-import { FiTrendingUp } from 'react-icons/fi';
+import { IoHomeOutline } from 'react-icons/io5';
+import { MdMusicNote } from 'react-icons/md';
 import { RiRobot2Line } from 'react-icons/ri';
 
-// Styled components for the redesigned profile page
+// Import custom hooks
+import { useProfileManager } from '../hooks/useProfileManager';
+import { useProfileStats } from '../hooks/useProfileStats';
+
+// Import components
+import { ProfileDropdown } from '../components/profile/ProfileDropdown';
+import { ProfileEditForm } from '../components/profile/ProfileEditForm';
+import { ProfileStatsCards } from '../components/profile/ProfileStatsCards';
+
+// Styled components
 const AppLayout = styled.div`
   display: flex;
   width: 100%;
@@ -152,42 +156,6 @@ const UserActions = styled.div`
   gap: 15px;
 `;
 
-const UserInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-`;
-
-const UserAvatar = styled.img`
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #1DB954;
-`;
-
-const UserName = styled.span`
-  font-weight: 500;
-`;
-
-const LogoutButton = styled.button`
-  background-color: transparent;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background-color: #f0f0f0;
-    color: #e91429;
-  }
-`;
-
 const ContentGrid = styled.div`
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -196,274 +164,6 @@ const ContentGrid = styled.div`
   @media (max-width: 1200px) {
     grid-template-columns: 1fr;
   }
-`;
-
-const ProfileCard = styled.div`
-  background-color: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-`;
-
-const ProfileHeader = styled.div`
-  background: linear-gradient(90deg, #1DB954, #169c46);
-  padding: 30px;
-  color: white;
-  position: relative;
-`;
-
-const ProfileHeaderContent = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-`;
-
-const ProfileImageContainer = styled.div`
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-`;
-
-const ProfilePicture = styled.div`
-  position: relative;
-  width: 100px;
-  height: 100px;
-`;
-
-const ProfileImage = styled.img`
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 4px solid white;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-`;
-
-const ProfileImageOverlay = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  cursor: pointer;
-
-  &:hover {
-    opacity: 1;
-  }
-`;
-
-const UploadIcon = styled.div`
-  color: white;
-  font-size: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
-
-const ProfileDetails = styled.div`
-  flex: 1;
-`;
-
-const ProfileName = styled.h2`
-  font-size: 24px;
-  font-weight: 600;
-  margin: 0 0 5px;
-`;
-
-const ProfileRole = styled.p`
-  font-size: 16px;
-  margin: 0;
-  opacity: 0.9;
-`;
-
-const EditButton = styled.button`
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background-color: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background-color: rgba(255, 255, 255, 0.3);
-  }
-`;
-
-const ProfileContent = styled.div`
-  padding: 30px;
-`;
-
-const ProfileInfoGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const ProfileInfoItem = styled.div`
-  margin-bottom: 20px;
-`;
-
-const ProfileInfoLabel = styled.p`
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 5px;
-`;
-
-const ProfileInfoValue = styled.p`
-  font-size: 16px;
-  color: #333;
-  font-weight: 500;
-  margin: 0;
-`;
-
-const EditableInput = styled.input`
-  width: 100%;
-  background-color: #f9f9f9;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  color: #333;
-  padding: 10px;
-  font-size: 16px;
-  
-  &:focus {
-    outline: none;
-    border-color: #1DB954;
-    box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.1);
-  }
-`;
-
-const ButtonsContainer = styled.div`
-  display: flex;
-  gap: 10px;
-  margin-top: 20px;
-`;
-
-const Button = styled.button`
-  background-color: #1DB954;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 10px 16px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  
-  &:hover {
-    background-color: #169c46;
-  }
-  
-  &:active {
-    transform: scale(0.98);
-  }
-`;
-
-const SecondaryButton = styled(Button)`
-  background-color: #f0f0f0;
-  color: #333;
-  
-  &:hover {
-    background-color: #e0e0e0;
-  }
-`;
-
-const DangerButton = styled(Button)`
-  background-color: #e91429;
-  
-  &:hover {
-    background-color: #c01022;
-  }
-`;
-
-const StatsCard = styled.div`
-  background-color: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  padding: 30px;
-`;
-
-const StatsTitle = styled.h3`
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 20px;
-  color: #333;
-`;
-
-const StatsList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-`;
-
-const StatItem = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #f0f0f0;
-  
-  &:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-`;
-
-const StatLabel = styled.span`
-  font-size: 14px;
-  color: #666;
-`;
-
-const StatValue = styled.span`
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-`;
-
-const ComingSoonCard = styled.div`
-  background-color: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  padding: 30px;
-  margin-top: 30px;
-  text-align: center;
-`;
-
-const ComingSoonTitle = styled.h3`
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 15px;
-  color: #1DB954;
-`;
-
-const ComingSoonText = styled.p`
-  font-size: 14px;
-  color: #666;
-  margin: 0;
-  line-height: 1.5;
 `;
 
 const NotificationMessage = styled.div<{ type: 'success' | 'error' }>`
@@ -484,317 +184,56 @@ const NotificationMessage = styled.div<{ type: 'success' | 'error' }>`
   }
 `;
 
-const FileInput = styled.input`
-  display: none;
-`;
-
-const UploadButton = styled.button`
+const Button = styled.button`
   background-color: #1DB954;
   color: white;
   border: none;
-  border-radius: 4px;
-  padding: 5px 10px;
-  font-size: 12px;
+  border-radius: 6px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 5px;
+  transition: all 0.2s ease;
   
   &:hover {
     background-color: #169c46;
   }
-  
-  &:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
 `;
 
-// Extended VideoJob interface with learning properties
-interface SongWithLearningData extends VideoJob {
-  learned: boolean;
-  lastPracticed?: string | null;
-  difficultyRating?: number | null;
-}
-
 const ProfilePage: React.FC = () => {
-  const [profileData, setProfileData] = useState<UserProfile | null>(null);
-  const [editableProfile, setEditableProfile] = useState<Partial<UserProfile> | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
-  
-  // Update songs state to use the extended interface
-  const [songs, setSongs] = useState<SongWithLearningData[]>([]);
-  const [songsLoading, setSongsLoading] = useState(true);
-  
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  
-  useEffect(() => {
-    fetchProfile();
-    fetchUserSongs();
-  }, []);
-  
-  const fetchProfile = async () => {
-    try {
-      setLoading(true);
-      const data = await getUserProfile();
-      setProfileData(data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load profile data. Please try again later.');
-      console.error('Error fetching profile:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Update the fetchUserSongs function to use the extended interface
-  const fetchUserSongs = async () => {
-    try {
-      setSongsLoading(true);
-      const videosData = await getUserVideos();
-      
-      // Get the current user ID from localStorage or profileData
-      const userId = profileData?.id || parseInt(localStorage.getItem('user_id') || '0');
-      
-      // Load learned status from localStorage with user-specific keys
-      const songsWithLearningStatus: SongWithLearningData[] = videosData.map(video => {
-        const learningData = JSON.parse(localStorage.getItem(`user_${userId}_song_learning_${video.id}`) || 'null');
-        return {
-          ...video,
-          learned: learningData?.learned || false,
-          lastPracticed: learningData?.lastPracticed || null,
-          difficultyRating: learningData?.difficultyRating || null
-        };
-      });
-      
-      setSongs(songsWithLearningStatus);
-    } catch (err) {
-      console.error('Error fetching user songs:', err);
-    } finally {
-      setSongsLoading(false);
-    }
-  };
-  
-  const handleUploadClick = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-  
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      console.log('File selected:', file.name, file.type, file.size);
-      
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setNotification({
-          message: "Please select an image file (JPEG, PNG, etc.)",
-          type: 'error'
-        });
-        // Clear the file input
-        e.target.value = '';
-        return;
-      }
-      
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setNotification({
-          message: "Image is too large. Maximum size is 5MB.",
-          type: 'error'
-        });
-        // Clear the file input
-        e.target.value = '';
-        return;
-      }
-      
-      // Create a preview of the selected image
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target && event.target.result) {
-          setFilePreview(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
-      
-      setSelectedFile(file);
-      // Clear any existing notifications
-      setNotification(null);
-      
-      // Show a notification that a file was selected
-      setNotification({
-        message: `Selected file: ${file.name}. Click Upload to save.`,
-        type: 'success'
-      });
-      
-      // Don't automatically submit - let user click the upload button
-    }
-  };
-  
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) {
-      e.preventDefault();
-    }
-    
-    if (!selectedFile) {
-      console.log('No file selected');
-      return;
-    }
-    
-    try {
-      setUploading(true);
-      
-      console.log('Uploading file:', selectedFile.name, selectedFile.type, selectedFile.size);
-      
-      const updatedProfile = await updateProfilePicture(selectedFile);
-      console.log('Profile updated successfully:', updatedProfile);
-      setProfileData(updatedProfile);
-      setNotification({
-        message: "Profile picture updated successfully!",
-        type: 'success'
-      });
-      
-      // Clear notification after 3 seconds
-      setTimeout(() => {
-        setNotification(null);
-      }, 3000);
-      
-      // Clear selected file
-      setSelectedFile(null);
-      // Reset the file input
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    } catch (err: any) {
-      console.error('Error details:', err);
-      const errorResponse = err.response || {};
-      console.error('Error status:', errorResponse.status);
-      console.error('Error data:', errorResponse.data);
-      
-      const errorMessage = err.response?.data?.error || "Failed to update profile picture. Please try again.";
-      setNotification({
-        message: errorMessage,
-        type: 'error'
-      });
-      console.error('Error updating profile picture:', err);
-    } finally {
-      setUploading(false);
-    }
-  };
-  
-  const handleLogout = async () => {
-    if (window.confirm('Are you sure you want to log out?')) {
-      try {
-        await logout();
-        navigate('/login');
-      } catch (error) {
-        console.error('Error logging out:', error);
-        // Force logout even if API call fails
-        localStorage.removeItem('auth_token');
-        navigate('/login');
-      }
-    }
-  };
-  
-  const handleEditClick = () => {
-    setIsEditMode(true);
-    setEditableProfile({
-      name: profileData?.name || '',
-      role: profileData?.role || '',
-      email: profileData?.email || ''
-    });
-  };
-  
-  const handleCancelEdit = () => {
-    setIsEditMode(false);
-    setEditableProfile(null);
-  };
-  
-  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    if (editableProfile) {
-      setEditableProfile({
-        ...editableProfile,
-        [name]: value
-      });
-    }
-  };
-  
-  const handleSaveProfile = async () => {
-    if (!editableProfile) return;
-    
-    try {
-      setSaving(true);
-      const updatedProfile = await updateProfile(editableProfile);
-      setProfileData(updatedProfile);
-      setIsEditMode(false);
-      setNotification({
-        message: "Profile updated successfully!",
-        type: 'success'
-      });
-      
-      // Clear notification after 3 seconds
-      setTimeout(() => {
-        setNotification(null);
-      }, 3000);
-    } catch (err) {
-      setNotification({
-        message: "Failed to update profile. Please try again.",
-        type: 'error'
-      });
-      console.error('Error updating profile:', err);
-    } finally {
-      setSaving(false);
-    }
-  };
-  
-  // Helper function to safely format dates with more robust type checking
-  const formatDate = (dateString?: string | null): string => {
-    if (!dateString) return 'N/A';
-    try {
-      return new Date(dateString).toLocaleDateString();
-    } catch (e) {
-      return 'Invalid Date';
-    }
-  };
-  
-  // Get the last practiced date across all songs
-  const getLastPracticedDate = (): string => {
-    const learnedSongs = songs.filter(song => song.learned && song.lastPracticed);
-    if (learnedSongs.length === 0) return 'Never';
-    
-    const sortedSongs = [...learnedSongs].sort((a, b) => {
-      const dateA = a.lastPracticed ? new Date(a.lastPracticed).getTime() : 0;
-      const dateB = b.lastPracticed ? new Date(b.lastPracticed).getTime() : 0;
-      return dateB - dateA;
-    });
-    
-    return formatDate(sortedSongs[0]?.lastPracticed);
-  };
 
-  // Calculate learning stats properly
-  const getTotalSongsLearned = (): number => {
-    return songs.filter(song => song.learned).length;
-  };
+  // Custom hooks
+  const {
+    profileData,
+    editableProfile,
+    isEditMode,
+    loading,
+    error,
+    notification,
+    selectedFile,
+    uploading,
+    saving,
+    filePreview,
+    fileInputRef,
+    handleFileSelect,
+    handleSubmit,
+    handleEditClick,
+    handleCancelEdit,
+    handleEditChange,
+    handleSaveProfile,
+    setNotification
+  } = useProfileManager();
 
-  const getLearningProgress = (): number => {
-    if (songs.length === 0) return 0;
-    return Math.round((getTotalSongsLearned() / songs.length) * 100);
-  };
+  const {
+    songs,
+    songsLoading,
+    totalSongs,
+    songsLearned,
+    learningProgress
+  } = useProfileStats(profileData?.id || null);
 
-  const getMostRecentSong = (): SongWithLearningData | null => {
-    if (songs.length === 0) return null;
-    return songs[0]; // We already sorted by date in fetchUserSongs
-  };
-  
-  // Calculate the account age in months
+  // Helper functions
   const getAccountAge = () => {
     if (!profileData?.last_login) return 'N/A';
     
@@ -803,14 +242,28 @@ const ProfilePage: React.FC = () => {
     const months = (now.getFullYear() - joined.getFullYear()) * 12 + now.getMonth() - joined.getMonth();
     return months <= 0 ? 'Just joined' : `${months} ${months === 1 ? 'month' : 'months'}`;
   };
-  
-  // Determine recent song content in a type-safe way
-  const recentSong = getMostRecentSong();
-  const recentSongTitle = recentSong?.song_title || 'None';
-  const recentSongArtist = recentSong?.artist || '';
-  const recentSongDate = recentSong ? formatDate(recentSong.created_at) : '';
-  const isRecentSongLearned = recentSong?.learned || false;
-  
+
+  const getMostRecentSong = () => {
+    if (songs.length === 0) return null;
+    return [...songs].sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0];
+  };
+
+  const handleLogout = async () => {
+    if (window.confirm('Are you sure you want to log out?')) {
+      try {
+        await logout();
+        navigate('/login');
+      } catch (error) {
+        console.error('Error logging out:', error);
+        localStorage.removeItem('auth_token');
+        navigate('/login');
+      }
+    }
+  };
+
+  // Loading state
   if (loading) {
     return (
       <AppLayout>
@@ -820,7 +273,7 @@ const ProfilePage: React.FC = () => {
             <NavItem to="/" data-tooltip="Home">
               <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
             </NavItem>
-            <NavItem to="/profile" data-tooltip="Profile">
+            <NavItem to="/profile" active data-tooltip="Profile">
               <NavIcon>{CgProfile({ size: 28 })}</NavIcon>
             </NavItem>
             <NavItem to="/songs" data-tooltip="My Songs">
@@ -833,12 +286,14 @@ const ProfilePage: React.FC = () => {
         </Sidebar>
         <MainContent>
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+            {/* Loading state */}
           </div>
         </MainContent>
       </AppLayout>
     );
   }
-  
+
+  // Error state
   if (error || !profileData) {
     return (
       <AppLayout>
@@ -848,7 +303,7 @@ const ProfilePage: React.FC = () => {
             <NavItem to="/" data-tooltip="Home">
               <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
             </NavItem>
-            <NavItem to="/profile" data-tooltip="Profile">
+            <NavItem to="/profile" active data-tooltip="Profile">
               <NavIcon>{CgProfile({ size: 28 })}</NavIcon>
             </NavItem>
             <NavItem to="/songs" data-tooltip="My Songs">
@@ -863,13 +318,16 @@ const ProfilePage: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
             <h2>Error</h2>
             <p>{error || 'Failed to load profile data'}</p>
-            <Button onClick={fetchProfile}>Try Again</Button>
+            <Button onClick={() => window.location.reload()}>Try Again</Button>
           </div>
         </MainContent>
       </AppLayout>
     );
   }
-  
+
+  // Main render
+  const mostRecentSong = getMostRecentSong();
+
   return (
     <AppLayout>
       <Sidebar>
@@ -889,171 +347,50 @@ const ProfilePage: React.FC = () => {
           </NavItem>
         </NavMenu>
       </Sidebar>
-      
+
       <MainContent>
         <PageHeader>
           <PageTitle>My Profile</PageTitle>
           <UserActions>
-            <UserInfo>
-              <UserAvatar 
-                src={filePreview || profileData.profile_picture || "https://via.placeholder.com/40x40?text=User"} 
-                alt={profileData.name} 
-              />
-              <UserName>{profileData.name}</UserName>
-            </UserInfo>
-            <LogoutButton onClick={handleLogout}>
-              {MdLogout({ size: 18 })} Logout
-            </LogoutButton>
+            <ProfileDropdown userData={profileData} />
           </UserActions>
         </PageHeader>
-        
+
         {notification && (
           <NotificationMessage type={notification.type}>
             {notification.message}
           </NotificationMessage>
         )}
-        
+
         <ContentGrid>
-          <ProfileCard>
-            <ProfileHeader>
-              <ProfileHeaderContent>
-                <ProfileImageContainer>
-                  <ProfilePicture>
-                    <ProfileImage 
-                      src={filePreview || profileData.profile_picture || "https://via.placeholder.com/100x100?text=Profile"} 
-                      alt={profileData.name} 
-                    />
-                    <ProfileImageOverlay onClick={handleUploadClick}>
-                      <UploadIcon>{BsCamera({ size: 24 })}</UploadIcon>
-                    </ProfileImageOverlay>
-                    <FileInput 
-                      ref={fileInputRef}
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleFileChange} 
-                      disabled={uploading || isEditMode}
-                      name="profile_picture"
-                    />
-                  </ProfilePicture>
-                  {selectedFile && (
-                    <UploadButton 
-                      onClick={handleSubmit} 
-                      disabled={uploading}
-                    >
-                      {uploading ? 'Uploading...' : 'Upload Picture'}
-                    </UploadButton>
-                  )}
-                </ProfileImageContainer>
-                <ProfileDetails>
-                  <ProfileName>{profileData.name}</ProfileName>
-                  <ProfileRole>{profileData.role}</ProfileRole>
-                </ProfileDetails>
-              </ProfileHeaderContent>
-              {!isEditMode && (
-                <EditButton onClick={handleEditClick}>
-                  {MdEdit({ size: 16 })} Edit Profile
-                </EditButton>
-              )}
-            </ProfileHeader>
-            
-            <ProfileContent>
-              <ProfileInfoGrid>
-                <ProfileInfoItem>
-                  <ProfileInfoLabel>Name</ProfileInfoLabel>
-                  {isEditMode ? (
-                    <EditableInput
-                      name="name"
-                      value={editableProfile?.name || ''}
-                      onChange={handleEditChange}
-                    />
-                  ) : (
-                    <ProfileInfoValue>{profileData.name}</ProfileInfoValue>
-                  )}
-                </ProfileInfoItem>
-                
-                <ProfileInfoItem>
-                  <ProfileInfoLabel>Role</ProfileInfoLabel>
-                  {isEditMode ? (
-                    <EditableInput
-                      name="role"
-                      value={editableProfile?.role || ''}
-                      onChange={handleEditChange}
-                    />
-                  ) : (
-                    <ProfileInfoValue>{profileData.role}</ProfileInfoValue>
-                  )}
-                </ProfileInfoItem>
-                
-                {isEditMode && (
-                  <ProfileInfoItem>
-                    <ProfileInfoLabel>Email</ProfileInfoLabel>
-                    <EditableInput
-                      name="email"
-                      type="email"
-                      value={editableProfile?.email || ''}
-                      onChange={handleEditChange}
-                    />
-                  </ProfileInfoItem>
-                )}
-              </ProfileInfoGrid>
-              
-              {isEditMode && (
-                <ButtonsContainer>
-                  <SecondaryButton onClick={handleCancelEdit} disabled={saving}>
-                    Cancel
-                  </SecondaryButton>
-                  <Button onClick={handleSaveProfile} disabled={saving}>
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </ButtonsContainer>
-              )}
-            </ProfileContent>
-          </ProfileCard>
-          
-          <div>
-            <StatsCard>
-              <StatsTitle>Account Statistics</StatsTitle>
-              <StatsList>
-                <StatItem>
-                  <StatLabel>Member Since</StatLabel>
-                  <StatValue>{getAccountAge()}</StatValue>
-                </StatItem>
-                <StatItem>
-                  <StatLabel>Videos Created</StatLabel>
-                  <StatValue>{songs.length}</StatValue>
-                </StatItem>
-                <StatItem>
-                  <StatLabel>Songs Learned</StatLabel>
-                  <StatValue>{getTotalSongsLearned()}</StatValue>
-                </StatItem>
-                <StatItem>
-                  <StatLabel>Learning Progress</StatLabel>
-                  <StatValue>{getLearningProgress()}%</StatValue>
-                </StatItem>
-                <StatItem>
-                  <StatLabel>Last Practiced</StatLabel>
-                  <StatValue>{getLastPracticedDate()}</StatValue>
-                </StatItem>
-                <StatItem>
-                  <StatLabel>Recent Song</StatLabel>
-                  <StatValue>{recentSongTitle}</StatValue>
-                </StatItem>
-              </StatsList>
-            </StatsCard>
-            
-            <ComingSoonCard>
-              <ComingSoonTitle>Your Learning Journey</ComingSoonTitle>
-              <ComingSoonText>
-                You've learned {getTotalSongsLearned()} out of {songs.length} songs. 
-                {songs.length > 0 ? ` That's ${getLearningProgress()}% progress!` : ''}
-                {getTotalSongsLearned() > 0 ? ` Your last practice was on ${getLastPracticedDate()}.` : ''}
-              </ComingSoonText>
-            </ComingSoonCard>
-          </div>
+          <ProfileEditForm
+            profileData={profileData}
+            editableProfile={editableProfile}
+            isEditMode={isEditMode}
+            uploading={uploading}
+            saving={saving}
+            selectedFile={selectedFile}
+            filePreview={filePreview}
+            fileInputRef={fileInputRef}
+            onFileChange={handleFileSelect}
+            onFileSubmit={handleSubmit}
+            onEditClick={handleEditClick}
+            onCancelEdit={handleCancelEdit}
+            onEditChange={handleEditChange}
+            onSaveProfile={handleSaveProfile}
+          />
+
+          <ProfileStatsCards
+            totalSongs={totalSongs}
+            songsLearned={songsLearned}
+            learningProgress={learningProgress}
+            accountAge={getAccountAge()}
+            mostRecentSong={mostRecentSong}
+          />
         </ContentGrid>
       </MainContent>
     </AppLayout>
   );
 };
 
-export default ProfilePage; 
+export default ProfilePage;

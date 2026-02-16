@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { logout } from '../services/api';
+import { useUser } from '../contexts/UserContext';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
@@ -17,6 +17,7 @@ import { useVideoJobPolling } from '../hooks/useVideoJobPolling';
 // Import components
 import { ConversationSidebar } from '../components/agent/ConversationSidebar';
 import { ChatInterface } from '../components/agent/ChatInterface';
+import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 
 // Import all styled components from AgentPageStyles
 import * as Styles from '../styles/AgentPageStyles';
@@ -59,8 +60,8 @@ const AgentPage: React.FC = () => {
   const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [showScrollbars, setShowScrollbars] = useState<boolean>(false);
-  const [userData, setUserData] = useState<any>(null);
   const [isCompactMode, setIsCompactMode] = useState<boolean>(false);
+  const { userData } = useUser();
   
   // Set theme for styled components
   const theme = { 
@@ -154,16 +155,6 @@ const AgentPage: React.FC = () => {
       setIsCompactMode(false);
     }
   }, [messages.length, activeConversationId]);
-  
-  // Handle logout
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Error logging out:', error);
-    }
-  };
   
   // Handle sending a message
   const handleSend = useCallback(async () => {
@@ -392,6 +383,11 @@ const AgentPage: React.FC = () => {
                 >
                   {FiPlusCircle({ size: 16 })}
                 </Styles.IconButton>
+                
+                {/* ProfileDropdown */}
+                <div style={{ marginLeft: '10px' }}>
+                  <ProfileDropdown userData={userData} />
+                </div>
               </Styles.ChatHeaderControls>
             </Styles.ChatHeader>
             

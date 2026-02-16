@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
-import { logout, getUserProfile, getUserVideos, extractSpotifyTrackId, getSpotifyAlbumArtwork, VideoJob } from '../services/api';
+import { getUserVideos, extractSpotifyTrackId, getSpotifyAlbumArtwork, VideoJob } from '../services/api';
+import { useUser } from '../contexts/UserContext';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
-import { MdMusicNote, MdAdd, MdLogout, MdCheckCircle } from 'react-icons/md';
+import { MdMusicNote, MdAdd, MdCheckCircle } from 'react-icons/md';
 import { BsMusicNoteList, BsSpotify } from 'react-icons/bs';
 import { FiTrendingUp } from 'react-icons/fi';
 import { AiOutlineClockCircle } from 'react-icons/ai';
 import { RiRobot2Line } from 'react-icons/ri';
+// Import ProfileDropdown component
+import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 
 // Styled components for the home page (matching profile page style)
 const AppLayout = styled.div`
@@ -149,43 +152,6 @@ const UserActions = styled.div`
   display: flex;
   align-items: center;
   gap: 15px;
-`;
-
-const UserInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-`;
-
-const UserAvatar = styled.img`
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #1DB954;
-`;
-
-const UserName = styled.span`
-  font-weight: 500;
-  color: #333;
-`;
-
-const LogoutButton = styled.button`
-  background-color: transparent;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background-color: #f0f0f0;
-    color: #e91429;
-  }
 `;
 
 const HomeContainer = styled.div`
@@ -531,21 +497,17 @@ const RecentActivityItem: React.FC<{ song: SongWithLearningData, albumCover: str
 };
 
 const HomePage: React.FC = () => {
-  const [userData, setUserData] = useState<any>(null);
+  const { userData } = useUser();
   const [songs, setSongs] = useState<SongWithLearningData[]>([]);
   const [loading, setLoading] = useState(true);
   const [albumCovers, setAlbumCovers] = useState<{[key: string]: string | null}>({});
   const navigate = useNavigate();
 
-  // Fetch current user and songs when component mounts
+  // Fetch songs when component mounts
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch user profile
-        const userData = await getUserProfile();
-        setUserData(userData);
-        
         // Fetch user's videos/songs
         const videosData = await getUserVideos();
         
@@ -602,17 +564,6 @@ const HomePage: React.FC = () => {
     fetchData();
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Error logging out:', error);
-      // Force logout even if API call fails
-      localStorage.removeItem('auth_token');
-      navigate('/login');
-    }
-  };
   
   // Calculate statistics from data
   const getVideosCreated = (): number => {
@@ -709,18 +660,7 @@ const HomePage: React.FC = () => {
         <PageHeader>
           <PageTitle>Dashboard</PageTitle>
           <UserActions>
-            {userData && (
-              <UserInfo>
-                <UserAvatar 
-                  src={userData.profile_picture || "https://via.placeholder.com/40x40?text=User"} 
-                  alt={userData.name} 
-                />
-                <UserName>{userData.name}</UserName>
-              </UserInfo>
-            )}
-            <LogoutButton onClick={handleLogout}>
-              {MdLogout({ size: 18 })} Logout
-            </LogoutButton>
+            <ProfileDropdown userData={userData} />
           </UserActions>
         </PageHeader>
         

@@ -3,7 +3,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import VideoJob, UserProfile
+from .models import VideoJob, UserProfile, Conversation, ConversationMessage
 from .serializers import (
     VideoJobSerializer,
     VideoStatusSerializer,
@@ -620,6 +620,43 @@ def search_spotify(title, artist):
         print(f"Error searching Spotify: {str(e)}")
         return None
 
+def get_or_create_conversation(conversation_id, user):
+    """Get or create a conversation in the database"""
+    conversation, created = Conversation.objects.get_or_create(
+        id=conversation_id,
+        defaults={'user': user, 'title': 'New conversation'}
+    )
+    return conversation
+
+def get_conversation_messages(conversation):
+    """Get messages from database as a list of dicts"""
+    messages = ConversationMessage.objects.filter(conversation=conversation)
+    return [{'role': msg.role, 'content': msg.content} for msg in messages]
+
+def save_conversation_message(conversation, role, content):
+    """Save a single message to the database"""
+    ConversationMessage.objects.create(
+        conversation=conversation,
+        role=role,
+        content=content
+    )
+    # Update conversation's updated_at timestamp
+    conversation.save()
+
+def update_conversation_title(conversation, messages):
+    """Update conversation title based on first user message"""
+    if conversation.title == 'New conversation' and messages:
+        # Find first user message
+        for msg in messages:
+            if msg['role'] == 'user':
+                # Use first 50 chars of first user message as title
+                title = msg['content'][:50]
+                if len(msg['content']) > 50:
+                    title += '...'
+                conversation.title = title
+                conversation.save()
+                break
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def agent_chat(request):
@@ -637,8 +674,11 @@ def agent_chat(request):
     if not conversation_id:
         conversation_id = f"conversation_{request.user.id}_{int(time.time())}"
 
-    # Get conversation history from cache
-    conversation = cache.get(conversation_id) or []
+    # Get or create conversation in database
+    db_conversation = get_or_create_conversation(conversation_id, request.user)
+    
+    # Get conversation history from database
+    conversation = get_conversation_messages(db_conversation)
 
     # Limit conversation history to last 10 messages to keep context window manageable
     if len(conversation) > 10:
@@ -665,9 +705,6 @@ def agent_chat(request):
         spotify_url = search_spotify(song_info['title'], song_info['artist'])
 
         if not spotify_url:
-            # Add this exchange to conversation history
-            conversation.append({"role": "user", "content": message})
-
             # Generate a conversational response with Claude instead of hardcoded message
             api_key = os.environ.get("ANTHROPIC_API_KEY")
             if not api_key:
@@ -714,11 +751,10 @@ def agent_chat(request):
                 except:
                     error_response = f"I couldn't find '{song_info['title']}' by {song_info['artist']} on Spotify. Could you check the spelling or try another song?"
 
-            # Add the response to conversation history
-            conversation.append({"role": "assistant", "content": error_response})
-
-            # Save updated conversation
-            cache.set(conversation_id, conversation, 86400)  # 24 hour expiry
+            # Save messages to database
+            save_conversation_message(db_conversation, 'user', message)
+            save_conversation_message(db_conversation, 'assistant', error_response)
+            update_conversation_title(db_conversation, [{'role': 'user', 'content': message}])
 
             return Response({
                 'message': error_response,
@@ -784,12 +820,10 @@ def agent_chat(request):
                 except:
                     success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
 
-            # Add this exchange to conversation history
-            conversation.append({"role": "user", "content": message})
-            conversation.append({"role": "assistant", "content": success_response})
-
-            # Save updated conversation
-            cache.set(conversation_id, conversation, 86400)  # 24 hour expiry
+            # Save messages to database
+            save_conversation_message(db_conversation, 'user', message)
+            save_conversation_message(db_conversation, 'assistant', success_response)
+            update_conversation_title(db_conversation, [{'role': 'user', 'content': message}])
 
             return Response({
                 'message': success_response,
@@ -808,7 +842,7 @@ def agent_chat(request):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     # If not a song request, handle as normal conversation
-    response = get_claude_response(message, conversation, conversation_id)
+    response = get_claude_response(message, conversation, db_conversation)
 
     # Add conversation_id to the response data
     if isinstance(response, Response):
@@ -864,7 +898,7 @@ def check_song_request_intent(message):
         print(f"Error checking song request intent: {str(e)}")
         return False
 
-def get_claude_response(message, conversation, conversation_id):
+def get_claude_response(message, conversation, db_conversation):
     """Get a response from Claude, maintaining conversation history"""
     try:
         # Get API key from environment variable
@@ -927,11 +961,10 @@ def get_claude_response(message, conversation, conversation_id):
         result = response.json()
         assistant_message = result.get('content', [{}])[0].get('text', '')
 
-        # Add assistant's response to conversation history
-        conversation.append({"role": "assistant", "content": assistant_message})
-
-        # Save updated conversation
-        cache.set(conversation_id, conversation, 86400)  # 24 hour expiry
+        # Save messages to database
+        save_conversation_message(db_conversation, 'user', message)
+        save_conversation_message(db_conversation, 'assistant', assistant_message)
+        update_conversation_title(db_conversation, conversation)
 
         return Response({
             'message': assistant_message,
@@ -944,30 +977,71 @@ def get_claude_response(message, conversation, conversation_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_conversation_history(request):
-    """Retrieve conversation history from cache"""
+    """Retrieve conversation history from database"""
     # Get conversation ID from the query parameters
     conversation_id = request.query_params.get('conversation_id')
 
-    # If no conversation_id provided, use user ID to construct it
     if not conversation_id:
-        conversation_id = f"conversation_{request.user.id}"
+        return Response({
+            'messages': [],
+            'conversation_id': None
+        })
 
-    # Retrieve conversation from cache
-    conversation = cache.get(conversation_id) or []
+    # Try to get conversation from database
+    try:
+        conversation = Conversation.objects.get(id=conversation_id, user=request.user)
+        messages = ConversationMessage.objects.filter(conversation=conversation).order_by('created_at')
+        
+        # Convert to frontend format
+        frontend_messages = [
+            {
+                'role': msg.role,
+                'content': msg.content
+            }
+            for msg in messages
+        ]
+        
+        return Response({
+            'messages': frontend_messages,
+            'conversation_id': conversation_id
+        })
+    except Conversation.DoesNotExist:
+        return Response({
+            'messages': [],
+            'conversation_id': conversation_id
+        })
 
-    # Convert the conversation to a format suitable for the frontend
-    frontend_messages = []
-    for message in conversation:
-        role = message.get('role')
-        content = message.get('content', '')
-
-        if role and content:
-            frontend_messages.append({
-                'role': role,
-                'content': content
-            })
-
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_all_conversations(request):
+    """Get all conversations for the current user"""
+    conversations = Conversation.objects.filter(user=request.user).order_by('-updated_at')
+    
+    # Build response with conversation metadata
+    conversation_list = []
+    for conv in conversations:
+        # Get the last message
+        last_message = ConversationMessage.objects.filter(conversation=conv).order_by('-created_at').first()
+        last_message_text = last_message.content if last_message else ''
+        
+        conversation_list.append({
+            'id': conv.id,
+            'title': conv.title,
+            'lastMessage': last_message_text[:100],  # Truncate to 100 chars
+            'date': conv.updated_at.isoformat()
+        })
+    
     return Response({
-        'messages': frontend_messages,
-        'conversation_id': conversation_id
+        'conversations': conversation_list
     })
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_conversation(request, conversation_id):
+    """Delete a conversation"""
+    try:
+        conversation = Conversation.objects.get(id=conversation_id, user=request.user)
+        conversation.delete()
+        return Response({'success': True})
+    except Conversation.DoesNotExist:
+        return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)

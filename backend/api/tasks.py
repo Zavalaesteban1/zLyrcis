@@ -215,6 +215,24 @@ def get_lyrics(title, artist):
         """Normalize string for fuzzy matching"""
         return re.sub(r'[^\w\s]', '', s.lower()).strip()
     
+    def strip_remaster_suffixes(title):
+        """Remove common remaster/version suffixes that break Genius search"""
+        # Remove patterns like: - Remaster, (Remaster), - Remastered, (2009 Remaster), etc.
+        patterns = [
+            r'\s*-\s*Remaster(ed)?(\s+\d+)?$',
+            r'\s*\(\s*Remaster(ed)?(\s+\d+)?\s*\)$',
+            r'\s*-\s*\d+\s*Remaster(ed)?$',
+            r'\s*\(\s*\d+\s*Remaster(ed)?\s*\)$',
+            r'\s*-\s*Remastered\s+Version$',
+            r'\s*\(\s*Remastered\s+Version\s*\)$',
+        ]
+        
+        cleaned = title
+        for pattern in patterns:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE).strip()
+        
+        return cleaned
+    
     def titles_match(title1, title2, threshold=0.7):
         """Check if two titles are similar enough"""
         norm1 = normalize_for_comparison(title1)
@@ -235,8 +253,25 @@ def get_lyrics(title, artist):
     try:
         print(f"Searching Genius for: '{title}' by '{artist}'")
         
-        # Search for the song
+        # First attempt: Try original title
         song = genius.search_song(title, artist)
+        
+        # If not found, try without remaster suffixes
+        if not song:
+            cleaned_title = strip_remaster_suffixes(title)
+            if cleaned_title != title:
+                print(f"  Retrying without remaster suffix: '{cleaned_title}'")
+                song = genius.search_song(cleaned_title, artist)
+        
+        # If still not found, try simplified title (remove feat., parentheses, etc.)
+        if not song:
+            simplified_title = re.sub(r'\(.*?\)', '', title).strip()
+            simplified_title = re.sub(r'\[.*?\]', '', simplified_title).strip()
+            simplified_title = re.sub(r'feat\..*', '', simplified_title, flags=re.IGNORECASE).strip()
+            
+            if simplified_title != title:
+                print(f"  Retrying with simplified title: '{simplified_title}'")
+                song = genius.search_song(simplified_title, artist)
         
         if song:
             print(f"Genius returned: '{song.title}' by '{song.artist}'")
@@ -246,20 +281,7 @@ def get_lyrics(title, artist):
                 print(f"⚠️ WARNING: Genius returned wrong song!")
                 print(f"  Requested: '{title}'")
                 print(f"  Got: '{song.title}'")
-                
-                # Try again with simplified title (remove feat., parentheses, etc.)
-                simplified_title = re.sub(r'\(.*?\)', '', title).strip()
-                simplified_title = re.sub(r'\[.*?\]', '', simplified_title).strip()
-                simplified_title = re.sub(r'feat\..*', '', simplified_title, flags=re.IGNORECASE).strip()
-                
-                if simplified_title != title:
-                    print(f"Retrying with simplified title: '{simplified_title}'")
-                    song = genius.search_song(simplified_title, artist)
-                    
-                    if song and titles_match(song.title, title):
-                        print(f"✓ Found correct song with simplified title: '{song.title}'")
-                    else:
-                        print(f"✗ Still wrong song, using anyway (may have sync issues)")
+                print(f"✗ Still wrong song, using anyway (may have sync issues)")
             else:
                 print(f"✓ Correct song found!")
             

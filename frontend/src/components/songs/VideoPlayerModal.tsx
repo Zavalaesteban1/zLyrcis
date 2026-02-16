@@ -109,8 +109,6 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           {MdClose({ size: 20 })}
         </VideoCloseButton>
         
-        {isLoading && <LoadingOverlay>Loading video...</LoadingOverlay>}
-        
         <VideoPlayer
           ref={videoRef}
           controls

@@ -7,15 +7,22 @@ import SignupPage from './pages/SignupPage';
 import SongsPage from './pages/SongsPage';
 import AgentPage from './pages/AgentPage';
 import { isAuthenticated, getCurrentUser } from './services/api';
+import { UserProvider } from './contexts/UserContext';
 import './app.css';
 
-// Protected route component
+// Protected route component with UserProvider
 interface ProtectedRouteProps {
   element: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ element }) => {
-  return isAuthenticated() ? <>{element}</> : <Navigate to="/login" />;
+  return isAuthenticated() ? (
+    <UserProvider>
+      {element}
+    </UserProvider>
+  ) : (
+    <Navigate to="/login" />
+  );
 };
 
 // Page transition wrapper component

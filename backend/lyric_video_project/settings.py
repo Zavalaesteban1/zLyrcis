@@ -103,7 +103,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 if DATABASE_URL and len(DATABASE_URL) > 10:
     # Production: Use DATABASE_URL (PostgreSQL on Railway)
     DATABASES = {
-        'default': dj_database_url.config(
+        'default': dj_database_url.parse(
             default=DATABASE_URL,
             conn_max_age=600,
         )

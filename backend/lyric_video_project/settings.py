@@ -98,6 +98,8 @@ WSGI_APPLICATION = 'lyric_video_project.wsgi.application'
 import dj_database_url
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
+print(f"DEBUG: DATABASE_URL repr = {repr(DATABASE_URL)}")
+print(f"DEBUG: DATABASE_URL length = {len(DATABASE_URL)}")
 
 # Check if DATABASE_URL exists AND is not empty
 if DATABASE_URL and len(DATABASE_URL) > 10:

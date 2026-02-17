@@ -97,11 +97,13 @@ WSGI_APPLICATION = 'lyric_video_project.wsgi.application'
 # Use DATABASE_URL for production (Railway, Render, etc.) or local MySQL config
 import dj_database_url
 
-if os.environ.get('DATABASE_URL'):
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
     # Production: Use DATABASE_URL (PostgreSQL on Railway)
     DATABASES = {
         'default': dj_database_url.config(
-            default=os.environ.get('DATABASE_URL'),
+            default=DATABASE_URL,
             conn_max_age=600,
         )
     }
@@ -113,7 +115,7 @@ else:
             'NAME': os.environ.get('DATABASE_NAME'),
             'USER': os.environ.get('DATABASE_USER'),
             'PASSWORD': os.environ.get('DATABASE_PASS'),
-            'HOST': os.environ.get('DB_HOST'),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
             'OPTIONS': {
                 'unix_socket': os.environ.get('DB_SOCKET', '/tmp/mysql.sock'),
             },

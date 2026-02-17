@@ -36,7 +36,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -94,16 +94,29 @@ WSGI_APPLICATION = 'lyric_video_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        # get the corresponding information from the .env file
-        'ENGINE': 'django.db.backends.mysql',  # Specify the engine (mysql, postgresql, etc.)
-        'NAME': os.environ.get('DATABASE_NAME'),
-        'USER': os.environ.get('DATABASE_USER'),
-        'PASSWORD': os.environ.get('DATABASE_PASS'),
-        'HOST': os.environ.get('DB_HOST'),
+# Use DATABASE_URL for production (Railway, Render, etc.) or local MySQL config
+import dj_database_url
+
+if os.environ.get('DATABASE_URL'):
+    # Production: Use DATABASE_URL (PostgreSQL on Railway)
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.environ.get('DATABASE_URL'),
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    # Development: Use local MySQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.environ.get('DATABASE_NAME'),
+            'USER': os.environ.get('DATABASE_USER'),
+            'PASSWORD': os.environ.get('DATABASE_PASS'),
+            'HOST': os.environ.get('DB_HOST'),
+        }
+    }
 
 
 # Password validation
@@ -180,9 +193,9 @@ if not mimetypes.inited:
 mimetypes.add_type("video/mp4", ".mp4")
 mimetypes.add_type("audio/mpeg", ".mp3")
 
-# Celery settings
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+# Celery settings - use REDIS_URL from Railway or fallback to localhost
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

@@ -103,7 +103,6 @@ if os.environ.get('DATABASE_URL'):
         'default': dj_database_url.config(
             default=os.environ.get('DATABASE_URL'),
             conn_max_age=600,
-            conn_health_checks=True,
         )
     }
 else:
@@ -115,6 +114,9 @@ else:
             'USER': os.environ.get('DATABASE_USER'),
             'PASSWORD': os.environ.get('DATABASE_PASS'),
             'HOST': os.environ.get('DB_HOST'),
+            'OPTIONS': {
+                'unix_socket': os.environ.get('DB_SOCKET', '/tmp/mysql.sock'),
+            },
         }
     }
 

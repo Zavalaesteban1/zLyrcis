@@ -99,7 +99,8 @@ import dj_database_url
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-if DATABASE_URL:
+# Check if DATABASE_URL exists AND is not empty
+if DATABASE_URL and len(DATABASE_URL) > 10:
     # Production: Use DATABASE_URL (PostgreSQL on Railway)
     DATABASES = {
         'default': dj_database_url.config(
@@ -121,8 +122,6 @@ else:
             },
         }
     }
-
-
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 

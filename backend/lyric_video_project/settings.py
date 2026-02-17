@@ -97,7 +97,7 @@ WSGI_APPLICATION = 'lyric_video_project.wsgi.application'
 # Use DATABASE_URL for production (Railway, Render, etc.) or local MySQL config
 import dj_database_url
 
-DATABASE_URL = os.environ.get('DATABASE_URL')
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip().lstrip('=')
 print("=========Debuging the backend in production =======")
 print(f"DEBUG: DATABASE_URL repr = {repr(DATABASE_URL)}")
 print(f"DEBUG: DATABASE_URL length = {len(DATABASE_URL)}")

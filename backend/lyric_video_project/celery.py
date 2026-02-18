@@ -13,15 +13,17 @@ else:
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lyric_video_project.settings')
 
-app = Celery('lyric_video_project')
-
-# Force read REDIS_URL directly from environment
+print("====== DEBUGGING REDIS AND CELERY =====")
 redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-print(f"Celery connecting to Redis: {redis_url[:20]}...")  # partial print for security
+print(f"REDIS_URL from environment: {redis_url[:40]}...")
+print(f"Full REDIS_URL length: {len(redis_url)}")
+print("========================================")
+
+app = Celery('lyric_video_project',
+             broker=redis_url,
+             backend=redis_url)
 
 app.config_from_object('django.conf:settings', namespace='CELERY')
-app.conf.broker_url = redis_url
-app.conf.result_backend = redis_url
 
 app.autodiscover_tasks()
 

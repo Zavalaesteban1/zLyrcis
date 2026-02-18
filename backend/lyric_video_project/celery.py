@@ -14,13 +14,19 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lyric_video_project.settings')
 
 redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 print(f"====== DEBUGGING REDIS AND CELERY =====")
-print(f"REDIS_URL from environment: {redis_url[:40]}...")
+print(f"REDIS_URL: {redis_url[:40]}...")
 print(f"========================================")
 
-app = Celery('lyric_video_project')
-app.config_from_object('django.conf:settings', namespace='CELERY')
-app.conf.broker_url = redis_url
-app.conf.result_backend = redis_url
+app = Celery('lyric_video_project',
+             broker=redis_url,
+             backend=redis_url,
+             include=['api.tasks'])
+
+app.conf.update(
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+)
 
 app.autodiscover_tasks()
 

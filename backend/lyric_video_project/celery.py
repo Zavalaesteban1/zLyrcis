@@ -12,20 +12,15 @@ else:
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lyric_video_project.settings')
 
-print("====== DEBUGGING REDIS AND CELERY =====")
 redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+print(f"====== DEBUGGING REDIS AND CELERY =====")
 print(f"REDIS_URL from environment: {redis_url[:40]}...")
-print("========================================")
+print(f"========================================")
 
 app = Celery('lyric_video_project')
-
 app.config_from_object('django.conf:settings', namespace='CELERY')
-
-# Force override AFTER config_from_object
-app.conf.update(
-    broker_url=redis_url,
-    result_backend=redis_url,
-)
+app.conf.broker_url = redis_url
+app.conf.result_backend = redis_url
 
 app.autodiscover_tasks()
 

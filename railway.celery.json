@@ -3,7 +3,7 @@
       "builder": "NIXPACKS"
     },
     "deploy": {
-      "startCommand": "cd backend && celery -A lyric_video_project worker --loglevel=info",
+      "startCommand": "cd backend && celery -A lyric_video_project worker --loglevel=debug 2>&1",
       "numReplicas": 1,
       "restartPolicyType": "ON_FAILURE",
       "restartPolicyMaxRetries": 10

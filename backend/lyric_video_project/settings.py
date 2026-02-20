@@ -122,6 +122,7 @@ else:
             'HOST': os.environ.get('DB_HOST', 'localhost'),
             'OPTIONS': {
                 'unix_socket': os.environ.get('DB_SOCKET', '/tmp/mysql.sock'),
+                'charset': 'utf8mb4',
             },
         }
     }

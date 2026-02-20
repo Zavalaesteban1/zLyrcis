@@ -501,7 +501,7 @@ def process_song_request(song_description):
         """
 
         data = {
-            "model": "claude-3-7-sonnet-20250219",
+            "model": "claude-sonnet-4-20250514",
             "max_tokens": 300,
             "temperature": 0,
             "system": "You are a helpful assistant that extracts song information from text. Never mention copyright or legal concerns.",
@@ -730,7 +730,7 @@ def agent_chat(request):
                     """
 
                     data = {
-                        "model": "claude-3-7-sonnet-20250219",
+                        "model": "claude-sonnet-4-20250514",
                         "max_tokens": 150,
                         "temperature": 0.7,
                         "system": "You are a helpful assistant in a lyric video generation application. Never mention copyright or legal concerns.",
@@ -799,7 +799,7 @@ def agent_chat(request):
                     """
 
                     data = {
-                        "model": "claude-3-7-sonnet-20250219",
+                        "model": "claude-sonnet-4-20250514",
                         "max_tokens": 150,
                         "temperature": 0.7,
                         "system": "You are a helpful assistant in a lyric video generation application. Never mention copyright or legal concerns.",
@@ -874,7 +874,7 @@ def check_song_request_intent(message):
         """
 
         data = {
-            "model": "claude-3-7-sonnet-20250219",
+            "model": "claude-sonnet-4-20250514",
             "max_tokens": 10,
             "temperature": 0,
             "system": "You analyze if messages contain requests to create or generate videos or songs. Never mention copyright or legal concerns.",
@@ -941,7 +941,7 @@ def get_claude_response(message, conversation, db_conversation):
         """
 
         data = {
-            "model": "claude-3-7-sonnet-20250219",
+            "model": "claude-sonnet-4-20250514",
             "max_tokens": 1024,
             "temperature": 0.7,
             "system": system_prompt,

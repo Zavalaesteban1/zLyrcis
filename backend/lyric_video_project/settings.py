@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'rest_framework.authtoken',  # Add token authentication
+    'cloudinary_storage',  # Cloudinary for media storage
+    'cloudinary',  # Cloudinary
     
     # Local apps
     'api',
@@ -192,9 +194,39 @@ CORS_ALLOWED_ORIGINS = [
     'https://zlyric.netlify.app',
     'http://localhost:3000',
 ]
-# Media files
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-MEDIA_URL = '/media/'
+
+# Cloudinary configuration
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': os.environ.get('CLOUDINARY_CLOUD_NAME', ''),
+    'API_KEY': os.environ.get('CLOUDINARY_API_KEY', ''),
+    'API_SECRET': os.environ.get('CLOUDINARY_API_SECRET', ''),
+}
+
+# Configure Cloudinary
+if CLOUDINARY_STORAGE['CLOUD_NAME']:
+    cloudinary.config(
+        cloud_name=CLOUDINARY_STORAGE['CLOUD_NAME'],
+        api_key=CLOUDINARY_STORAGE['API_KEY'],
+        api_secret=CLOUDINARY_STORAGE['API_SECRET'],
+        secure=True
+    )
+    print(f"Cloudinary configured: {CLOUDINARY_STORAGE['CLOUD_NAME']}")
+
+# Media files - Use Cloudinary in production, local storage in development
+if os.environ.get('DATABASE_URL'):
+    # Production: Use Cloudinary for media storage
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    MEDIA_URL = '/media/'  # Cloudinary will handle the actual URL
+    print("Using Cloudinary for media storage (production)")
+else:
+    # Development: Use local storage
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+    MEDIA_URL = '/media/'
+    print("Using local media storage (development)")
 
 # Add correct MIME types
 if not mimetypes.inited:

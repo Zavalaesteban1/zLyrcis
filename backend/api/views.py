@@ -108,7 +108,7 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def me(self, request):
         profile = self.get_object()
-        serializer = self.get_serializer(profile)
+        serializer = self.get_serializer(profile, context={'request': request})
         return Response(serializer.data)
 
     @action(detail=False, methods=['post', 'patch'])
@@ -140,7 +140,7 @@ class UserProfileViewSet(viewsets.ModelViewSet):
             profile.save()
 
         # Return the updated profile
-        return Response(UserProfileSerializer(profile).data)
+        return Response(UserProfileSerializer(profile, context={'request': request}).data)
 
     @action(detail=False, methods=['post'])
     def update_picture(self, request):
@@ -170,12 +170,7 @@ class UserProfileViewSet(viewsets.ModelViewSet):
         profile.save()
 
         # Return the full profile data with the absolute URL
-        serialized_profile = UserProfileSerializer(profile).data
-        if profile.profile_picture:
-            # Get the full URL including domain
-            request_base_url = request.build_absolute_uri('/')[:-1]  # Remove trailing slash
-            serialized_profile['profile_picture'] = request_base_url + profile.profile_picture.url
-
+        serialized_profile = UserProfileSerializer(profile, context={'request': request}).data
         return Response(serialized_profile)
 
     @action(detail=False, methods=['post'])
@@ -227,7 +222,7 @@ def user_login(request):
     # Get user profile
     try:
         profile = UserProfile.objects.get(user=user)
-        profile_data = UserProfileSerializer(profile).data
+        profile_data = UserProfileSerializer(profile, context={'request': request}).data
     except UserProfile.DoesNotExist:
         profile_data = None
 
@@ -316,7 +311,7 @@ def google_login(request):
         # Get user profile
         try:
             profile = UserProfile.objects.get(user=user)
-            profile_data = UserProfileSerializer(profile).data
+            profile_data = UserProfileSerializer(profile, context={'request': request}).data
         except UserProfile.DoesNotExist:
             profile_data = None
 
@@ -382,7 +377,7 @@ def user_signup(request):
         'user_id': user.pk,
         'username': user.username,
         'email': user.email,
-        'profile': UserProfileSerializer(profile).data
+        'profile': UserProfileSerializer(profile, context={'request': request}).data
     }, status=status.HTTP_201_CREATED)
 
 @api_view(['POST'])
@@ -411,7 +406,7 @@ def get_user_info(request):
     user = request.user
     try:
         profile = UserProfile.objects.get(user=user)
-        profile_data = UserProfileSerializer(profile).data
+        profile_data = UserProfileSerializer(profile, context={'request': request}).data
     except UserProfile.DoesNotExist:
         profile_data = None
 

@@ -195,10 +195,12 @@ export const ChatSidebar = styled.div<{ isOpen: boolean }>`
   
   @media (max-width: 768px) {
     left: 0;
-    width: 280px;
+    width: 85%;
+    max-width: 320px;
     z-index: 110; /* Higher than main sidebar on mobile */
     transform: translateX(${props => props.isOpen ? '0' : '-100%'});
-    box-shadow: ${props => props.isOpen ? '2px 0 10px rgba(0, 0, 0, 0.1)' : 'none'};
+    box-shadow: ${props => props.isOpen ? '4px 0 20px rgba(0, 0, 0, 0.15)' : 'none'};
+    border-right: none;
   }
 `;
 
@@ -208,6 +210,26 @@ export const ChatListHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background-color: #fafafa;
+  
+  @media (max-width: 768px) {
+    padding: 16px 18px;
+    background: linear-gradient(135deg, #1DB954, #169c46);
+    color: white;
+    border-bottom: none;
+  }
+`;
+
+export const ChatListTitle = styled.h3`
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  
+  @media (max-width: 768px) {
+    color: white;
+    font-size: 17px;
+  }
 `;
 
 export const NewChatButton = styled.button`
@@ -222,9 +244,21 @@ export const NewChatButton = styled.button`
   cursor: pointer;
   font-weight: 600;
   transition: all 0.2s ease;
+  font-size: 14px;
   
   &:hover {
     background-color: #19a049;
+  }
+  
+  @media (max-width: 768px) {
+    background-color: rgba(255, 255, 255, 0.2);
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 15px;
+    
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.3);
+    }
   }
 `;
 
@@ -239,6 +273,10 @@ export const ChatList = styled.div`
   
   &::-webkit-scrollbar {
     display: none;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 12px 10px;
   }
 `;
 
@@ -257,6 +295,16 @@ export const ChatItem = styled.div<{ active?: boolean }>`
   &:hover {
     background-color: ${props => props.active ? 'rgba(29, 185, 84, 0.15)' : 'rgba(0, 0, 0, 0.05)'};
   }
+  
+  @media (max-width: 768px) {
+    padding: 14px 16px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    
+    &:active {
+      transform: scale(0.98);
+    }
+  }
 `;
 
 export const ChatItemTitle = styled.div`
@@ -266,6 +314,10 @@ export const ChatItemTitle = styled.div`
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+  
+  @media (max-width: 768px) {
+    font-size: 15px;
+  }
 `;
 
 export const ChatItemDelete = styled.button`
@@ -313,6 +365,22 @@ export const ChatItemDelete = styled.button`
     border-style: solid;
     border-color: rgba(0, 0, 0, 0.75) transparent transparent transparent;
     pointer-events: none;
+  }
+  
+  @media (max-width: 768px) {
+    opacity: 1;
+    padding: 8px;
+    color: #999;
+    
+    &:active {
+      color: #e91429;
+      transform: scale(1.1);
+    }
+    
+    &:hover::after,
+    &:hover::before {
+      display: none;
+    }
   }
 `;
 
@@ -362,6 +430,23 @@ export const ChatItemEdit = styled.button`
     border-style: solid;
     border-color: rgba(0, 0, 0, 0.75) transparent transparent transparent;
     pointer-events: none;
+  }
+  
+  @media (max-width: 768px) {
+    opacity: 1;
+    padding: 8px;
+    margin-right: 4px;
+    color: #999;
+    
+    &:active {
+      color: #1DB954;
+      transform: scale(1.1);
+    }
+    
+    &:hover::after,
+    &:hover::before {
+      display: none;
+    }
   }
 `;
 
@@ -499,9 +584,12 @@ export const ChatHeader = styled.div`
   position: sticky;
   top: 0;
   z-index: 10;
+  gap: 0;
   
   @media (max-width: 768px) {
-    padding: 12px 16px;
+    padding: 14px 16px;
+    flex-wrap: nowrap;
+    gap: 0;
   }
 `;
 
@@ -516,18 +604,38 @@ export const ChatHeaderIcon = styled.div`
   margin-right: 12px;
   color: white;
   font-size: 18px;
+  flex-shrink: 0;
+  
+  @media (max-width: 768px) {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    margin-right: 10px;
+  }
 `;
 
 export const ChatHeaderTitle = styled.div`
   font-weight: 600;
   font-size: 16px;
   color: #333;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  
+  @media (max-width: 768px) {
+    font-size: 15px;
+  }
 `;
 
 export const ChatHeaderSubtitle = styled.div`
   font-size: 13px;
   color: #777;
   margin-top: 2px;
+  line-height: 1.2;
+  
+  @media (max-width: 768px) {
+    display: none;
+  }
 `;
 
 export const ChatHeaderControls = styled.div`
@@ -535,6 +643,11 @@ export const ChatHeaderControls = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
+  
+  @media (max-width: 768px) {
+    gap: 8px;
+    margin-left: auto;
+  }
 `;
 
 export const IconButton = styled.button`
@@ -552,6 +665,15 @@ export const IconButton = styled.button`
   &:hover {
     color: #1DB954;
     background-color: rgba(29, 185, 84, 0.1);
+  }
+  
+  @media (max-width: 768px) {
+    padding: 6px;
+    
+    /* Hide some buttons on mobile to reduce clutter */
+    &.hide-mobile {
+      display: none;
+    }
   }
 `;
 
@@ -590,8 +712,8 @@ export const ChatMessages = styled.div`
   scroll-behavior: smooth;
   
   @media (max-width: 768px) {
-    padding: 20px 16px;
-    gap: 20px;
+    padding: 24px 16px;
+    gap: 18px;
   }
 `;
 
@@ -765,6 +887,10 @@ export const InputRow = styled.div`
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
+  
+  @media (max-width: 768px) {
+    max-width: 100%;
+  }
 `;
 
 export const HelperText = styled.div`
@@ -773,6 +899,10 @@ export const HelperText = styled.div`
   margin-top: 4px;
   padding-left: 12px;
   align-self: flex-start;
+  
+  @media (max-width: 768px) {
+    display: none;
+  }
 `;
 
 export const Textarea = styled.textarea`
@@ -968,6 +1098,10 @@ export const CompactChatHeader = styled.div`
   padding: 22px 26px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   background-color: #fcfcfc;
+  
+  @media (max-width: 768px) {
+    padding: 18px 20px;
+  }
 `;
 
 export const CompactChatTitle = styled.div`
@@ -975,6 +1109,10 @@ export const CompactChatTitle = styled.div`
   font-size: 18px;
   color: #333;
   letter-spacing: -0.2px;
+  
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
 `;
 
 export const CompactChatInput = styled.div`
@@ -987,6 +1125,10 @@ export const CompactChatInput = styled.div`
   
   &:focus-within {
     border-top-color: rgba(29, 185, 84, 0.1);
+  }
+  
+  @media (max-width: 768px) {
+    padding: 16px 18px;
   }
 `;
 
@@ -1001,4 +1143,11 @@ export const CompactChatIcon = styled.div`
   margin-right: 14px;
   color: white;
   font-size: 22px;
+  
+  @media (max-width: 768px) {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+    margin-right: 12px;
+  }
 `; 

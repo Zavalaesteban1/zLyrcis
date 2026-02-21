@@ -349,7 +349,7 @@ const AgentPage: React.FC = () => {
               {windowWidth <= 768 && !sidebarOpen && (
                 <Styles.IconButton 
                   onClick={() => setSidebarOpen(true)}
-                  style={{ marginRight: '10px' }}
+                  style={{ marginRight: '8px' }}
                   title="Open menu"
                 >
                   {MdMenu({ size: 20 })}
@@ -358,21 +358,23 @@ const AgentPage: React.FC = () => {
               <Styles.ChatHeaderIcon>
                 {RiRobot2Line({ size: 18 })}
               </Styles.ChatHeaderIcon>
-              <div>
-                <Styles.ChatHeaderTitle>Lyric Video Assistant</Styles.ChatHeaderTitle>
+              <div style={{ display: 'flex', flexDirection: 'column', flex: '0 0 auto', marginRight: 'auto' }}>
+                <Styles.ChatHeaderTitle>AI Music Agent</Styles.ChatHeaderTitle>
                 <Styles.ChatHeaderSubtitle>{currentDate}</Styles.ChatHeaderSubtitle>
               </div>
               <Styles.ChatHeaderControls>
-                {/* Button to toggle conversation list on mobile and desktop */}
+                {/* Button to toggle conversation list - SHOW on mobile with better styling */}
                 <Styles.IconButton 
                   onClick={() => setChatSidebarOpen(!chatSidebarOpen)}
-                  title="Toggle conversations"
+                  title="Conversation History"
+                  style={windowWidth <= 768 ? { padding: '8px' } : {}}
                 >
-                  {BsChatDots({ size: 16 })}
+                  {BsChatDots({ size: windowWidth <= 768 ? 18 : 16 })}
                 </Styles.IconButton>
                 
-                {/* Button to toggle scrollbars */}
+                {/* Button to toggle scrollbars - hide on mobile */}
                 <Styles.IconButton 
+                  className={windowWidth <= 768 ? "hide-mobile" : ""}
                   onClick={toggleScrollbars}
                   title={showScrollbars ? "Hide scrollbars" : "Show scrollbars"}
                 >
@@ -382,16 +384,17 @@ const AgentPage: React.FC = () => {
                   }
                 </Styles.IconButton>
                 
-                {/* Button for new conversation */}
+                {/* Button for new conversation - bigger on mobile */}
                 <Styles.IconButton 
                   onClick={handleNewChat}
                   title="New conversation"
+                  style={windowWidth <= 768 ? { padding: '8px' } : {}}
                 >
-                  {FiPlusCircle({ size: 16 })}
+                  {FiPlusCircle({ size: windowWidth <= 768 ? 18 : 16 })}
                 </Styles.IconButton>
                 
-                {/* ProfileDropdown */}
-                <div style={{ marginLeft: '10px' }}>
+                {/* ProfileDropdown - always show */}
+                <div style={{ marginLeft: windowWidth <= 768 ? '8px' : '10px' }}>
                   <ProfileDropdown userData={userData} />
                 </div>
               </Styles.ChatHeaderControls>

@@ -75,9 +75,9 @@ export const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
   return (
     <Styles.ChatSidebar isOpen={isOpen} theme={theme}>
       <Styles.ChatListHeader>
-        <h3 style={{ margin: 0 }}>Conversations</h3>
+        <Styles.ChatListTitle>Conversations</Styles.ChatListTitle>
         <Styles.NewChatButton onClick={onNewChat}>
-          {FiPlusCircle({ size: 16 })} New chat
+          {FiPlusCircle({ size: 16 })} New
         </Styles.NewChatButton>
       </Styles.ChatListHeader>
       

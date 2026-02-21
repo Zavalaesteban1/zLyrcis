@@ -97,7 +97,7 @@ const AgentPage: React.FC = () => {
     onSongRequest: (jobId, title, artist, isFavoriteOnly) => {
       // Add processing indicator with appropriate message
       if (isFavoriteOnly) {
-        // For favorites, show "Adding to collection" indicator briefly
+        // For favorites, show "Adding to collection" indicator
         setMessages(prev => [...prev, { 
           text: '...', 
           isUser: false, 
@@ -105,10 +105,8 @@ const AgentPage: React.FC = () => {
           processingLabel: '🎵 Adding to your collection...'
         }]);
         
-        // Remove the processing indicator after 1.5 seconds (simulate adding time)
-        setTimeout(() => {
-          setMessages(prev => prev.filter(msg => !msg.isProcessing));
-        }, 1500);
+        // Store that we're waiting for a favorite completion
+        // (handled in handleSend after response)
       } else {
         // For video generation, show "Generating video" indicator
         setMessages(prev => [...prev, { 
@@ -207,8 +205,17 @@ const AgentPage: React.FC = () => {
     setMessages(prev => prev.filter(msg => !(msg.text === '...' && !msg.isProcessing)));
     
     if (response) {
-      // Add the AI's response message
-      if (response.message) {
+      // For favorite-only songs, delay showing the response to sync with the "adding" indicator
+      if (response.is_favorite_only && response.message) {
+        // Wait 2 seconds to show "Adding to collection..." then show success message
+        setTimeout(() => {
+          // Remove the processing indicator
+          setMessages(prev => prev.filter(msg => !msg.isProcessing));
+          // Add the AI's success message
+          setMessages(prev => [...prev, { text: response.message, isUser: false }]);
+        }, 2000);
+      } else if (response.message) {
+        // For regular messages and video generation, add response immediately
         setMessages(prev => [...prev, { text: response.message, isUser: false }]);
       }
     }

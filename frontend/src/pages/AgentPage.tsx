@@ -325,7 +325,7 @@ const AgentPage: React.FC = () => {
                 <Styles.Textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask me about creating a lyric video..."
+                  placeholder="Ask me about music..."
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();

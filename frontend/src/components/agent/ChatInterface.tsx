@@ -23,6 +23,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [newestMessageIdx, setNewestMessageIdx] = useState(-1);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  // Track window resize for mobile detection
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -98,7 +109,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             ref={textareaRef}
             value={input}
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onInputChange(e.target.value)}
-            placeholder="Ask me about creating a lyric video..."
+            placeholder="Ask me about music..."
             onKeyDown={handleKeyPress}
             disabled={isLoading}
             rows={1}

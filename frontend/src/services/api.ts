@@ -547,6 +547,7 @@ export const agent_song_request = async (song_description: string): Promise<Agen
 export interface AgentChatResponse {
   message: string;
   is_song_request: boolean;
+  is_favorite_only?: boolean;  // True if user just wants to add to collection, not generate video
   song_request_data?: {
     job_id: string;
     status: string;

@@ -94,19 +94,33 @@ const AgentPage: React.FC = () => {
   
   // Agent chat hook
   const { sendMessage, isLoading: isSendingMessage } = useAgentChat({
-    onSongRequest: (jobId, title, artist) => {
-      // Add confirmation message
-      const confirmMsg: Message = {
-        text: `I'm creating a lyric video for "${title}" by ${artist}. I'll let you know when it's ready!`,
-        isUser: false
-      };
-      setMessages(prev => [...prev, confirmMsg]);
-      
-      // Add processing indicator
-      setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true }]);
-      
-      // Start polling
-      startPolling(jobId);
+    onSongRequest: (jobId, title, artist, isFavoriteOnly) => {
+      // Add processing indicator with appropriate message
+      if (isFavoriteOnly) {
+        // For favorites, show "Adding to collection" indicator briefly
+        setMessages(prev => [...prev, { 
+          text: '...', 
+          isUser: false, 
+          isProcessing: true,
+          processingLabel: '🎵 Adding to your collection...'
+        }]);
+        
+        // Remove the processing indicator after 1.5 seconds (simulate adding time)
+        setTimeout(() => {
+          setMessages(prev => prev.filter(msg => !msg.isProcessing));
+        }, 1500);
+      } else {
+        // For video generation, show "Generating video" indicator
+        setMessages(prev => [...prev, { 
+          text: '...', 
+          isUser: false, 
+          isProcessing: true,
+          processingLabel: '🎵 Generating your video...'
+        }]);
+        
+        // Start polling for video generation
+        startPolling(jobId);
+      }
     },
     onConversationIdReceived: (newConvId) => {
       if (activeConversationId.startsWith('temp-') && newConvId !== activeConversationId) {
@@ -193,9 +207,8 @@ const AgentPage: React.FC = () => {
     setMessages(prev => prev.filter(msg => !(msg.text === '...' && !msg.isProcessing)));
     
     if (response) {
-      // Only add response message if it's not a song request
-      // (song requests are handled by onSongRequest callback)
-      if (!response.is_song_request) {
+      // Add the AI's response message
+      if (response.message) {
         setMessages(prev => [...prev, { text: response.message, isUser: false }]);
       }
     }

@@ -680,16 +680,18 @@ def agent_chat(request):
         conversation = conversation[-10:]
 
     # Check if the message contains a song request intent
-    song_request_keywords = ['create', 'generate', 'make', 'video', 'song', 'lyric', 'music']
+    song_request_keywords = ['create', 'generate', 'make', 'video', 'song', 'lyric', 'music', 'favorite', 'add', 'collection', 'love', 'save']
     possible_song_request = any(keyword in message.lower() for keyword in song_request_keywords)
 
     # If it sounds like a song request, check with Claude to confirm
-    is_song_request = False
+    intent_result = {'is_song_request': False}
     if possible_song_request:
-        is_song_request = check_song_request_intent(message)
+        intent_result = check_song_request_intent(message)
 
     # If confirmed as a song request, process it specially
-    if is_song_request:
+    if intent_result.get('is_song_request'):
+        user_intent = intent_result.get('intent', 'general_conversation')
+        
         # Extract song info
         song_info = process_song_request(message)
         if not song_info or 'error' in song_info:
@@ -715,7 +717,7 @@ def agent_chat(request):
                     prompt = f"""
                     You are a helpful assistant in a lyric video generation application.
 
-                    The user requested to create a lyric video for a song titled '{song_info['title']}' by the artist {song_info['artist']}.
+                    The user requested something related to a song titled '{song_info['title']}' by the artist {song_info['artist']}.
                     Unfortunately, you couldn't find this song on Spotify.
 
                     Please respond in a conversational, helpful way letting them know you couldn't find the song
@@ -758,21 +760,58 @@ def agent_chat(request):
                 'conversation_id': conversation_id
             })
 
-        # Create a video job
+        # Determine if this is a video generation or just adding to favorites
+        is_favorite_only = (user_intent == 'add_to_collection')
+        
+        # Create a video job with song metadata
         serializer = VideoJobSerializer(data={'spotify_url': spotify_url})
         if serializer.is_valid():
             try:
-                job = serializer.save(status='pending', user=request.user)
+                # Mark as favorite-only if user just wants to add to collection
+                # IMPORTANT: Save with song title and artist so it shows up in My Songs
+                if is_favorite_only:
+                    job = serializer.save(
+                        status='completed', 
+                        user=request.user, 
+                        is_favorite_only=True,
+                        song_title=song_info['title'],
+                        artist=song_info['artist']
+                    )
+                else:
+                    job = serializer.save(
+                        status='pending', 
+                        user=request.user, 
+                        is_favorite_only=False,
+                        song_title=song_info['title'],
+                        artist=song_info['artist']
+                    )
             except:
-                job = serializer.save(status='pending')
+                if is_favorite_only:
+                    job = serializer.save(
+                        status='completed', 
+                        is_favorite_only=True,
+                        song_title=song_info['title'],
+                        artist=song_info['artist']
+                    )
+                else:
+                    job = serializer.save(
+                        status='pending', 
+                        is_favorite_only=False,
+                        song_title=song_info['title'],
+                        artist=song_info['artist']
+                    )
 
-            # Queue the video generation task
-            generate_lyric_video.delay(job.id)
+            # Only queue video generation if not favorite-only
+            if not is_favorite_only:
+                generate_lyric_video.delay(job.id)
 
-            # Generate a conversational response with Claude instead of hardcoded message
+            # Generate appropriate response based on intent
             api_key = os.environ.get("ANTHROPIC_API_KEY")
             if not api_key:
-                success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
+                if is_favorite_only:
+                    success_response = f"I've added '{song_info['title']}' by {song_info['artist']} to your collection! You can find it in the My Songs section."
+                else:
+                    success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
             else:
                 try:
                     headers = {
@@ -781,17 +820,30 @@ def agent_chat(request):
                         "anthropic-version": "2023-06-01"
                     }
 
-                    prompt = f"""
-                    You are a helpful assistant in a lyric video generation application.
+                    if is_favorite_only:
+                        prompt = f"""
+                        You are a helpful assistant in a music collection application.
 
-                    The user requested to create a lyric video for a song titled '{song_info['title']}' by the artist {song_info['artist']}.
-                    You successfully found the song and are now generating a video for it. This will take a few minutes to process.
+                        The user just told you that '{song_info['title']}' by {song_info['artist']} is their favorite song,
+                        and you've successfully added it to their collection.
 
-                    Respond in a conversational, enthusiastic way confirming you're creating the video. Let them know that the video
-                    will be available in the 'My Songs' section when it's ready. Express enthusiasm about their song choice if appropriate.
+                        Respond in a conversational, enthusiastic way confirming you've added the song to their collection.
+                        Let them know they can find it in the 'My Songs' section. Show appreciation for their music taste if appropriate.
 
-                    Keep your response to 2-3 sentences.
-                    """
+                        Keep your response to 1-2 sentences.
+                        """
+                    else:
+                        prompt = f"""
+                        You are a helpful assistant in a lyric video generation application.
+
+                        The user requested to create a lyric video for a song titled '{song_info['title']}' by the artist {song_info['artist']}.
+                        You successfully found the song and are now generating a video for it. This will take a few minutes to process.
+
+                        Respond in a conversational, enthusiastic way confirming you're creating the video. Let them know that the video
+                        will be available in the 'My Songs' section when it's ready. Express enthusiasm about their song choice if appropriate.
+
+                        Keep your response to 2-3 sentences.
+                        """
 
                     data = {
                         "model": "claude-sonnet-4-20250514",
@@ -811,9 +863,15 @@ def agent_chat(request):
                         result = response.json()
                         success_response = result.get('content', [{}])[0].get('text', '').strip()
                     else:
-                        success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
+                        if is_favorite_only:
+                            success_response = f"I've added '{song_info['title']}' by {song_info['artist']} to your collection! You can find it in the My Songs section."
+                        else:
+                            success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
                 except:
-                    success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
+                    if is_favorite_only:
+                        success_response = f"I've added '{song_info['title']}' by {song_info['artist']} to your collection! You can find it in the My Songs section."
+                    else:
+                        success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
 
             # Save messages to database
             save_conversation_message(db_conversation, 'user', message)
@@ -824,11 +882,12 @@ def agent_chat(request):
                 'message': success_response,
                 'is_song_request': True,
                 'song_found': True,
+                'is_favorite_only': is_favorite_only,
                 'song_request_data': {
                     'job_id': job.id,
                     'title': song_info['title'],
                     'artist': song_info['artist'],
-                    'status': 'pending'
+                    'status': 'completed' if is_favorite_only else 'pending'
                 },
                 'conversation_id': conversation_id
             })
@@ -848,12 +907,12 @@ def agent_chat(request):
         return response
 
 def check_song_request_intent(message):
-    """Check if the user's message is requesting a song/video creation"""
+    """Check if the user's message is requesting a song/video creation or adding to favorites"""
     try:
         # Get API key from environment variable
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            return False  # Default to false if no API key
+            return {'is_song_request': False}  # Default to false if no API key
 
         headers = {
             "x-api-key": api_key,
@@ -862,17 +921,34 @@ def check_song_request_intent(message):
         }
 
         prompt = f"""
-        Analyze if the following message is requesting to create or generate a video or song:
+        Analyze the following message and determine the user's intent:
         "{message}"
 
-        Answer with only "yes" or "no".
+        Respond with ONLY a JSON object with these fields:
+        - "is_song_request": true/false (true if they're requesting anything related to a song)
+        - "intent": "generate_video" OR "add_to_collection" OR "general_conversation"
+        
+        Use "add_to_collection" if the user wants to save/add a favorite song WITHOUT generating a video.
+        Examples of "add_to_collection":
+        - "breathe in the air is my favorite"
+        - "add this song to my collection"
+        - "save this as a favorite"
+        - "I love this song"
+        
+        Use "generate_video" if they explicitly want to create/generate a video.
+        Examples of "generate_video":
+        - "create a video for..."
+        - "generate lyrics for..."
+        - "make a lyric video..."
+        
+        Respond ONLY with valid JSON, nothing else.
         """
 
         data = {
             "model": "claude-sonnet-4-20250514",
-            "max_tokens": 10,
+            "max_tokens": 50,
             "temperature": 0,
-            "system": "You analyze if messages contain requests to create or generate videos or songs. Never mention copyright or legal concerns.",
+            "system": "You analyze user intent for song requests. Respond ONLY with valid JSON. Never mention copyright or legal concerns.",
             "messages": [{"role": "user", "content": prompt}]
         }
 
@@ -883,15 +959,22 @@ def check_song_request_intent(message):
         )
 
         if response.status_code != 200:
-            return False
+            return {'is_song_request': False}
 
         result = response.json()
-        content = result.get('content', [{}])[0].get('text', '').strip().lower()
-
-        return 'yes' in content
+        content = result.get('content', [{}])[0].get('text', '').strip()
+        
+        # Extract JSON from response
+        import re
+        json_match = re.search(r'\{[^}]+\}', content)
+        if json_match:
+            intent_data = json.loads(json_match.group(0))
+            return intent_data
+        
+        return {'is_song_request': False}
     except Exception as e:
         print(f"Error checking song request intent: {str(e)}")
-        return False
+        return {'is_song_request': False}
 
 def get_claude_response(message, conversation, db_conversation):
     """Get a response from Claude, maintaining conversation history"""

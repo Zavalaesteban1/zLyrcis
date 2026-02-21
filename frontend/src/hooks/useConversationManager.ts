@@ -5,6 +5,7 @@ export interface Message {
   text: string;
   isUser: boolean;
   isProcessing?: boolean;
+  processingLabel?: string;  // Custom label for processing indicator
 }
 
 export interface Conversation {

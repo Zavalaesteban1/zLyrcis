@@ -3,7 +3,7 @@ import { agent_chat, AgentChatResponse } from '../services/api';
 import { Message } from './useConversationManager';
 
 interface UseAgentChatOptions {
-  onSongRequest?: (jobId: string, title: string, artist: string) => void;
+  onSongRequest?: (jobId: string, title: string, artist: string, isFavoriteOnly?: boolean) => void;
   onConversationIdReceived?: (conversationId: string) => void;
 }
 
@@ -32,7 +32,8 @@ export const useAgentChat = (options: UseAgentChatOptions = {}) => {
       // Handle song request
       if (response.is_song_request && response.song_request_data) {
         const { job_id, title, artist } = response.song_request_data;
-        onSongRequest?.(job_id, title, artist);
+        const isFavoriteOnly = response.is_favorite_only || false;
+        onSongRequest?.(job_id, title, artist, isFavoriteOnly);
       }
 
       return response;

@@ -114,16 +114,16 @@ if DATABASE_URL and len(DATABASE_URL) > 10:
         )
     }
 else:
-    # Development: Use local MySQL
+    # Development: Use local MySQL (Homebrew) via TCP/IP
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
             'NAME': os.environ.get('DATABASE_NAME'),
             'USER': os.environ.get('DATABASE_USER'),
             'PASSWORD': os.environ.get('DATABASE_PASS'),
-            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'HOST': '127.0.0.1',  # Use TCP/IP instead of socket
+            'PORT': '3306',
             'OPTIONS': {
-                'unix_socket': os.environ.get('DB_SOCKET', '/tmp/mysql.sock'),
                 'charset': 'utf8mb4',
             },
         }

@@ -78,7 +78,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             return (
               <Styles.AssistantTypingIndicator key={index} isProcessing={message.isProcessing}>
                 {message.isProcessing && (
-                  <Styles.ProcessingLabel>🎵 Generating your video...</Styles.ProcessingLabel>
+                  <Styles.ProcessingLabel>
+                    {message.processingLabel || '🎵 Generating your video...'}
+                  </Styles.ProcessingLabel>
                 )}
                 <Styles.DotContainer>
                   <Styles.Dot isProcessing={message.isProcessing} />

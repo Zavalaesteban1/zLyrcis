@@ -28,6 +28,7 @@ class VideoJob(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     video_file = models.FileField(upload_to=video_upload_path, blank=True, null=True)
     error_message = models.TextField(blank=True)
+    is_favorite_only = models.BooleanField(default=False)  # True if user just wants to save song, not generate video
     
     def __str__(self):
         return f"{self.song_title} by {self.artist} ({self.status})"

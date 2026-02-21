@@ -659,83 +659,50 @@ const LandingPage: React.FC = () => {
       
       {/* Hero section */}
       <HeroSection>
-        <HeroTitle>Generate Beautiful Lyric Videos from Your Favorite Songs</HeroTitle>
+        <HeroTitle>Talk to AI About Music</HeroTitle>
         <HeroSubtitle>
-          Turn any Song track into a stunning lyric video with just a few clicks.
-          Learn songs faster, prepare for concerts, or enhance your music experience.
+          Discover new songs, chat about artists, or just explore music with AI.
         </HeroSubtitle>
-        <PrimaryButton onClick={openSignupModal}>Get Started for Free</PrimaryButton>
+        <PrimaryButton onClick={openSignupModal}>Get Started</PrimaryButton>
       </HeroSection>
       
       {/* Features section */}
       <FeatureSection>
-        <SectionTitle>Features</SectionTitle>
-        <SectionSubtitle>Everything you need to create amazing lyric videos</SectionSubtitle>
+        <SectionTitle>What You Can Do</SectionTitle>
+        <SectionSubtitle>Discover music through AI</SectionSubtitle>
         
         <FeatureList>
           <FeatureItem>
             <FeatureIcon>{RiRobot2Line({ size: 36 })}</FeatureIcon>
-            <FeatureTitle>AI Lyric Agent</FeatureTitle>
+            <FeatureTitle>Chat About Music</FeatureTitle>
             <FeatureDescription>
-              Our intelligent AI agent helps you create lyric videos effortlessly. Just describe what you want, and the AI does the rest.
+              Have natural conversations with our AI about your favorite artists and discover new songs.
             </FeatureDescription>
           </FeatureItem>
           
           <FeatureItem>
-            <FeatureIcon>{MdLyrics({ size: 36 })}</FeatureIcon>
-            <FeatureTitle>Automatic Lyric Sync</FeatureTitle>
+            <FeatureIcon>{BsSpotify({ size: 36 })}</FeatureIcon>
+            <FeatureTitle>Get Recommendations</FeatureTitle>
             <FeatureDescription>
-              Our algorithm perfectly syncs lyrics with the music, highlighting each line as it's sung.
+              Receive personalized song suggestions based on your preferences, complete with Spotify links and album art.
             </FeatureDescription>
           </FeatureItem>
           
           <FeatureItem>
             <FeatureIcon>{MdVideoLibrary({ size: 36 })}</FeatureIcon>
-            <FeatureTitle>Video Library</FeatureTitle>
+            <FeatureTitle>Build Your Collection</FeatureTitle>
             <FeatureDescription>
-              Build your personal collection of lyric videos. Access them anytime, from any device.
+              Save your favorite songs and create a personalized music library that grows with your conversations.
             </FeatureDescription>
           </FeatureItem>
         </FeatureList>
       </FeatureSection>
       
-      {/* Partnerships section */}
-      <PartnershipSection>
-        <SectionTitle>Business Partnerships</SectionTitle>
-        <SectionSubtitle>Discover how our lyric video platform can help grow your business</SectionSubtitle>
-        
-        <PartnerList>
-          <PartnerItem>
-            <PartnerIcon>{FaGuitar({ size: 36 })}</PartnerIcon>
-            <PartnerTitle>Artist Partnerships</PartnerTitle>
-            <PartnerDescription>
-              Special packages for artists and labels to create official lyric videos for releases. Increase engagement with your fans through high-quality, branded content.
-            </PartnerDescription>
-          </PartnerItem>
-          
-          <PartnerItem>
-            <PartnerIcon>{MdSchool({ size: 36 })}</PartnerIcon>
-            <PartnerTitle>Music Learning Platforms</PartnerTitle>
-            <PartnerDescription>
-              Seamlessly integrate with your existing music education platform. Help students learn lyrics and improve comprehension with our synchronized video technology.
-            </PartnerDescription>
-          </PartnerItem>
-          
-          <PartnerItem>
-            <PartnerIcon>{FaTicketAlt({ size: 36 })}</PartnerIcon>
-            <PartnerTitle>Concert Promoters</PartnerTitle>
-            <PartnerDescription>
-              Partner with us for pre-concert promotion. Create excitement and familiarity with an artist's catalog through engaging lyric videos before live events.
-            </PartnerDescription>
-          </PartnerItem>
-        </PartnerList>
-      </PartnershipSection>
-      
       {/* Call to action section */}
       <CTASection>
-        <SectionTitle>Ready to create your first lyric video?</SectionTitle>
-        <SectionSubtitle>Join thousands of users who are already enjoying zLyrics</SectionSubtitle>
-        <PrimaryButton onClick={openSignupModal}>Create Free Account</PrimaryButton>
+        <SectionTitle>Discover music with AI</SectionTitle>
+        <SectionSubtitle>Join and start building your music collection today</SectionSubtitle>
+        <PrimaryButton onClick={openSignupModal}>Create Account</PrimaryButton>
       </CTASection>
       
       {/* Footer */}

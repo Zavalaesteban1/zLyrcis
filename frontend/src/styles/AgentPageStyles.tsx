@@ -486,6 +486,7 @@ export const ChatContainer = styled.div`
     border-radius: 0;
     box-shadow: none;
     border: none;
+    animation: none;
   }
 `;
 
@@ -498,6 +499,10 @@ export const ChatHeader = styled.div`
   position: sticky;
   top: 0;
   z-index: 10;
+  
+  @media (max-width: 768px) {
+    padding: 12px 16px;
+  }
 `;
 
 export const ChatHeaderIcon = styled.div`
@@ -583,6 +588,11 @@ export const ChatMessages = styled.div`
   
   /* Smooth scrolling */
   scroll-behavior: smooth;
+  
+  @media (max-width: 768px) {
+    padding: 20px 16px;
+    gap: 20px;
+  }
 `;
 
 export const MessageBubble = styled.div<{ isUser: boolean; isNew?: boolean }>`
@@ -621,6 +631,13 @@ export const MessageBubble = styled.div<{ isUser: boolean; isNew?: boolean }>`
     font-size: 12px;
     color: #666;
     opacity: ${props => props.isUser ? 0 : 0.8};
+  }
+  
+  @media (max-width: 768px) {
+    max-width: 90%;
+    padding: 14px 18px;
+    font-size: 15px;
+    border-radius: 18px;
   }
 `;
 
@@ -736,6 +753,10 @@ export const ChatInput = styled.div`
   position: sticky;
   bottom: 0;
   z-index: 10;
+  
+  @media (max-width: 768px) {
+    padding: 16px;
+  }
 `;
 
 export const InputRow = styled.div`
@@ -796,6 +817,14 @@ export const Textarea = styled.textarea`
     opacity: 0.7;
     cursor: not-allowed;
   }
+  
+  @media (max-width: 768px) {
+    padding: 14px 18px;
+    font-size: 16px;
+    margin-right: 10px;
+    min-height: 50px;
+    border-radius: 20px;
+  }
 `;
 
 export const SendButton = styled.button`
@@ -811,6 +840,7 @@ export const SendButton = styled.button`
   transition: all 0.2s ease;
   font-size: 16px;
   font-weight: 500;
+  white-space: nowrap;
   
   &:hover {
     background-color: #19a049;
@@ -833,6 +863,12 @@ export const SendButton = styled.button`
   svg {
     margin-left: 8px;
     font-size: 20px;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 14px 24px;
+    font-size: 15px;
+    border-radius: 20px;
   }
 `;
 
@@ -921,6 +957,8 @@ export const CompactChatContainer = styled.div`
   
   @media (max-width: 768px) {
     width: 95%;
+    max-width: 95%;
+    border-radius: 16px;
   }
 `;
 

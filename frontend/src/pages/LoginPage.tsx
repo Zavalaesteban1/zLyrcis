@@ -65,6 +65,11 @@ const HeaderLogo = styled.div`
   
   @media (max-width: 768px) {
     font-size: 24px;
+    gap: 8px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 20px;
   }
 `;
 
@@ -133,8 +138,12 @@ const HeroTitle = styled.h1`
   max-width: 900px;
   
   @media (max-width: 768px) {
-    font-size: 36px;
+    font-size: 32px;
     margin-bottom: 16px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 28px;
   }
 `;
 
@@ -191,7 +200,11 @@ const SectionTitle = styled.h2`
   text-align: center;
   
   @media (max-width: 768px) {
-    font-size: 32px;
+    font-size: 28px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 24px;
   }
 `;
 

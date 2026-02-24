@@ -18,6 +18,7 @@ frontend/.env
 # Ignore audio_files directory content but keep the directory
 audio_files/*
 !audio_files/.gitkeep
+!audio_files/README.md
 
 # Media files (generated videos, images)
 backend/media/videos/*

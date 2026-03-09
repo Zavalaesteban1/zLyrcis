@@ -35,6 +35,8 @@ export interface VideoJob {
   updated_at: string;
   video_file: string | null;
   error_message: string | null;
+  is_favorite: boolean;
+  is_favorite_only: boolean;
 }
 
 export interface VideoStatusResponse {

@@ -373,7 +373,7 @@ const NotificationMessage = styled.div<{ type: 'success' | 'error' }>`
 
 const SongsPage: React.FC = () => {
   const { userData } = useUser();
-  const [filter, setFilter] = useState<'all' | 'learned' | 'not-learned'>('all');
+  const [filter, setFilter] = useState<'all' | 'learned' | 'not-learned' | 'favorites'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [songToDelete, setSongToDelete] = useState<Song | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -479,8 +479,9 @@ const SongsPage: React.FC = () => {
   }, [playingSongId, songs, videoRef, handleVideoLoaded, setNotification]);
 
   // Filter songs by category
-  const unlearnedSongs = songs.filter(song => !song.learned);
-  const learnedSongs = songs.filter(song => song.learned);
+  const favoriteSongs = songs.filter(song => song.is_favorite);
+  const unlearnedSongs = songs.filter(song => !song.learned && !song.is_favorite);
+  const learnedSongs = songs.filter(song => song.learned && !song.is_favorite);
   
   // Apply search filter
   const filterBySearch = (songList: Song[]) => {
@@ -492,6 +493,7 @@ const SongsPage: React.FC = () => {
     );
   };
   
+  const filteredFavoriteSongs = filterBySearch(favoriteSongs);
   const filteredUnlearnedSongs = filterBySearch(unlearnedSongs);
   const filteredLearnedSongs = filterBySearch(learnedSongs);
 
@@ -555,6 +557,7 @@ const SongsPage: React.FC = () => {
   const stats = getLearningStats(songs);
   
   // Determine which galleries to show based on filter
+  const showFavorites = filter === 'favorites';
   const showUnlearned = filter === 'all' || filter === 'not-learned';
   const showLearned = filter === 'learned';
 
@@ -713,6 +716,18 @@ const SongsPage: React.FC = () => {
                 </EmptyState>
               ) : (
                 <>
+                  {showFavorites && filteredFavoriteSongs.length > 0 && (
+                    <HorizontalSongGallery
+                      title="Favorite Songs"
+                      songs={filteredFavoriteSongs}
+                      playingSongId={playingSongId}
+                      onToggleLearned={toggleLearnedStatus}
+                      onPlay={handlePlayPause}
+                      onDownload={handleDownload}
+                      onDelete={handleDeleteClick}
+                    />
+                  )}
+                  
                   {showUnlearned && filteredUnlearnedSongs.length > 0 && (
                     <HorizontalSongGallery
                       title="Unlearned Songs"
@@ -737,7 +752,8 @@ const SongsPage: React.FC = () => {
                     />
                   )}
                   
-                  {((showUnlearned && filteredUnlearnedSongs.length === 0) && 
+                  {((showFavorites && filteredFavoriteSongs.length === 0) && 
+                    (showUnlearned && filteredUnlearnedSongs.length === 0) && 
                     (showLearned && filteredLearnedSongs.length === 0)) && (
                     <EmptyState>
                       <EmptyStateText>No songs match your current filter.</EmptyStateText>

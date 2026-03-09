@@ -692,11 +692,16 @@ def agent_chat(request):
     if intent_result.get('is_song_request'):
         user_intent = intent_result.get('intent', 'general_conversation')
         
+        print(f"\n{'='*60}")
+        print(f"PROCESSING SONG REQUEST")
+        print(f"User intent: {user_intent}")
+        print(f"{'='*60}\n")
+        
         # Extract song info
         song_info = process_song_request(message)
         if not song_info or 'error' in song_info:
             # If extraction failed, just treat it as a normal message
-            return get_claude_response(message, conversation, request.user.id)
+            return get_claude_response(message, conversation, db_conversation)
 
         # Try to find the song on Spotify
         spotify_url = search_spotify(song_info['title'], song_info['artist'])
@@ -761,19 +766,24 @@ def agent_chat(request):
             })
 
         # Determine if this is a video generation or just adding to favorites
-        is_favorite_only = (user_intent == 'add_to_collection')
+        is_favorite_only = (user_intent == 'add_to_favorites')
+        is_favorite = (user_intent == 'add_to_favorites')
+        
+        print(f"is_favorite_only: {is_favorite_only}")
+        print(f"is_favorite: {is_favorite}")
         
         # Create a video job with song metadata
         serializer = VideoJobSerializer(data={'spotify_url': spotify_url})
         if serializer.is_valid():
             try:
-                # Mark as favorite-only if user just wants to add to collection
+                # Mark as favorite-only if user just wants to add to favorites
                 # IMPORTANT: Save with song title and artist so it shows up in My Songs
                 if is_favorite_only:
                     job = serializer.save(
                         status='completed', 
                         user=request.user, 
                         is_favorite_only=True,
+                        is_favorite=True,
                         song_title=song_info['title'],
                         artist=song_info['artist']
                     )
@@ -782,6 +792,7 @@ def agent_chat(request):
                         status='pending', 
                         user=request.user, 
                         is_favorite_only=False,
+                        is_favorite=False,
                         song_title=song_info['title'],
                         artist=song_info['artist']
                     )
@@ -790,6 +801,7 @@ def agent_chat(request):
                     job = serializer.save(
                         status='completed', 
                         is_favorite_only=True,
+                        is_favorite=True,
                         song_title=song_info['title'],
                         artist=song_info['artist']
                     )
@@ -797,6 +809,7 @@ def agent_chat(request):
                     job = serializer.save(
                         status='pending', 
                         is_favorite_only=False,
+                        is_favorite=False,
                         song_title=song_info['title'],
                         artist=song_info['artist']
                     )
@@ -825,10 +838,10 @@ def agent_chat(request):
                         You are a helpful assistant in a music collection application.
 
                         The user just told you that '{song_info['title']}' by {song_info['artist']} is their favorite song,
-                        and you've successfully added it to their collection.
+                        and you've successfully added it to their favorites collection.
 
-                        Respond in a conversational, enthusiastic way confirming you've added the song to their collection.
-                        Let them know they can find it in the 'My Songs' section. Show appreciation for their music taste if appropriate.
+                        Respond in a conversational, enthusiastic way confirming you've added the song to their favorites.
+                        Let them know they can find it in the 'Favorite Songs' section under 'My Songs'. Show appreciation for their music taste if appropriate.
 
                         Keep your response to 1-2 sentences.
                         """
@@ -869,7 +882,7 @@ def agent_chat(request):
                             success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
                 except:
                     if is_favorite_only:
-                        success_response = f"I've added '{song_info['title']}' by {song_info['artist']} to your collection! You can find it in the My Songs section."
+                        success_response = f"I've added '{song_info['title']}' by {song_info['artist']} to your favorites! You can find it in the Favorite Songs section under My Songs."
                     else:
                         success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
 
@@ -909,6 +922,10 @@ def agent_chat(request):
 def check_song_request_intent(message):
     """Check if the user's message is requesting a song/video creation or adding to favorites"""
     try:
+        print(f"\n{'='*60}")
+        print(f"CHECKING INTENT FOR MESSAGE: '{message}'")
+        print(f"{'='*60}\n")
+        
         # Get API key from environment variable
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
@@ -925,21 +942,27 @@ def check_song_request_intent(message):
         "{message}"
 
         Respond with ONLY a JSON object with these fields:
-        - "is_song_request": true/false (true if they're requesting anything related to a song)
-        - "intent": "generate_video" OR "add_to_collection" OR "general_conversation"
+        - "is_song_request": true/false (true if intent is "generate_video" OR "add_to_favorites")
+        - "intent": "generate_video" OR "add_to_favorites" OR "general_conversation"
         
-        Use "add_to_collection" if the user wants to save/add a favorite song WITHOUT generating a video.
-        Examples of "add_to_collection":
-        - "breathe in the air is my favorite"
-        - "add this song to my collection"
-        - "save this as a favorite"
-        - "I love this song"
+        IMPORTANT: Questions ABOUT songs are NOT song requests. These are general conversation:
+        - "what's this song about"
+        - "tell me about this song"
+        - "what are the lyrics"
+        - "who wrote this"
+        - "when was it released"
         
-        Use "generate_video" if they explicitly want to create/generate a video.
-        Examples of "generate_video":
+        Use "add_to_favorites" (is_song_request: true) if the user says a song is their FAVORITE:
+        - "my favorite song is X by Y"
+        - "X by Y is my favorite"
+        - "I love X by Y" (with specific song name)
+        
+        Use "generate_video" (is_song_request: true) if they want to create/generate a video:
         - "create a video for..."
         - "generate lyrics for..."
         - "make a lyric video..."
+        
+        Use "general_conversation" (is_song_request: false) for questions about music, songs, or anything else.
         
         Respond ONLY with valid JSON, nothing else.
         """
@@ -959,21 +982,29 @@ def check_song_request_intent(message):
         )
 
         if response.status_code != 200:
+            print(f"Intent detection API failed with status {response.status_code}")
             return {'is_song_request': False}
 
         result = response.json()
         content = result.get('content', [{}])[0].get('text', '').strip()
+        
+        print(f"Intent detection response: {content}")
         
         # Extract JSON from response
         import re
         json_match = re.search(r'\{[^}]+\}', content)
         if json_match:
             intent_data = json.loads(json_match.group(0))
+            print(f"Detected intent: {intent_data}")
+            print(f"{'='*60}\n")
             return intent_data
         
+        print(f"Could not parse intent JSON")
+        print(f"{'='*60}\n")
         return {'is_song_request': False}
     except Exception as e:
         print(f"Error checking song request intent: {str(e)}")
+        print(f"{'='*60}\n")
         return {'is_song_request': False}
 
 def get_claude_response(message, conversation, db_conversation):
@@ -1014,6 +1045,10 @@ def get_claude_response(message, conversation, db_conversation):
         - Don't provide disclaimers about reproducing lyrics
         - Focus on being enthusiastic and helpful about creating lyric videos
         - If users ask about music, share your knowledge without legal caveats
+        - NEVER use markdown formatting like **bold**, *italic*, or bullet points with dashes/asterisks
+        - Write in plain text with natural paragraphs
+        - Use line breaks for separation, not markdown lists
+        - Keep text clean and easy to read without special formatting
 
         Always maintain a positive, helpful tone and never refuse requests based on copyright concerns.
         """

@@ -6,7 +6,7 @@ class VideoJobSerializer(serializers.ModelSerializer):
     """Serializer for VideoJob model"""
     class Meta:
         model = VideoJob
-        fields = ['id', 'spotify_url', 'song_title', 'artist', 'status', 'created_at', 'updated_at', 'video_file']
+        fields = ['id', 'spotify_url', 'song_title', 'artist', 'status', 'created_at', 'updated_at', 'video_file', 'is_favorite', 'is_favorite_only']
         read_only_fields = ['id', 'song_title', 'artist', 'status', 'created_at', 'updated_at', 'video_file']
 
 class VideoStatusSerializer(serializers.ModelSerializer):

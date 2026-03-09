@@ -12,6 +12,8 @@ export interface Song {
   learned: boolean;
   lastPracticed?: string | null;
   difficultyRating?: number | null;
+  is_favorite: boolean;
+  is_favorite_only: boolean;
 }
 
 interface UseSongsManagerReturn {
@@ -58,7 +60,9 @@ export const useSongsManager = (userId: number | null): UseSongsManagerReturn =>
           albumCoverUrl: null,
           learned: learningData?.learned || false,
           lastPracticed: learningData?.lastPracticed || null,
-          difficultyRating: learningData?.difficultyRating || null
+          difficultyRating: learningData?.difficultyRating || null,
+          is_favorite: video.is_favorite || false,
+          is_favorite_only: video.is_favorite_only || false
         };
       });
       

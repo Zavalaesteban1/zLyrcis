@@ -49,9 +49,9 @@ const SearchInput = styled.input`
 `;
 
 interface FilterBarProps {
-  filter: 'all' | 'learned' | 'not-learned';
+  filter: 'all' | 'learned' | 'not-learned' | 'favorites';
   searchTerm: string;
-  onFilterChange: (filter: 'all' | 'learned' | 'not-learned') => void;
+  onFilterChange: (filter: 'all' | 'learned' | 'not-learned' | 'favorites') => void;
   onSearchChange: (searchTerm: string) => void;
 }
 
@@ -64,6 +64,12 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   return (
     <FilterBarContainer>
       <FilterOptions>
+        <FilterOption
+          active={filter === 'favorites'}
+          onClick={() => onFilterChange('favorites')}
+        >
+          Favorite Songs
+        </FilterOption>
         <FilterOption
           active={filter === 'all'}
           onClick={() => onFilterChange('all')}

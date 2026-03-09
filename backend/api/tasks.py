@@ -36,6 +36,7 @@ except ImportError:
 try:
     import cloudinary
     import cloudinary.api
+    import cloudinary.uploader
     cloudinary.config(
         cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
         api_key=os.getenv('CLOUDINARY_API_KEY'),
@@ -44,7 +45,7 @@ try:
     CLOUDINARY_AVAILABLE = True
 except ImportError:
     CLOUDINARY_AVAILABLE = False
-    print("Cloudinary not installed. Audio files will use local storage only.")
+    print("Cloudinary not installed. Media files will use local storage only.")
 
 
 @shared_task
@@ -138,23 +139,56 @@ def generate_lyric_video(job_id):
             
             # 6. Save the video
             if os.path.exists(video_path):
-                # Create directories if they don't exist
-                os.makedirs(os.path.dirname(settings.MEDIA_ROOT), exist_ok=True)
-                
-                # Final video path
-                final_path = os.path.join(settings.MEDIA_ROOT, f"videos/{job_id}.mp4")
-                os.makedirs(os.path.dirname(final_path), exist_ok=True)
-                
-                # Copy the video to the media directory
-                import shutil
-                shutil.copy2(video_path, final_path)
-                
-                # Update job
-                job.video_file = f"videos/{job_id}.mp4"
-                job.status = 'completed'
-                job.save()
-                
-                print(f"Video successfully created: {final_path}")
+                # Check if we're in production (Cloudinary available and DATABASE_URL set)
+                if CLOUDINARY_AVAILABLE and os.environ.get('DATABASE_URL'):
+                    # PRODUCTION: Upload to Cloudinary
+                    print(f"Uploading video to Cloudinary...")
+                    try:
+                        import cloudinary.uploader
+                        
+                        result = cloudinary.uploader.upload(
+                            video_path,
+                            resource_type="video",
+                            folder="lyric-videos",
+                            public_id=f"video_{job_id}",
+                            overwrite=True,
+                            eager=[{"streaming_profile": "full_hd", "format": "m3u8"}],
+                            eager_async=True
+                        )
+                        
+                        # Save Cloudinary URL to database
+                        job.video_file = result['secure_url']
+                        job.status = 'completed'
+                        job.save()
+                        
+                        print(f"✓ Video uploaded to Cloudinary: {result['secure_url']}")
+                        print(f"  Public ID: {result['public_id']}")
+                        print(f"  Format: {result['format']}")
+                        
+                    except Exception as e:
+                        print(f"✗ Cloudinary upload failed: {e}")
+                        traceback.print_exc()
+                        raise ValueError(f"Failed to upload video to Cloudinary: {e}")
+                        
+                else:
+                    # DEVELOPMENT: Save locally
+                    print(f"Saving video locally (development mode)...")
+                    os.makedirs(os.path.dirname(settings.MEDIA_ROOT), exist_ok=True)
+                    
+                    # Final video path
+                    final_path = os.path.join(settings.MEDIA_ROOT, f"videos/{job_id}.mp4")
+                    os.makedirs(os.path.dirname(final_path), exist_ok=True)
+                    
+                    # Copy the video to the media directory
+                    import shutil
+                    shutil.copy2(video_path, final_path)
+                    
+                    # Update job with local path
+                    job.video_file = f"videos/{job_id}.mp4"
+                    job.status = 'completed'
+                    job.save()
+                    
+                    print(f"✓ Video saved locally: {final_path}")
             else:
                 raise ValueError("Failed to create video file")
             

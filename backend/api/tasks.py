@@ -247,7 +247,7 @@ def get_spotify_track_info(track_id):
 
 
 def get_lyrics(title, artist):
-    """Get lyrics from Genius API with verification"""
+    """Get lyrics from Genius API with verification and Cloudflare bypass"""
     # Get Genius API token
     genius_token = settings.GENIUS_ACCESS_TOKEN
     
@@ -255,9 +255,42 @@ def get_lyrics(title, artist):
         print("Genius API token not found. Set GENIUS_ACCESS_TOKEN in settings.")
         return None
     
-    # Set up Genius API client
+    # Try with cloudscraper first to bypass Cloudflare
+    try:
+        import cloudscraper
+        HAS_CLOUDSCRAPER = True
+    except ImportError:
+        HAS_CLOUDSCRAPER = False
+        print("⚠️  cloudscraper not installed. May encounter Cloudflare blocks.")
+    
+    # Set up Genius API client with better configuration
     genius = lyricsgenius.Genius(genius_token)
     genius.verbose = False  # Turn off status messages
+    genius.timeout = 30
+    genius.sleep_time = 1.0  # Add delay to avoid rate limits
+    
+    # If cloudscraper available, replace the session
+    if HAS_CLOUDSCRAPER:
+        print("Using cloudscraper to bypass Cloudflare protection...")
+        # Replace the requests session with cloudscraper session
+        genius._session = cloudscraper.create_scraper(
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'desktop': True
+            }
+        )
+        # Add the authorization header
+        genius._session.headers.update({
+            'Authorization': f'Bearer {genius_token}'
+        })
+    else:
+        # Fallback: Use better headers
+        genius._session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9',
+        })
     
     def normalize_for_comparison(s):
         """Normalize string for fuzzy matching"""

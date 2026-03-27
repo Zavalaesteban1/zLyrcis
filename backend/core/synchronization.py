@@ -14,7 +14,7 @@ import numpy as np
 import asyncio
 import traceback
 from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
 # Import configuration
@@ -65,6 +65,7 @@ class SyncedLyric:
     duration: float
     confidence: float = 0.0
     method: str = "unknown"
+    words: List[Dict] = field(default_factory=list)
 
 
 class AdvancedLyricSynchronizer:
@@ -186,23 +187,80 @@ class AdvancedLyricSynchronizer:
         """Main synchronization method that tries multiple approaches"""
         print("Starting advanced lyrics synchronization...")
         
-        # Method 1: Try enhanced Deepgram with audio features
+        # Method 1: Local Whisper Word-Level Sync (Highly Accurate)
+        whisper_result = self._synchronize_with_local_whisper(lyrics_lines)
+        if whisper_result and len(whisper_result) > len(lyrics_lines) * 0.7:
+            print("Using perfect Local Whisper word-level synchronization")
+            return whisper_result
+
+        # Method 2: Try enhanced Deepgram with audio features
         deepgram_result = self._synchronize_with_enhanced_deepgram(lyrics_lines)
         if deepgram_result and len(deepgram_result) > len(lyrics_lines) * 0.7:
             print("Using enhanced Deepgram synchronization")
             return deepgram_result
         
-        # Method 2: Try audio analysis-based synchronization
+        # Method 3: Try audio analysis-based synchronization
         if self.audio_features:
             audio_result = self._synchronize_with_audio_analysis(lyrics_lines)
             if audio_result:
                 print("Using audio analysis-based synchronization")
                 return audio_result
         
-        # Method 3: Fallback to improved basic synchronization
+        # Method 4: Fallback to improved basic synchronization
         print("Using improved basic synchronization")
         return self._create_improved_basic_synchronization(lyrics_lines)
     
+    def _synchronize_with_local_whisper(self, lyrics_lines: List[str]) -> Optional[List[SyncedLyric]]:
+        """Synchronize perfectly using whisper-timestamped for word-level bounding boxes"""
+        try:
+            import whisper_timestamped as whisper
+        except ImportError:
+            print("whisper-timestamped not available - skipping. Please install with: pip install whisper-timestamped torch")
+            return None
+            
+        try:
+            print("Loading local Whisper model for highly accurate word-level transcription...")
+            # Use 'base' for speed, but 'small'/'medium' yields better accuracy.
+            model = whisper.load_model("base", device="cpu")
+            audio = whisper.load_audio(self.audio_path)
+            
+            print("Transcribing audio to get word-level timestamps...")
+            result = whisper.transcribe(model, audio, language="en")
+            
+            # Extract all words sequentially
+            words = []
+            for segment in result.get("segments", []):
+                for word in segment.get("words", []):
+                    # whisper-timestamped returns dicts like: {'text': ' word', 'start': 1.2, 'end': 1.5}
+                    words.append({
+                        "word": word["text"].strip(),
+                        "start": word["start"],
+                        "end": word["end"]
+                    })
+            
+            if not words:
+                print("No words extracted from local Whisper response")
+                return None
+            
+            print(f"Local Whisper returned {len(words)} words with perfect timestamps")
+            
+            # Match lyrics to word sequences using existing improved algorithm
+            synced_lyrics = self._match_lyrics_to_words(lyrics_lines, words)
+            
+            if synced_lyrics:
+                print(f"Successfully synced {len(synced_lyrics)} lyric lines using local Whisper")
+            
+            # Validate and adjust timing
+            if self.audio_features and hasattr(self, '_validate_timing_with_audio_features'):
+                synced_lyrics = self._validate_timing_with_audio_features(synced_lyrics)
+            
+            return synced_lyrics
+            
+        except Exception as e:
+            print(f"Error in local Whisper synchronization: {e}")
+            traceback.print_exc()
+            return None
+
     def _synchronize_with_enhanced_deepgram(self, lyrics_lines: List[str]) -> Optional[List[SyncedLyric]]:
         """Enhanced Deepgram synchronization using audio features"""
         if not DEEPGRAM_AVAILABLE:
@@ -342,6 +400,20 @@ class AdvancedLyricSynchronizer:
             if best_match:
                 start_idx, end_idx, confidence = best_match
                 
+                # Extract sequence of matched words
+                matched_words = []
+                for k in range(start_idx, end_idx + 1):
+                    w = words[k]
+                    if isinstance(w, dict):
+                        m_word = w.get('word', w.get('text', ''))
+                        m_start = w.get('start', 0)
+                        m_end = w.get('end', m_start + 0.5)
+                    else:
+                        m_word = w.word if hasattr(w, 'word') else ''
+                        m_start = w.start if hasattr(w, 'start') else 0
+                        m_end = w.end if hasattr(w, 'end') else m_start + 0.5
+                    matched_words.append({"word": m_word.strip(), "start": m_start, "end": m_end})
+
                 # Extract start/end times - handle both dict and object formats
                 start_word = words[start_idx]
                 end_word = words[end_idx]
@@ -371,7 +443,8 @@ class AdvancedLyricSynchronizer:
                     end_time=end_time,
                     duration=duration,
                     confidence=confidence,
-                    method="enhanced_deepgram"
+                    method="enhanced_deepgram",
+                    words=matched_words
                 ))
                 
                 word_idx = end_idx + 1
@@ -1013,7 +1086,8 @@ def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str]) -> Lis
             "end_time": lyric.end_time,
             "duration": lyric.duration,
             "confidence": lyric.confidence,
-            "method": lyric.method
+            "method": lyric.method,
+            "words": lyric.words if hasattr(lyric, 'words') else []
         })
     
     print(f"Advanced synchronization complete: {len(result)} lyrics synced")

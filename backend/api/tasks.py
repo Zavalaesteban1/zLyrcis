@@ -1041,6 +1041,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         text = lyric["text"]
         duration = lyric["duration"]
         
+        # Select color for this line (cycle through colors)
+        current_color = colors[i % len(colors)]
+        next_color = colors[(i + 1) % len(colors)]
+        
+        # Calculate vertical position for this line
+        vertical_position = vertical_start + ((i % 6) * vertical_spacing)
+        if vertical_position > max_vertical:
+            vertical_position = vertical_start
+            
         k_text = ""
         words = lyric.get("words", [])
         

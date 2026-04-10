@@ -96,6 +96,31 @@ class VideoJobViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(job, context={'request': request})
         return Response(serializer.data)
 
+    @action(detail=True, methods=['post'])
+    def start_generation(self, request, pk=None):
+        """Start video generation with customized settings."""
+        job = self.get_object()
+        
+        bg_color = request.data.get('bg_color')
+        text_color = request.data.get('text_color')
+        karaoke_color = request.data.get('karaoke_color')
+        
+        if bg_color:
+            job.bg_color = bg_color
+        if text_color:
+            job.text_color = text_color
+        if karaoke_color:
+            job.karaoke_color = karaoke_color
+            
+        job.status = 'pending'
+        job.save()
+        
+        # Queue the video generation task
+        generate_lyric_video.delay(job.id)
+        
+        serializer = self.get_serializer(job)
+        return Response(serializer.data)
+
 class UserProfileViewSet(viewsets.ModelViewSet):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
@@ -672,6 +697,48 @@ def agent_chat(request):
     # Get or create conversation in database
     db_conversation = get_or_create_conversation(conversation_id, request.user)
     
+    # Check if this is a response to the customization prompt
+    if db_conversation:
+        last_msgs = list(db_conversation.messages.filter(role='assistant').order_by('-created_at')[:1])
+        if last_msgs and "customize your video" in last_msgs[0].content.lower():
+            user_response = message.lower()
+            try:
+                job = VideoJob.objects.filter(user=request.user, status='awaiting_customization').order_by('-created_at').first()
+            except:
+                job = VideoJob.objects.filter(status='awaiting_customization').order_by('-created_at').first()
+                
+            if any(word in user_response for word in ['yes', 'yeah', 'sure', 'customize', 'edit', 'change', 'ok', 'okay', 'yep']):
+                resp_text = "Great! Opening customization settings now."
+                save_conversation_message(db_conversation, 'user', message)
+                save_conversation_message(db_conversation, 'assistant', resp_text)
+                return Response({
+                    'message': resp_text,
+                    'is_song_request': False,
+                    'show_customization_modal': True,
+                    'job_id': job.id if job else None,
+                    'conversation_id': conversation_id
+                })
+            else:
+                if job:
+                    job.status = 'pending'
+                    job.save()
+                    generate_lyric_video.delay(job.id)
+                resp_text = "Alright, generating your video with the default settings! It will be available in the 'My Songs' section when it's ready."
+                save_conversation_message(db_conversation, 'user', message)
+                save_conversation_message(db_conversation, 'assistant', resp_text)
+                return Response({
+                    'message': resp_text,
+                    'is_song_request': True,
+                    'song_found': True,
+                    'song_request_data': {
+                        'job_id': job.id if job else None,
+                        'title': job.song_title if job else '',
+                        'artist': job.artist if job else '',
+                        'status': 'pending'
+                    },
+                    'conversation_id': conversation_id
+                })
+
     # Get conversation history from database
     conversation = get_conversation_messages(db_conversation)
 
@@ -816,7 +883,9 @@ def agent_chat(request):
 
             # Only queue video generation if not favorite-only
             if not is_favorite_only:
-                generate_lyric_video.delay(job.id)
+                job.status = 'awaiting_customization'
+                job.save()
+                # generate_lyric_video.delay(job.id)  # Wait for customization
 
             # Generate appropriate response based on intent
             api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -824,7 +893,7 @@ def agent_chat(request):
                 if is_favorite_only:
                     success_response = f"I've added '{song_info['title']}' by {song_info['artist']} to your collection! You can find it in the My Songs section."
                 else:
-                    success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
+                    success_response = f"I found '{song_info['title']}' by {song_info['artist']}! Would you like to customize your video settings before generating it?"
             else:
                 try:
                     headers = {
@@ -850,12 +919,12 @@ def agent_chat(request):
                         You are a helpful assistant in a lyric video generation application.
 
                         The user requested to create a lyric video for a song titled '{song_info['title']}' by the artist {song_info['artist']}.
-                        You successfully found the song and are now generating a video for it. This will take a few minutes to process.
+                        You successfully found the song. Before generating the video, you must ask if they want to customize it.
 
-                        Respond in a conversational, enthusiastic way confirming you're creating the video. Let them know that the video
-                        will be available in the 'My Songs' section when it's ready. Express enthusiasm about their song choice if appropriate.
+                        Respond in a conversational, enthusiastic way confirming you found the song. Ask them clearly: "Would you like to customize your video settings before generating it?"
+                        Express enthusiasm about their song choice if appropriate.
 
-                        Keep your response to 2-3 sentences.
+                        Keep your response to 2-3 sentences, and MAKE SURE your final sentence asks about customization.
                         """
 
                     data = {
@@ -879,12 +948,12 @@ def agent_chat(request):
                         if is_favorite_only:
                             success_response = f"I've added '{song_info['title']}' by {song_info['artist']} to your collection! You can find it in the My Songs section."
                         else:
-                            success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
+                            success_response = f"I found '{song_info['title']}' by {song_info['artist']}! Would you like to customize your video settings before generating it?"
                 except:
                     if is_favorite_only:
                         success_response = f"I've added '{song_info['title']}' by {song_info['artist']} to your favorites! You can find it in the Favorite Songs section under My Songs."
                     else:
-                        success_response = f"I'm creating a lyric video for '{song_info['title']}' by {song_info['artist']}. You'll be able to view it in the My Songs section when it's ready."
+                        success_response = f"I found '{song_info['title']}' by {song_info['artist']}! Would you like to customize your video settings before generating it?"
 
             # Save messages to database
             save_conversation_message(db_conversation, 'user', message)

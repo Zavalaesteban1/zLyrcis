@@ -135,7 +135,12 @@ def generate_lyric_video(job_id):
             
             # 5. Create lyric video with animated lyrics (now with ASS subtitles)
             video_path = os.path.join(temp_dir, 'output.mp4')
-            create_animated_lyric_video(audio_path, synced_lyrics, song_info, video_path)
+            create_animated_lyric_video(
+                audio_path, synced_lyrics, song_info, video_path,
+                bg_color=job.bg_color,
+                text_color=job.text_color,
+                karaoke_color=job.karaoke_color
+            )
             
             # 6. Save the video
             if os.path.exists(video_path):
@@ -865,7 +870,7 @@ def create_basic_synchronization(lyrics_lines, audio_duration):
     return synced_lyrics
 
 
-def create_animated_lyric_video(audio_path, synced_lyrics, song_info, output_path):
+def create_animated_lyric_video(audio_path, synced_lyrics, song_info, output_path, bg_color='gradient', text_color='&H00FFFFFF', karaoke_color='&H000000FF'):
     """Create a lyric video with vertically animated lyrics using ASS format"""
     try:
         # EXTRA VALIDATION: Filter synced lyrics before creating subtitles
@@ -906,7 +911,7 @@ def create_animated_lyric_video(audio_path, synced_lyrics, song_info, output_pat
         # Continue with the rest of the function
         # 1. Create ASS subtitle file with animated vertical text
         subtitle_path = os.path.splitext(output_path)[0] + '.ass'
-        create_animated_subtitles(synced_lyrics, song_info, subtitle_path)
+        create_animated_subtitles(synced_lyrics, song_info, subtitle_path, text_color=text_color, karaoke_color=karaoke_color)
         
         # Check if an SRT file was also created (by other parts of the process)
         # This often happens with some ffmpeg workflows
@@ -916,32 +921,39 @@ def create_animated_lyric_video(audio_path, synced_lyrics, song_info, output_pat
             if check_and_fix_srt(srt_path):
                 print("Fixed metadata in SRT file!")
         
-        # 2. Generate background video with gradient effect
+        # 2. Generate background video
         audio_duration = get_audio_duration(audio_path)
         temp_bg = os.path.splitext(output_path)[0] + '_bg.mp4'
         
-        # Create a more dynamic gradient background with subtle animation
-        # The moving gradient works better with vertical lyrics
-        # Using a dark gradient allows the text to stand out better
-        subprocess.run([
-            'ffmpeg', '-y',
-            '-f', 'lavfi',
-            '-i', f'gradients=s=1280x720:c0=0x000428:c1=0x004e92:d={audio_duration}:speed=0.02',
-            '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-            temp_bg
-        ], check=True)
-        
-        # If the gradient filter fails (may happen in some ffmpeg versions), fall back to simpler background
-        if not os.path.exists(temp_bg) or os.path.getsize(temp_bg) == 0:
-            print("Falling back to basic background...")
+        if bg_color and bg_color.startswith('#'):
             subprocess.run([
                 'ffmpeg', '-y',
                 '-f', 'lavfi',
-                '-i', f'color=c=black:s=1280x720:d={audio_duration}',
-                '-vf', 'drawbox=x=0:y=0:w=iw:h=ih:color=blue@0.4:t=fill,format=yuv420p',
+                '-i', f'color=c={bg_color}:s=1280x720:d={audio_duration}',
                 '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
                 temp_bg
             ], check=True)
+        else:
+            # Create a more dynamic gradient background with subtle animation
+            subprocess.run([
+                'ffmpeg', '-y',
+                '-f', 'lavfi',
+                '-i', f'gradients=s=1280x720:c0=0x000428:c1=0x004e92:d={audio_duration}:speed=0.02',
+                '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+                temp_bg
+            ], check=True)
+            
+            # If the gradient filter fails
+            if not os.path.exists(temp_bg) or os.path.getsize(temp_bg) == 0:
+                print("Falling back to basic background...")
+                subprocess.run([
+                    'ffmpeg', '-y',
+                    '-f', 'lavfi',
+                    '-i', f'color=c=black:s=1280x720:d={audio_duration}',
+                    '-vf', 'drawbox=x=0:y=0:w=iw:h=ih:color=blue@0.4:t=fill,format=yuv420p',
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+                    temp_bg
+                ], check=True)
         
         # 3. Combine background, audio, and ASS subtitles
         subprocess.run([
@@ -970,10 +982,10 @@ def create_animated_lyric_video(audio_path, synced_lyrics, song_info, output_pat
         return None
 
 
-def create_animated_subtitles(synced_lyrics, song_info, output_path):
+def create_animated_subtitles(synced_lyrics, song_info, output_path, text_color='&H00FFFFFF', karaoke_color='&H000000FF'):
     """Create animated ASS subtitles with vertical flowing text effect"""
     # ASS subtitle header with vertical styling
-    header = """[Script Info]
+    header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1280
 PlayResY: 720
@@ -983,10 +995,10 @@ Title: Lyrics
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,42,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,30,1
+Style: Default,Arial,42,{text_color},{karaoke_color},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,30,1
 Style: Title,Arial,64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,2,1,8,10,10,40,1
 Style: Artist,Arial,48,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,8,10,10,120,1
-Style: LyricLine,Arial,46,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,5,10,10,30,1
+Style: LyricLine,Arial,46,{text_color},{karaoke_color},&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,5,10,10,30,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -1006,18 +1018,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     vertical_spacing = 68  # Space between lines
     
     # Define colors for visual appeal (in ASS format: &HAABBGGRR)
-    colors = [
-        "&H00FFFFFF",  # White
-        "&H0000FFFF",  # Yellow
-        "&H000080FF",  # Orange
-        "&H000000FF",  # Red
-        "&H00FF00FF",  # Magenta
-        "&H00FF0000",  # Blue
-        "&H0000FF00",  # Green
-    ]
+    current_color = text_color
+    next_color = karaoke_color
     
     # Process each lyric with vertical animation effect
     for i, lyric in enumerate(synced_lyrics):
+        # Calculate vertical position
+        vertical_position = vertical_start + (i % ((max_vertical - vertical_start) // vertical_spacing + 1)) * vertical_spacing
+        
         # Format timing
         start_h = int(lyric["start_time"] // 3600)
         start_m = int((lyric["start_time"] % 3600) // 60)
@@ -1032,33 +1040,65 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         start_time = f"{start_h}:{start_m:02d}:{start_s:02d}.{start_cs:02d}"
         end_time = f"{end_h}:{end_m:02d}:{end_s:02d}.{end_cs:02d}"
         
-        # Create karaoke effect with character-by-character timing
+        # Create karaoke effect using precise word-level timing if available
         text = lyric["text"]
         duration = lyric["duration"]
         
-        # Calculate time per character for smooth animation
-        chars = len(text)
-        if chars == 0:
-            continue
-            
-        ms_per_char = int((duration * 1000) / chars)
         
-        # Select color for this line (cycle through colors)
-        current_color = colors[i % len(colors)]
-        next_color = colors[(i + 1) % len(colors)]
-        
+
         # Calculate vertical position for this line
         vertical_position = vertical_start + ((i % 6) * vertical_spacing)
         if vertical_position > max_vertical:
             vertical_position = vertical_start
-        
-        # Create karaoke effect with k-timing and vertical positioning
+            
         k_text = ""
-        for char in text:
-            if char == " ":
-                k_text += " "  # Don't animate spaces
-            else:
-                k_text += f"{{\\k{ms_per_char}}}{char}"
+        words = lyric.get("words", [])
+        
+        if words and len(words) > 0:
+            # We have exact word-level timings! Create highly precise \k tags.
+            current_idx = 0
+            for w_obj in words:
+                w_text = w_obj["word"]
+                w_duration_cs = int((w_obj["end"] - w_obj["start"]) * 100)
+                
+                # Find this word in the line text so we don't lose punctuation/spaces
+                # We just advance through the original text
+                word_indices = []
+                find_idx = text[current_idx:].lower().find(w_text.lower())
+                
+                if find_idx != -1:
+                    actual_start = current_idx + find_idx
+                    actual_end = actual_start + len(w_text)
+                    
+                    # Any characters before this word get 0 duration (they just appear)
+                    if actual_start > current_idx:
+                        prefix = text[current_idx:actual_start]
+                        k_text += prefix
+                    
+                    k_text += f"{{\\k{w_duration_cs}}}{text[actual_start:actual_end]}"
+                    current_idx = actual_end
+                else:
+                    k_text += f"{{\\k{w_duration_cs}}}{w_text}"
+            
+            # Add any remaining tail text
+            if current_idx < len(text):
+                k_text += text[current_idx:]
+                
+            # For backward compatibility / transition math
+            ms_per_char = int((duration * 1000) / max(1, len(text)))
+        else:
+            # Fallback to character-based average timing
+            chars = len(text)
+            if chars == 0:
+                continue
+                
+            ms_per_char = int((duration * 1000) / chars)
+            
+            for char in text:
+                if char == " ":
+                    k_text += " "  # Don't animate spaces
+                else:
+                    k_text += f"{{\\k{ms_per_char}}}{char}"
         
         # Add dialogue event with multiple effects:
         # 1. Positioned vertically using \pos(x,y)
@@ -1070,8 +1110,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f"Dialogue: 0,{start_time},{end_time},LyricLine,,0,0,0,,"
             f"{{\\pos({center_x},{vertical_position})\\fad(200,300)"
             f"\\1c{current_color}\\bord2"
-            f"\\t(0,{ms_per_char*3},\\fscx110\\fscy110\\1c{current_color})"
-            f"\\t({ms_per_char*3},{duration*500},\\fscx100\\fscy100\\1c{next_color})"
+            f"\\t(0,{int(ms_per_char*3)},\\fscx110\\fscy110\\1c{current_color})"
+            f"\\t({int(ms_per_char*3)},{int(duration*500)},\\fscx100\\fscy100\\1c{next_color})"
             f"}}{k_text}"
         )
     

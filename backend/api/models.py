@@ -13,6 +13,7 @@ class VideoJob(models.Model):
     """Model for storing video generation job information"""
     STATUS_CHOICES = (
         ('pending', 'Pending'),
+        ('awaiting_customization', 'Awaiting Customization'),
         ('processing', 'Processing'),
         ('completed', 'Completed'),
         ('failed', 'Failed'),
@@ -23,13 +24,16 @@ class VideoJob(models.Model):
     spotify_url = models.URLField(max_length=255)
     song_title = models.CharField(max_length=255, blank=True)
     artist = models.CharField(max_length=255, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     video_file = models.FileField(upload_to=video_upload_path, blank=True, null=True)
     error_message = models.TextField(blank=True)
     is_favorite_only = models.BooleanField(default=False)  # True if user just wants to save song, not generate video
     is_favorite = models.BooleanField(default=False)  # True if user marked this as a favorite song
+    bg_color = models.CharField(max_length=20, default='gradient', blank=True)
+    text_color = models.CharField(max_length=20, default='&H00FFFFFF', blank=True)
+    karaoke_color = models.CharField(max_length=20, default='&H000000FF', blank=True)
     
     def __str__(self):
         return f"{self.song_title} by {self.artist} ({self.status})"

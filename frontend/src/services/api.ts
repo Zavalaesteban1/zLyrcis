@@ -83,21 +83,21 @@ export interface AuthResponse {
 const clearPreviousUserData = () => {
   // Get all localStorage keys
   const keys = Object.keys(localStorage);
-  
+
   // Get the current user ID
   const currentUserId = localStorage.getItem('user_id');
-  
+
   // Clear all user-specific data that doesn't belong to the current user
   keys.forEach(key => {
     // Remove any song learning data not belonging to current user
     if (key.includes('song_learning_')) {
       // If it's a user-specific key but not for the current user, or if it's not user-specific at all
-      if ((key.includes('user_') && !key.includes(`user_${currentUserId}_`)) || 
-          !key.includes('user_')) {
+      if ((key.includes('user_') && !key.includes(`user_${currentUserId}_`)) ||
+        !key.includes('user_')) {
         localStorage.removeItem(key);
       }
     }
-    
+
     // Also remove any video owner mappings not for current user
     if (key.startsWith('video_owner_')) {
       const storedUserId = localStorage.getItem(key);
@@ -105,14 +105,14 @@ const clearPreviousUserData = () => {
         localStorage.removeItem(key);
       }
     }
-    
+
     // Clear other types of user data not belonging to current user
     // For example, preferences, settings, etc.
     if (key.includes('user_data_') && !key.includes(`user_data_${currentUserId}`)) {
       localStorage.removeItem(key);
     }
   });
-  
+
   // Log the cleanup
   console.log('Cleared previous user data from localStorage');
 };
@@ -163,20 +163,20 @@ export const updateProfilePicture = async (file: File): Promise<UserProfile> => 
   // Create a new FormData instance
   const formData = new FormData();
   formData.append('profile_picture', file);
-  
-  console.log('FormData contents:', 
-    Array.from(formData.entries()).map(entry => `${entry[0]}: ${entry[1] instanceof File ? 
-      `File: ${(entry[1] as File).name}, type: ${(entry[1] as File).type}, size: ${(entry[1] as File).size}` : 
+
+  console.log('FormData contents:',
+    Array.from(formData.entries()).map(entry => `${entry[0]}: ${entry[1] instanceof File ?
+      `File: ${(entry[1] as File).name}, type: ${(entry[1] as File).type}, size: ${(entry[1] as File).size}` :
       entry[1]}`));
-  
+
   try {
     // Use the fetch API instead of axios
     const token = getAuthToken();
     const url = `${API_URL}/profile/update_picture/`;
-    
+
     console.log('Sending request to:', url);
     console.log('With token:', token ? 'Token present' : 'No token');
-    
+
     const response = await fetch(url, {
       method: 'POST',
       body: formData,
@@ -185,16 +185,16 @@ export const updateProfilePicture = async (file: File): Promise<UserProfile> => 
         'Authorization': token ? `Token ${token}` : ''
       }
     });
-    
+
     console.log('Response status:', response.status);
     console.log('Response headers:', Object.fromEntries(response.headers));
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
       console.error('Server error response:', errorData);
       throw new Error(errorData.error || `Server error: ${response.status}`);
     }
-    
+
     const data = await response.json();
     console.log('Response data:', data);
     return data;
@@ -266,11 +266,11 @@ export const logout = async (): Promise<void> => {
   await api.post('/auth/logout/');
   // Get the current user ID before removing it from localStorage
   const userId = localStorage.getItem('user_id');
-  
+
   // Remove token and user_id from localStorage
   localStorage.removeItem('auth_token');
   localStorage.removeItem('user_id');
-  
+
   // Remove any user-specific data from localStorage
   if (userId) {
     const keys = Object.keys(localStorage);
@@ -306,10 +306,10 @@ export const getUserVideos = async (): Promise<VideoJob[]> => {
     // Only get videos for the authenticated user
     // The VideoJobViewSet now filters by the current user
     const response = await api.get('/videos/?status=completed');
-    
+
     // Additional client-side filtering (just in case)
     const userId = localStorage.getItem('user_id');
-    
+
     // Filter videos by user_id in localStorage for extra safety
     const videos = response.data;
     // For each video, associate it with the current user in localStorage
@@ -320,7 +320,7 @@ export const getUserVideos = async (): Promise<VideoJob[]> => {
         localStorage.setItem(`video_owner_${video.id}`, userId);
       }
     });
-    
+
     return videos;
   } catch (error) {
     console.error('Error fetching user videos:', error);
@@ -348,21 +348,21 @@ export const deleteVideo = async (videoId: string): Promise<void> => {
  */
 export const extractSpotifyTrackId = (spotifyUrl: string): string | null => {
   if (!spotifyUrl) return null;
-  
+
   // Handle multiple Spotify URL formats
   const patterns = [
     /spotify\.com\/track\/([a-zA-Z0-9]+)/, // standard web URL
     /open\.spotify\.com\/track\/([a-zA-Z0-9]+)/, // open.spotify URL
     /spotify:track:([a-zA-Z0-9]+)/ // URI format
   ];
-  
+
   for (const pattern of patterns) {
     const match = spotifyUrl.match(pattern);
     if (match && match[1]) {
       return match[1];
     }
   }
-  
+
   console.warn(`Could not extract track ID from Spotify URL: ${spotifyUrl}`);
   return null;
 };
@@ -393,16 +393,16 @@ const getSpotifyAccessToken = async (): Promise<string> => {
     }
 
     console.log('Requesting new Spotify access token...');
-    
+
     // Make sure we have the credentials
     if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
       throw new Error('Spotify credentials are not configured');
     }
-    
+
     // Request new token using client credentials flow
     const params = new URLSearchParams();
     params.append('grant_type', 'client_credentials');
-    
+
     const response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
@@ -411,7 +411,7 @@ const getSpotifyAccessToken = async (): Promise<string> => {
       },
       body: params
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Failed to get Spotify token: ${response.status} ${response.statusText} - ${errorText}`);
@@ -447,22 +447,22 @@ export const getSpotifyAlbumArtwork = async (trackId: string): Promise<string | 
     console.warn('No track ID provided to getSpotifyAlbumArtwork');
     return null;
   }
-  
+
   try {
     // Check cache first
     if (albumCoverCache[trackId] !== undefined) {
       console.log(`Using cached album cover for track ${trackId}`);
       return albumCoverCache[trackId];
     }
-    
+
     // Check if we have proper Spotify credentials
-    const credsAvailable = SPOTIFY_CLIENT_ID && 
-                           SPOTIFY_CLIENT_SECRET && 
-                           SPOTIFY_CLIENT_ID !== 'your_spotify_client_id_here' && 
-                           SPOTIFY_CLIENT_SECRET !== 'your_spotify_client_secret_here';
-    
+    const credsAvailable = SPOTIFY_CLIENT_ID &&
+      SPOTIFY_CLIENT_SECRET &&
+      SPOTIFY_CLIENT_ID !== 'your_spotify_client_id_here' &&
+      SPOTIFY_CLIENT_SECRET !== 'your_spotify_client_secret_here';
+
     console.log(`Album artwork for track ${trackId}: Credentials available = ${credsAvailable}`);
-    
+
     if (!credsAvailable) {
       console.log('Using mock album artwork (Spotify credentials not set)');
       // Return a mock cover URL based on the trackId for testing
@@ -470,26 +470,26 @@ export const getSpotifyAlbumArtwork = async (trackId: string): Promise<string | 
       albumCoverCache[trackId] = mockUrl; // Cache the result
       return mockUrl;
     }
-    
+
     // Try to get album artwork from Spotify API
     try {
       const token = await getSpotifyAccessToken();
-      
+
       // Make direct request to Spotify API
       const response = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         console.error(`Spotify API error for track ${trackId}: ${response.status} ${response.statusText} - ${errorText}`);
         throw new Error(`Spotify API error: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (data && data.album && data.album.images && data.album.images.length > 0) {
         console.log(`Successfully retrieved album artwork for track ${trackId}`);
         const coverUrl = data.album.images[0].url;
@@ -536,12 +536,12 @@ export const agent_song_request = async (song_description: string): Promise<Agen
     },
     body: JSON.stringify({ song_description })
   });
-  
+
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || 'Failed to process song request');
   }
-  
+
   return response.json();
 };
 
@@ -549,7 +549,10 @@ export const agent_song_request = async (song_description: string): Promise<Agen
 export interface AgentChatResponse {
   message: string;
   is_song_request: boolean;
-  is_favorite_only?: boolean;  // True if user just wants to add to collection, not generate video
+  song_found?: boolean;
+  is_favorite_only?: boolean;
+  show_customization_modal?: boolean;
+  job_id?: string;
   song_request_data?: {
     job_id: string;
     status: string;
@@ -558,6 +561,32 @@ export interface AgentChatResponse {
   };
   conversation_id: string;
 }
+
+export const startVideoGeneration = async (
+  jobId: string,
+  settings: { bgColor: string; textColor: string; karaokeColor: string }
+): Promise<any> => {
+  const token = getAuthToken();
+  const response = await fetch(`${API_URL}/videos/${jobId}/start_generation/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Token ${token}` } : {})
+    },
+    body: JSON.stringify({
+      bg_color: settings.bgColor,
+      text_color: settings.textColor,
+      karaoke_color: settings.karaokeColor
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to start generation' }));
+    throw new Error(errorData.error || 'Failed to start generation');
+  }
+
+  return response.json();
+};
 
 // Interface for conversation history
 export interface ConversationMessage {
@@ -580,12 +609,12 @@ export const fetchConversationHistory = async (conversation_id: string): Promise
       Authorization: `Token ${getAuthToken()}`
     }
   });
-  
+
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || 'Failed to fetch conversation history');
   }
-  
+
   return response.json();
 };
 
@@ -597,17 +626,17 @@ export const agent_chat = async (message: string, conversation_id?: string): Pro
       'Content-Type': 'application/json',
       Authorization: `Token ${getAuthToken()}`
     },
-    body: JSON.stringify({ 
+    body: JSON.stringify({
       message,
       conversation_id: conversation_id || null
     })
   });
-  
+
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || 'Failed to process chat message');
   }
-  
+
   return response.json();
 };
 

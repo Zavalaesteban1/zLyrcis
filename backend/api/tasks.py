@@ -996,8 +996,8 @@ Title: Lyrics
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,Arial,42,{text_color},{karaoke_color},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,30,1
-Style: Title,Arial,64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,2,1,8,10,10,40,1
-Style: Artist,Arial,48,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,8,10,10,120,1
+Style: Title,Arial,64,{text_color},{karaoke_color},&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,2,1,8,10,10,40,1
+Style: Artist,Arial,48,{text_color},{karaoke_color},&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,8,10,10,120,1
 Style: LyricLine,Arial,46,{text_color},{karaoke_color},&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,5,10,10,30,1
 
 [Events]
@@ -1109,9 +1109,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         events.append(
             f"Dialogue: 0,{start_time},{end_time},LyricLine,,0,0,0,,"
             f"{{\\pos({center_x},{vertical_position})\\fad(200,300)"
-            f"\\1c{current_color}\\bord2"
-            f"\\t(0,{int(ms_per_char*3)},\\fscx110\\fscy110\\1c{current_color})"
-            f"\\t({int(ms_per_char*3)},{int(duration*500)},\\fscx100\\fscy100\\1c{next_color})"
+            f"\\1c{current_color}&\\bord2"
+            f"\\t(0,{int(ms_per_char*3)},\\fscx110\\fscy110\\1c{current_color}&)"
+            f"\\t({int(ms_per_char*3)},{int(duration*500)},\\fscx100\\fscy100\\1c{next_color}&)"
             f"}}{k_text}"
         )
     

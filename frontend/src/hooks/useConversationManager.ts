@@ -15,11 +15,10 @@ export interface Conversation {
   date: Date;
 }
 
-const CONVERSATION_ID_KEY = 'agent_conversation_id';
-const CONVERSATIONS_LIST_KEY = 'agent_conversations_list';
-const CONVERSATION_MESSAGES_PREFIX = 'agent_conversation_messages_';
-
-const getConversationMessagesKey = (id: string) => `${CONVERSATION_MESSAGES_PREFIX}${id}`;
+const getUserId = () => localStorage.getItem('user_id') || 'default';
+const getConversationIdKey = () => `agent_conversation_id_${getUserId()}`;
+const getConversationsListKey = () => `agent_conversations_list_${getUserId()}`;
+const getConversationMessagesKey = (id: string) => `agent_conversation_messages_${getUserId()}_${id}`;
 
 const WELCOME_MESSAGE: Message = {
   text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?",
@@ -36,7 +35,7 @@ export const useConversationManager = () => {
   // Load conversations list from localStorage
   useEffect(() => {
     const loadConversationsList = () => {
-      const saved = localStorage.getItem(CONVERSATIONS_LIST_KEY);
+      const saved = localStorage.getItem(getConversationsListKey());
       if (saved) {
         try {
           const parsed = JSON.parse(saved) as Conversation[];
@@ -58,14 +57,14 @@ export const useConversationManager = () => {
   // Load active conversation on mount
   useEffect(() => {
     if (isInitialized.current) return;
-    
+
     const loadActiveConversation = async () => {
-      const savedId = localStorage.getItem(CONVERSATION_ID_KEY);
-      
+      const savedId = localStorage.getItem(getConversationIdKey());
+
       if (savedId) {
         await loadConversation(savedId);
       }
-      
+
       isInitialized.current = true;
     };
 
@@ -74,13 +73,13 @@ export const useConversationManager = () => {
 
   // Save conversations list to localStorage
   const saveConversationsList = useCallback((convs: Conversation[]) => {
-    localStorage.setItem(CONVERSATIONS_LIST_KEY, JSON.stringify(convs));
+    localStorage.setItem(getConversationsListKey(), JSON.stringify(convs));
   }, []);
 
   // Save messages for a specific conversation
   const saveMessages = useCallback((conversationId: string, msgs: Message[]) => {
     if (!conversationId || msgs.length <= 1) return;
-    
+
     localStorage.setItem(getConversationMessagesKey(conversationId), JSON.stringify(msgs));
   }, []);
 
@@ -93,7 +92,7 @@ export const useConversationManager = () => {
     try {
       // Try backend first
       const history = await fetchConversationHistory(id);
-      
+
       if (history.messages && history.messages.length > 0) {
         const convertedMessages: Message[] = history.messages.map(msg => ({
           text: msg.content,
@@ -105,13 +104,13 @@ export const useConversationManager = () => {
           msg => !msg.isUser && msg.text.includes("I'm your lyric video assistant")
         );
 
-        const finalMessages = hasWelcome 
-          ? convertedMessages 
+        const finalMessages = hasWelcome
+          ? convertedMessages
           : [WELCOME_MESSAGE, ...convertedMessages];
 
         setMessages(finalMessages);
         setActiveConversationId(id);
-        localStorage.setItem(CONVERSATION_ID_KEY, id);
+        localStorage.setItem(getConversationIdKey(), id);
         saveMessages(id, finalMessages);
       } else {
         // Try localStorage fallback
@@ -128,13 +127,13 @@ export const useConversationManager = () => {
   // Load from localStorage fallback
   const loadFromLocalStorage = useCallback((id: string) => {
     const saved = localStorage.getItem(getConversationMessagesKey(id));
-    
+
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as Message[];
         setMessages(parsed);
         setActiveConversationId(id);
-        localStorage.setItem(CONVERSATION_ID_KEY, id);
+        localStorage.setItem(getConversationIdKey(), id);
       } catch (error) {
         console.error('Error parsing saved messages:', error);
         setMessages([WELCOME_MESSAGE]);
@@ -161,8 +160,8 @@ export const useConversationManager = () => {
     saveConversationsList(updatedConvs);
 
     setActiveConversationId(tempId);
-    localStorage.setItem(CONVERSATION_ID_KEY, tempId);
-    
+    localStorage.setItem(getConversationIdKey(), tempId);
+
     setMessages([WELCOME_MESSAGE]);
     saveMessages(tempId, [WELCOME_MESSAGE]);
 
@@ -171,10 +170,10 @@ export const useConversationManager = () => {
 
   // Update conversation title and metadata
   const updateConversation = useCallback((id: string, updates: Partial<Conversation>) => {
-    const updatedConvs = conversations.map(conv => 
+    const updatedConvs = conversations.map(conv =>
       conv.id === id ? { ...conv, ...updates, date: new Date() } : conv
     );
-    
+
     // Move updated conversation to top
     const index = updatedConvs.findIndex(c => c.id === id);
     if (index > 0) {
@@ -192,11 +191,11 @@ export const useConversationManager = () => {
 
     const lastNonProcessingMsg = [...msgs].reverse()
       .find(msg => !msg.isProcessing && msg.text !== '...');
-    
+
     if (!lastNonProcessingMsg) return;
 
     const existingConv = conversations.find(c => c.id === id);
-    
+
     if (existingConv) {
       updateConversation(id, {
         lastMessage: lastNonProcessingMsg.text
@@ -210,7 +209,7 @@ export const useConversationManager = () => {
         lastMessage: lastNonProcessingMsg.text,
         date: new Date()
       };
-      
+
       const updatedConvs = [newConv, ...conversations];
       setConversations(updatedConvs);
       saveConversationsList(updatedConvs);
@@ -224,7 +223,7 @@ export const useConversationManager = () => {
     const updatedConvs = conversations.filter(c => c.id !== id);
     setConversations(updatedConvs);
     saveConversationsList(updatedConvs);
-    
+
     // Remove messages from localStorage
     localStorage.removeItem(getConversationMessagesKey(id));
 
@@ -234,7 +233,7 @@ export const useConversationManager = () => {
         loadConversation(updatedConvs[0].id);
       } else {
         setActiveConversationId('');
-        localStorage.removeItem(CONVERSATION_ID_KEY);
+        localStorage.removeItem(getConversationIdKey());
         setMessages([WELCOME_MESSAGE]);
       }
     }
@@ -242,7 +241,7 @@ export const useConversationManager = () => {
 
   // Replace temporary ID with permanent one
   const replaceConversationId = useCallback((tempId: string, permanentId: string) => {
-    const updatedConvs = conversations.map(conv => 
+    const updatedConvs = conversations.map(conv =>
       conv.id === tempId ? { ...conv, id: permanentId } : conv
     );
 
@@ -252,7 +251,7 @@ export const useConversationManager = () => {
     // Update active conversation ID
     if (activeConversationId === tempId) {
       setActiveConversationId(permanentId);
-      localStorage.setItem(CONVERSATION_ID_KEY, permanentId);
+      localStorage.setItem(getConversationIdKey(), permanentId);
     }
 
     // Copy messages to new key and delete old

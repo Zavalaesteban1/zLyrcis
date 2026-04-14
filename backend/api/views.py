@@ -121,6 +121,57 @@ class VideoJobViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(job)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['post'])
+    def use_existing_variant(self, request):
+        """Create a new job using an exact existing video variant to save processing"""
+        variant_id = request.data.get('variant_id')
+        if not variant_id:
+            return Response({'error': 'variant_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            source_job = VideoJob.objects.get(id=variant_id, status='completed')
+        except VideoJob.DoesNotExist:
+            return Response({'error': 'Variant not found or not completed'}, status=status.HTTP_404_NOT_FOUND)
+            
+        # Create a new job for this user with same settings
+        try:
+            new_job = VideoJob.objects.create(
+                user=request.user,
+                spotify_url=source_job.spotify_url,
+                song_title=source_job.song_title,
+                artist=source_job.artist,
+                status='completed',
+                video_file=source_job.video_file,
+                bg_color=source_job.bg_color,
+                text_color=source_job.text_color,
+                karaoke_color=source_job.karaoke_color,
+                is_favorite_only=False,
+                is_favorite=False
+            )
+        except:
+            # Fallback if user field doesn't work currently
+            new_job = VideoJob.objects.create(
+                spotify_url=source_job.spotify_url,
+                song_title=source_job.song_title,
+                artist=source_job.artist,
+                status='completed',
+                video_file=source_job.video_file,
+                bg_color=source_job.bg_color,
+                text_color=source_job.text_color,
+                karaoke_color=source_job.karaoke_color,
+                is_favorite_only=False,
+                is_favorite=False
+            )
+            
+        # Store in session
+        user_videos = request.session.get('user_videos', [])
+        user_videos.append(str(new_job.id))
+        request.session['user_videos'] = user_videos
+        request.session.modified = True
+            
+        serializer = self.get_serializer(new_job)
+        return Response(serializer.data)
+
 class UserProfileViewSet(viewsets.ModelViewSet):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
@@ -709,6 +760,22 @@ def agent_chat(request):
                 
             if any(word in user_response for word in ['yes', 'yeah', 'sure', 'customize', 'edit', 'change', 'ok', 'okay', 'yep']):
                 resp_text = "Great! Opening customization settings now."
+                
+                # Check for existing variants
+                existing_variants = []
+                if job:
+                    seen_configs = set()
+                    for v in VideoJob.objects.filter(spotify_url=job.spotify_url, status='completed', is_favorite_only=False):
+                        if (v.bg_color, v.text_color, v.karaoke_color) not in seen_configs and v.video_file:
+                            seen_configs.add((v.bg_color, v.text_color, v.karaoke_color))
+                            existing_variants.append({
+                                'id': str(v.id),
+                                'bg_color': v.bg_color,
+                                'text_color': v.text_color,
+                                'karaoke_color': v.karaoke_color,
+                                'song_title': v.song_title,
+                            })
+                            
                 save_conversation_message(db_conversation, 'user', message)
                 save_conversation_message(db_conversation, 'assistant', resp_text)
                 return Response({
@@ -716,13 +783,29 @@ def agent_chat(request):
                     'is_song_request': False,
                     'show_customization_modal': True,
                     'job_id': job.id if job else None,
+                    'existing_variants': existing_variants,
                     'conversation_id': conversation_id
                 })
             else:
                 if job:
-                    job.status = 'pending'
-                    job.save()
-                    generate_lyric_video.delay(job.id)
+                    # Can we reuse default existing variant?
+                    default_variant = VideoJob.objects.filter(
+                        spotify_url=job.spotify_url, 
+                        status='completed', 
+                        bg_color='gradient',
+                        text_color='&H00FFFFFF',
+                        karaoke_color='&H000000FF',
+                        is_favorite_only=False
+                    ).exclude(video_file='').first()
+                    
+                    if default_variant and default_variant.video_file:
+                        job.status = 'completed'
+                        job.video_file = default_variant.video_file
+                        job.save()
+                    else:
+                        job.status = 'pending'
+                        job.save()
+                        generate_lyric_video.delay(job.id)
                 resp_text = "Alright, generating your video with the default settings! It will be available in the 'My Songs' section when it's ready."
                 save_conversation_message(db_conversation, 'user', message)
                 save_conversation_message(db_conversation, 'assistant', resp_text)
@@ -734,7 +817,7 @@ def agent_chat(request):
                         'job_id': job.id if job else None,
                         'title': job.song_title if job else '',
                         'artist': job.artist if job else '',
-                        'status': 'pending'
+                        'status': job.status if job else 'pending'
                     },
                     'conversation_id': conversation_id
                 })
@@ -888,12 +971,21 @@ def agent_chat(request):
                 # generate_lyric_video.delay(job.id)  # Wait for customization
 
             # Generate appropriate response based on intent
+            existing_variants_count = VideoJob.objects.filter(
+                spotify_url=spotify_url, 
+                status='completed', 
+                is_favorite_only=False
+            ).exclude(video_file='').count()
+            
             api_key = os.environ.get("ANTHROPIC_API_KEY")
             if not api_key:
                 if is_favorite_only:
                     success_response = f"I've added '{song_info['title']}' by {song_info['artist']} to your collection! You can find it in the My Songs section."
                 else:
-                    success_response = f"I found '{song_info['title']}' by {song_info['artist']}! Would you like to customize your video settings before generating it?"
+                    if existing_variants_count > 0:
+                        success_response = f"I found '{song_info['title']}' by {song_info['artist']}! Good news: there are already {existing_variants_count} video configurations available for this song. Would you like to customize your video settings to choose one, or just generate?"
+                    else:
+                        success_response = f"I found '{song_info['title']}' by {song_info['artist']}! Would you like to customize your video settings before generating it?"
             else:
                 try:
                     headers = {
@@ -915,17 +1007,28 @@ def agent_chat(request):
                         Keep your response to 1-2 sentences.
                         """
                     else:
-                        prompt = f"""
-                        You are a helpful assistant in a lyric video generation application.
+                        if existing_variants_count > 0:
+                            prompt = f"""
+                            You are a helpful assistant in a lyric video generation application.
 
-                        The user requested to create a lyric video for a song titled '{song_info['title']}' by the artist {song_info['artist']}.
-                        You successfully found the song. Before generating the video, you must ask if they want to customize it.
+                            The user requested to create a lyric video for a song titled '{song_info['title']}' by the artist {song_info['artist']}.
+                            You successfully found the song. You must also let them know that there are already {existing_variants_count} previously generated video configurations available for this song!
 
-                        Respond in a conversational, enthusiastic way confirming you found the song. Ask them clearly: "Would you like to customize your video settings before generating it?"
-                        Express enthusiasm about their song choice if appropriate.
+                            Respond in a conversational, enthusiastic way confirming you found the song and mentioning the existing videos. Ask them clearly: "Would you like to customize your video settings to view the existing options, or just generate your own?"
+                            Express enthusiasm. Keep your response to 2-3 sentences.
+                            """
+                        else:
+                            prompt = f"""
+                            You are a helpful assistant in a lyric video generation application.
 
-                        Keep your response to 2-3 sentences, and MAKE SURE your final sentence asks about customization.
-                        """
+                            The user requested to create a lyric video for a song titled '{song_info['title']}' by the artist {song_info['artist']}.
+                            You successfully found the song. Before generating the video, you must ask if they want to customize it.
+
+                            Respond in a conversational, enthusiastic way confirming you found the song. Ask them clearly: "Would you like to customize your video settings before generating it?"
+                            Express enthusiasm about their song choice if appropriate.
+
+                            Keep your response to 2-3 sentences, and MAKE SURE your final sentence asks about customization.
+                            """
 
                     data = {
                         "model": "claude-sonnet-4-20250514",

@@ -5,7 +5,7 @@ import { Message } from './useConversationManager';
 interface UseAgentChatOptions {
   onSongRequest?: (jobId: string, title: string, artist: string, isFavoriteOnly?: boolean) => void;
   onConversationIdReceived?: (conversationId: string) => void;
-  onCustomizationRequest?: (jobId: string) => void;
+  onCustomizationRequest?: (jobId: string, existingVariants?: any[]) => void;
 }
 
 export const useAgentChat = (options: UseAgentChatOptions = {}) => {
@@ -32,7 +32,7 @@ export const useAgentChat = (options: UseAgentChatOptions = {}) => {
 
       // Handle customization prompt
       if (response.show_customization_modal && response.job_id) {
-        onCustomizationRequest?.(response.job_id);
+        onCustomizationRequest?.(response.job_id, response.existing_variants);
       } else if (response.is_song_request && response.song_request_data) {
         // Handle normal song request
         const { job_id, title, artist } = response.song_request_data;

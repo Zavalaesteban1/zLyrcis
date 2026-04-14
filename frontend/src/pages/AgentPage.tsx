@@ -19,7 +19,7 @@ import { ConversationSidebar } from '../components/agent/ConversationSidebar';
 import { ChatInterface } from '../components/agent/ChatInterface';
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 import { VideoSettingsModal } from '../components/agent/VideoSettingsModal';
-import { startVideoGeneration } from '../services/api';
+import { startVideoGeneration, useExistingVariant } from '../services/api';
 
 // Import all styled components from AgentPageStyles
 import * as Styles from '../styles/AgentPageStyles';
@@ -65,6 +65,7 @@ const AgentPage: React.FC = () => {
   const [isCompactMode, setIsCompactMode] = useState<boolean>(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
+  const [existingVariants, setExistingVariants] = useState<any[]>([]);
   const { userData } = useUser();
 
   // Set theme for styled components
@@ -124,8 +125,10 @@ const AgentPage: React.FC = () => {
         startPolling(jobId);
       }
     },
-    onCustomizationRequest: (jobId) => {
+    onCustomizationRequest: (jobId, variants) => {
       setPendingJobId(jobId);
+      if (variants) setExistingVariants(variants);
+      else setExistingVariants([]);
       setModalOpen(true);
     },
     onConversationIdReceived: (newConvId) => {
@@ -444,13 +447,24 @@ const AgentPage: React.FC = () => {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         jobId={pendingJobId}
+        existingVariants={existingVariants}
+        onUseExisting={async (variantId) => {
+          setModalOpen(false);
+          try {
+            setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true, processingLabel: 'Reusing existing video configuration...' }]);
+            await useExistingVariant(variantId);
+            setMessages(prev => prev.filter(msg => !msg.isProcessing));
+            setMessages(prev => [...prev, { text: "Your video has been instantly added to My Songs!", isUser: false }]);
+          } catch (e) {
+            console.error("Failed to reuse existing video", e);
+          }
+        }}
         onGenerate={async (colors) => {
           setModalOpen(false);
           try {
             if (pendingJobId) {
               setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true, processingLabel: 'Applying configurations and generating video...' }]);
               await startVideoGeneration(pendingJobId, colors);
-              updateConversationMessages(activeConversationId, messages);
             }
           } catch (e) {
             console.error("Failed to generate with custom settings", e);

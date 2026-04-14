@@ -553,6 +553,13 @@ export interface AgentChatResponse {
   is_favorite_only?: boolean;
   show_customization_modal?: boolean;
   job_id?: string;
+  existing_variants?: {
+    id: string;
+    bg_color: string;
+    text_color: string;
+    karaoke_color: string;
+    song_title: string;
+  }[];
   song_request_data?: {
     job_id: string;
     status: string;
@@ -561,6 +568,25 @@ export interface AgentChatResponse {
   };
   conversation_id: string;
 }
+
+export const useExistingVariant = async (variantId: string): Promise<any> => {
+  const token = getAuthToken();
+  const response = await fetch(`${API_URL}/videos/use_existing_variant/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Token ${token}` } : {})
+    },
+    body: JSON.stringify({ variant_id: variantId })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to use existing variant' }));
+    throw new Error(errorData.error || 'Failed to use existing variant');
+  }
+
+  return response.json();
+};
 
 export const startVideoGeneration = async (
   jobId: string,

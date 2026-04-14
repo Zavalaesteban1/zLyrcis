@@ -112,11 +112,23 @@ class VideoJobViewSet(viewsets.ModelViewSet):
         if karaoke_color:
             job.karaoke_color = karaoke_color
             
-        job.status = 'pending'
-        job.save()
+        existing_job = VideoJob.objects.filter(
+            spotify_url=job.spotify_url,
+            bg_color=job.bg_color,
+            text_color=job.text_color,
+            karaoke_color=job.karaoke_color,
+            status='completed'
+        ).exclude(video_file='').first()
         
-        # Queue the video generation task
-        generate_lyric_video.delay(job.id)
+        if existing_job and existing_job.video_file:
+            job.video_file = existing_job.video_file
+            job.status = 'completed'
+            job.save()
+        else:
+            job.status = 'pending'
+            job.save()
+            # Queue the video generation task
+            generate_lyric_video.delay(job.id)
         
         serializer = self.get_serializer(job)
         return Response(serializer.data)
@@ -693,11 +705,23 @@ def search_spotify(title, artist):
 
 def get_or_create_conversation(conversation_id, user):
     """Get or create a conversation in the database"""
-    conversation, created = Conversation.objects.get_or_create(
-        id=conversation_id,
-        defaults={'user': user, 'title': 'New conversation'}
-    )
-    return conversation
+    try:
+        conversation = Conversation.objects.get(id=conversation_id)
+        if conversation.user != user:
+            import uuid
+            new_id = str(uuid.uuid4())
+            return Conversation.objects.create(
+                id=new_id,
+                user=user,
+                title='New conversation'
+            )
+        return conversation
+    except Conversation.DoesNotExist:
+        return Conversation.objects.create(
+            id=conversation_id,
+            user=user,
+            title='New conversation'
+        )
 
 def get_conversation_messages(conversation):
     """Get messages from database as a list of dicts"""
@@ -747,6 +771,7 @@ def agent_chat(request):
 
     # Get or create conversation in database
     db_conversation = get_or_create_conversation(conversation_id, request.user)
+    conversation_id = db_conversation.id
     
     # Check if this is a response to the customization prompt
     if db_conversation:
@@ -788,25 +813,26 @@ def agent_chat(request):
                 })
             else:
                 if job:
-                    # Can we reuse default existing variant?
-                    default_variant = VideoJob.objects.filter(
-                        spotify_url=job.spotify_url, 
-                        status='completed', 
-                        bg_color='gradient',
-                        text_color='&H00FFFFFF',
-                        karaoke_color='&H000000FF',
-                        is_favorite_only=False
+                    existing_job = VideoJob.objects.filter(
+                        spotify_url=job.spotify_url,
+                        bg_color=job.bg_color,
+                        text_color=job.text_color,
+                        karaoke_color=job.karaoke_color,
+                        status='completed'
                     ).exclude(video_file='').first()
                     
-                    if default_variant and default_variant.video_file:
+                    if existing_job and existing_job.video_file:
+                        job.video_file = existing_job.video_file
                         job.status = 'completed'
-                        job.video_file = default_variant.video_file
                         job.save()
+                        resp_text = "Alright, pulling your video from our global repository! It is already available in the 'My Songs' section."
                     else:
                         job.status = 'pending'
                         job.save()
                         generate_lyric_video.delay(job.id)
-                resp_text = "Alright, generating your video with the default settings! It will be available in the 'My Songs' section when it's ready."
+                        resp_text = "Alright, generating your video with the default settings! It will be available in the 'My Songs' section when it's ready."
+                else:
+                    resp_text = "Alright, generating your video with the default settings! It will be available in the 'My Songs' section when it's ready."
                 save_conversation_message(db_conversation, 'user', message)
                 save_conversation_message(db_conversation, 'assistant', resp_text)
                 return Response({

@@ -111,6 +111,10 @@ const clearPreviousUserData = () => {
     if (key.includes('user_data_') && !key.includes(`user_data_${currentUserId}`)) {
       localStorage.removeItem(key);
     }
+
+    if (key.includes('agent_conversation') || key === 'agent_show_scrollbars') {
+      localStorage.removeItem(key);
+    }
   });
 
   // Log the cleanup
@@ -275,7 +279,12 @@ export const logout = async (): Promise<void> => {
   if (userId) {
     const keys = Object.keys(localStorage);
     keys.forEach(key => {
-      if (key.includes(`user_${userId}_`)) {
+      if (
+        key.includes(`user_${userId}_`) ||
+        key.includes('agent_conversation') ||
+        key.includes('learning_data') ||
+        key.includes('video_owner_')
+      ) {
         localStorage.removeItem(key);
       }
     });

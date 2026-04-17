@@ -465,8 +465,8 @@ class AdvancedLyricSynchronizer:
                     ))
                     
                     # CRITICAL FIX: Advance word_idx to avoid getting stuck
-                    # Skip ahead by estimated number of words for this line
-                    estimated_words = max(3, len(line_words))
+                    # Skip ahead by estimated number of words for this line (force advance to escape ambient noise clusters)
+                    estimated_words = max(10, len(line_words) * 2)
                     word_idx = min(word_idx + estimated_words, len(words) - 1)
                 else:
                     synced_lyrics.append(SyncedLyric(
@@ -500,7 +500,7 @@ class AdvancedLyricSynchronizer:
         consecutive_large_gaps = 0
         MAX_DURATION = 12.0
         MIN_GAP = 0.1
-        MAX_GAP = 10.0
+        MAX_GAP = 240.0
         
         # Detect cascading failures (many consecutive large gaps)
         for i in range(1, len(synced_lyrics)):
@@ -604,13 +604,13 @@ class AdvancedLyricSynchronizer:
         
         best_match = None
         best_score = 0.0
-        search_window = min(50, len(transcribed_words) - start_idx)  # Reduced search window
+        search_window = min(500, len(transcribed_words) - start_idx)  # Dramatically expanded to support long instrumentals
         
         # Maximum duration for a single lyric line (in seconds)
         MAX_LINE_DURATION = 15.0
         
-        # CRITICAL: Maximum time distance from previous line (prevents jumping too far)
-        MAX_TIME_DISTANCE = 20.0  # Don't search more than 20 seconds ahead
+        # CRITICAL: Maximum time distance from previous line (expanded to support long intros/solos)
+        MAX_TIME_DISTANCE = 240.0  # Search up to 4 minutes ahead
         
         for i in range(start_idx, start_idx + search_window):
             # Get start time of potential match

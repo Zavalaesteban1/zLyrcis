@@ -992,6 +992,7 @@ PlayResY: 720
 Aspect Ratio: 16:9
 Collisions: Normal
 Title: Lyrics
+WrapStyle: 1
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
@@ -1078,7 +1079,39 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     k_text += f"{{\\k{w_duration_cs}}}{text[actual_start:actual_end]}"
                     current_idx = actual_end
                 else:
-                    k_text += f"{{\\k{w_duration_cs}}}{w_text}"
+                    # Fallback: check if we can fuzzy match it to something nearby
+                    from difflib import SequenceMatcher
+                    import re
+                    
+                    best_match_idx = -1
+                    best_match_len = 0
+                    
+                    # Look at next few words in original text
+                    remaining_text = text[current_idx:]
+                    words_in_remaining = [m for m in re.finditer(r'\b\w+\b', remaining_text)]
+                    
+                    for m in words_in_remaining[:3]:  # Check next 3 words
+                        ratio = SequenceMatcher(None, m.group().lower(), w_text.lower()).ratio()
+                        if ratio > 0.7:  # Pretty good match
+                            best_match_idx = m.start()
+                            best_match_len = len(m.group())
+                            break
+                            
+                    if best_match_idx != -1:
+                        actual_start = current_idx + best_match_idx
+                        actual_end = actual_start + best_match_len
+                        
+                        if actual_start > current_idx:
+                            prefix = text[current_idx:actual_start]
+                            k_text += prefix
+                            
+                        k_text += f"{{\\k{w_duration_cs}}}{text[actual_start:actual_end]}"
+                        current_idx = actual_end
+                    else:
+                        # It's an extra word/hallucination not found in the reference lyric.
+                        # Don't print the raw unspaced whisper word! Just append its timing 
+                        # so the karaoke natively pauses during the vocal stutter.
+                        k_text += f"{{\\k{w_duration_cs}}}"
             
             # Add any remaining tail text
             if current_idx < len(text):
@@ -1110,8 +1143,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f"Dialogue: 0,{start_time},{end_time},LyricLine,,0,0,0,,"
             f"{{\\pos({center_x},{vertical_position})\\fad(200,300)"
             f"\\bord2"
-            f"\\t(0,{int(ms_per_char*3)},\\fscx110\\fscy110)"
-            f"\\t({int(ms_per_char*3)},{int(duration*500)},\\fscx100\\fscy100)"
             f"}}{k_text}"
         )
     

@@ -465,6 +465,8 @@ const AgentPage: React.FC = () => {
             if (pendingJobId) {
               setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true, processingLabel: 'Applying configurations and generating video...' }]);
               await startVideoGeneration(pendingJobId, colors);
+              // Start polling to detect when video is complete
+              startPolling(pendingJobId);
             }
           } catch (e) {
             console.error("Failed to generate with custom settings", e);

@@ -49,7 +49,7 @@ export const useAgentChat = (options: UseAgentChatOptions = {}) => {
     } finally {
       setIsLoading(false);
     }
-  }, [onSongRequest, onConversationIdReceived]);
+  }, [onSongRequest, onConversationIdReceived, onCustomizationRequest]);
 
   return {
     sendMessage,

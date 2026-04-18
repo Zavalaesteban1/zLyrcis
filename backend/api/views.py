@@ -812,7 +812,15 @@ def agent_chat(request):
                     'conversation_id': conversation_id
                 })
             else:
-                if job:
+                # Check if user is declining customization or asking an unrelated question
+                decline_keywords = ['no', 'nope', 'nah', 'skip', 'default', 'just generate', 'dont', "don't", 'without']
+                is_decline = any(word in user_response for word in decline_keywords)
+                
+                # If it's not a clear decline, treat it as a general conversation question
+                if not is_decline:
+                    # Pass through to normal conversation handling
+                    pass  # Will fall through to get_claude_response below
+                elif job:
                     existing_job = VideoJob.objects.filter(
                         spotify_url=job.spotify_url,
                         bg_color=job.bg_color,
@@ -831,22 +839,37 @@ def agent_chat(request):
                         job.save()
                         generate_lyric_video.delay(job.id)
                         resp_text = "Alright, generating your video with the default settings! It will be available in the 'My Songs' section when it's ready."
+                    
+                    save_conversation_message(db_conversation, 'user', message)
+                    save_conversation_message(db_conversation, 'assistant', resp_text)
+                    return Response({
+                        'message': resp_text,
+                        'is_song_request': True,
+                        'song_found': True,
+                        'song_request_data': {
+                            'job_id': job.id if job else None,
+                            'title': job.song_title if job else '',
+                            'artist': job.artist if job else '',
+                            'status': job.status if job else 'pending'
+                        },
+                        'conversation_id': conversation_id
+                    })
                 else:
                     resp_text = "Alright, generating your video with the default settings! It will be available in the 'My Songs' section when it's ready."
-                save_conversation_message(db_conversation, 'user', message)
-                save_conversation_message(db_conversation, 'assistant', resp_text)
-                return Response({
-                    'message': resp_text,
-                    'is_song_request': True,
-                    'song_found': True,
-                    'song_request_data': {
-                        'job_id': job.id if job else None,
-                        'title': job.song_title if job else '',
-                        'artist': job.artist if job else '',
-                        'status': job.status if job else 'pending'
-                    },
-                    'conversation_id': conversation_id
-                })
+                    save_conversation_message(db_conversation, 'user', message)
+                    save_conversation_message(db_conversation, 'assistant', resp_text)
+                    return Response({
+                        'message': resp_text,
+                        'is_song_request': True,
+                        'song_found': True,
+                        'song_request_data': {
+                            'job_id': job.id if job else None,
+                            'title': '',
+                            'artist': '',
+                            'status': 'pending'
+                        },
+                        'conversation_id': conversation_id
+                    })
 
     # Get conversation history from database
     conversation = get_conversation_messages(db_conversation)
@@ -856,8 +879,16 @@ def agent_chat(request):
         conversation = conversation[-10:]
 
     # Check if the message contains a song request intent
+    # But first filter out obvious questions
+    question_patterns = ['what', 'who', 'when', 'where', 'why', 'how', 'tell me about', 'explain', 'describe', 'meaning of']
+    is_question = any(pattern in message.lower() for pattern in question_patterns)
+    
     song_request_keywords = ['create', 'generate', 'make', 'video', 'song', 'lyric', 'music', 'favorite', 'add', 'collection', 'love', 'save']
     possible_song_request = any(keyword in message.lower() for keyword in song_request_keywords)
+    
+    # Don't treat questions as song requests, even if they contain song keywords
+    if is_question and not any(word in message.lower() for word in ['create', 'generate', 'make', 'add', 'save']):
+        possible_song_request = False
 
     # If it sounds like a song request, check with Claude to confirm
     intent_result = {'is_song_request': False}
@@ -1089,19 +1120,45 @@ def agent_chat(request):
             save_conversation_message(db_conversation, 'assistant', success_response)
             update_conversation_title(db_conversation, [{'role': 'user', 'content': message}])
 
-            return Response({
-                'message': success_response,
-                'is_song_request': True,
-                'song_found': True,
-                'is_favorite_only': is_favorite_only,
-                'song_request_data': {
-                    'job_id': job.id,
-                    'title': song_info['title'],
-                    'artist': song_info['artist'],
-                    'status': 'completed' if is_favorite_only else 'pending'
-                },
-                'conversation_id': conversation_id
-            })
+            # If not favorite-only, open customization modal instead of starting generation
+            if not is_favorite_only:
+                # Collect existing variants for this song
+                existing_variants = []
+                seen_configs = set()
+                for v in VideoJob.objects.filter(spotify_url=spotify_url, status='completed', is_favorite_only=False):
+                    if (v.bg_color, v.text_color, v.karaoke_color) not in seen_configs and v.video_file:
+                        seen_configs.add((v.bg_color, v.text_color, v.karaoke_color))
+                        existing_variants.append({
+                            'id': str(v.id),
+                            'bg_color': v.bg_color,
+                            'text_color': v.text_color,
+                            'karaoke_color': v.karaoke_color,
+                            'song_title': v.song_title,
+                        })
+                
+                return Response({
+                    'message': success_response,
+                    'is_song_request': False,
+                    'show_customization_modal': True,
+                    'job_id': str(job.id),
+                    'existing_variants': existing_variants,
+                    'conversation_id': conversation_id
+                })
+            else:
+                # For favorite-only, return normal song request response
+                return Response({
+                    'message': success_response,
+                    'is_song_request': True,
+                    'song_found': True,
+                    'is_favorite_only': is_favorite_only,
+                    'song_request_data': {
+                        'job_id': job.id,
+                        'title': song_info['title'],
+                        'artist': song_info['artist'],
+                        'status': 'completed'
+                    },
+                    'conversation_id': conversation_id
+                })
         else:
             # Handle validation errors
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

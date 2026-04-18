@@ -27,7 +27,7 @@ class VideoJob(models.Model):
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    video_file = models.FileField(upload_to=video_upload_path, blank=True, null=True)
+    video_file = models.URLField(max_length=500, blank=True, null=True)  # Cloudinary URLs can be long
     error_message = models.TextField(blank=True)
     is_favorite_only = models.BooleanField(default=False)  # True if user just wants to save song, not generate video
     is_favorite = models.BooleanField(default=False)  # True if user marked this as a favorite song

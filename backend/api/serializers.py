@@ -4,10 +4,40 @@ from django.contrib.auth.models import User
 
 class VideoJobSerializer(serializers.ModelSerializer):
     """Serializer for VideoJob model"""
+    video_file = serializers.SerializerMethodField()
+    
     class Meta:
         model = VideoJob
         fields = ['id', 'spotify_url', 'song_title', 'artist', 'status', 'created_at', 'updated_at', 'video_file', 'is_favorite', 'is_favorite_only', 'bg_color', 'text_color', 'karaoke_color']
-        read_only_fields = ['id', 'song_title', 'artist', 'status', 'created_at', 'updated_at', 'video_file']
+        read_only_fields = ['id', 'song_title', 'artist', 'status', 'created_at', 'updated_at']
+    
+    def get_video_file(self, obj):
+        """Return video file URL - handles both URLField and FileField"""
+        if not obj.video_file:
+            return None
+        
+        # If it's a string (URLField with Cloudinary URL), check if it's a full URL
+        if isinstance(obj.video_file, str):
+            if obj.video_file.startswith('http://') or obj.video_file.startswith('https://'):
+                return obj.video_file
+        
+        # Try FileField approach for backwards compatibility
+        try:
+            if hasattr(obj.video_file, 'url'):
+                url = obj.video_file.url
+                # If it's already a full URL (Cloudinary), return as is
+                if url.startswith('http://') or url.startswith('https://'):
+                    return url
+                # Otherwise build absolute URI (local storage)
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(url)
+                return url
+        except (ValueError, AttributeError):
+            pass
+        
+        # Fallback: return as string
+        return str(obj.video_file) if obj.video_file else None
 
 class VideoStatusSerializer(serializers.ModelSerializer):
     video_url = serializers.SerializerMethodField()
@@ -19,11 +49,30 @@ class VideoStatusSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'status', 'song_title', 'artist', 'video_url', 'error']
     
     def get_video_url(self, obj):
+        """Get video URL - handles both URLField (Cloudinary URLs) and FileField"""
         if obj.video_file and obj.status == 'completed':
-            request = self.context.get('request')
-            if request is not None:
-                return request.build_absolute_uri(obj.video_file.url)
-            return obj.video_file.url if obj.video_file else None
+            # If video_file is a string (URLField with Cloudinary URL), return directly
+            if isinstance(obj.video_file, str):
+                # Already a full URL (Cloudinary)
+                if obj.video_file.startswith('http://') or obj.video_file.startswith('https://'):
+                    return obj.video_file
+            
+            # Otherwise, try to get URL from FileField (for backwards compatibility)
+            try:
+                if hasattr(obj.video_file, 'url'):
+                    url = obj.video_file.url
+                    # If it's already a full URL, return as is
+                    if url.startswith('http://') or url.startswith('https://'):
+                        return url
+                    # Otherwise build absolute URI
+                    request = self.context.get('request')
+                    if request is not None:
+                        return request.build_absolute_uri(url)
+                    return url
+            except (ValueError, AttributeError):
+                # If we can't get the URL, return the video_file value itself
+                return str(obj.video_file) if obj.video_file else None
+        
         return None
 
 class UserSerializer(serializers.ModelSerializer):

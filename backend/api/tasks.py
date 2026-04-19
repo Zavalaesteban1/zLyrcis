@@ -252,7 +252,7 @@ def get_spotify_track_info(track_id):
 
 
 def get_lyrics(title, artist):
-    """Get lyrics from Genius API with verification"""
+    """Get lyrics from Genius API with verification and proxy support for production"""
     # Get Genius API token
     genius_token = settings.GENIUS_ACCESS_TOKEN
     
@@ -260,8 +260,19 @@ def get_lyrics(title, artist):
         print("Genius API token not found. Set GENIUS_ACCESS_TOKEN in settings.")
         return None
     
+    # Check if we should use a proxy (for production environments)
+    proxy_url = os.environ.get('PROXY_URL')
+    
     # Set up Genius API client
-    genius = lyricsgenius.Genius(genius_token)
+    if proxy_url:
+        print(f"Using proxy for Genius API requests")
+        genius = lyricsgenius.Genius(
+            genius_token,
+            proxies={'http': proxy_url, 'https': proxy_url}
+        )
+    else:
+        genius = lyricsgenius.Genius(genius_token)
+    
     genius.verbose = False  # Turn off status messages
     genius.timeout = 30
     genius.sleep_time = 1.0  # Add delay to avoid rate limits

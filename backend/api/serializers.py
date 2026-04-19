@@ -13,18 +13,12 @@ class VideoJobSerializer(serializers.ModelSerializer):
     
     def get_video_file(self, obj):
         """Return video file URL - handles both URLField and FileField"""
-        print(f"DEBUG VideoJobSerializer.get_video_file() called for job {obj.id}")
-        print(f"  video_file type: {type(obj.video_file)}")
-        print(f"  video_file value: {obj.video_file}")
-        
         if not obj.video_file:
-            print(f"  -> Returning None (no video_file)")
             return None
         
         # If it's a string (URLField with Cloudinary URL), check if it's a full URL
         if isinstance(obj.video_file, str):
             if obj.video_file.startswith('http://') or obj.video_file.startswith('https://'):
-                print(f"  -> Returning string URL: {obj.video_file}")
                 return obj.video_file
             else:
                 # It's a relative path - build absolute URL
@@ -33,10 +27,8 @@ class VideoJobSerializer(serializers.ModelSerializer):
                     # Prepend /media/ for Django's MEDIA_URL
                     media_url = f"/media/{obj.video_file}"
                     abs_url = request.build_absolute_uri(media_url)
-                    print(f"  -> Returning absolute URL from relative path: {abs_url}")
                     return abs_url
                 else:
-                    print(f"  -> No request context, returning relative path: {obj.video_file}")
                     return obj.video_file
         
         # Try FileField approach for backwards compatibility
@@ -45,24 +37,18 @@ class VideoJobSerializer(serializers.ModelSerializer):
                 url = obj.video_file.url
                 # If it's already a full URL (Cloudinary), return as is
                 if url.startswith('http://') or url.startswith('https://'):
-                    print(f"  -> Returning FileField URL: {url}")
                     return url
                 # Otherwise build absolute URI (local storage)
                 request = self.context.get('request')
                 if request:
                     abs_url = request.build_absolute_uri(url)
-                    print(f"  -> Returning absolute URI: {abs_url}")
                     return abs_url
-                print(f"  -> Returning relative URL: {url}")
                 return url
-        except (ValueError, AttributeError) as e:
-            print(f"  -> FileField.url failed: {e}")
+        except (ValueError, AttributeError):
             pass
         
         # Fallback: return as string
-        result = str(obj.video_file) if obj.video_file else None
-        print(f"  -> Returning fallback string: {result}")
-        return result
+        return str(obj.video_file) if obj.video_file else None
 
 class VideoStatusSerializer(serializers.ModelSerializer):
     video_url = serializers.SerializerMethodField()
@@ -75,17 +61,11 @@ class VideoStatusSerializer(serializers.ModelSerializer):
     
     def get_video_url(self, obj):
         """Get video URL - handles both URLField (Cloudinary URLs) and FileField"""
-        print(f"DEBUG VideoStatusSerializer.get_video_url() called for job {obj.id}")
-        print(f"  status: {obj.status}")
-        print(f"  video_file type: {type(obj.video_file)}")
-        print(f"  video_file value: {obj.video_file}")
-        
         if obj.video_file and obj.status == 'completed':
             # If video_file is a string (URLField with Cloudinary URL), return directly
             if isinstance(obj.video_file, str):
                 # Already a full URL (Cloudinary)
                 if obj.video_file.startswith('http://') or obj.video_file.startswith('https://'):
-                    print(f"  -> Returning string URL: {obj.video_file}")
                     return obj.video_file
                 else:
                     # It's a relative path - build absolute URL
@@ -93,7 +73,6 @@ class VideoStatusSerializer(serializers.ModelSerializer):
                     if request:
                         media_url = f"/media/{obj.video_file}"
                         abs_url = request.build_absolute_uri(media_url)
-                        print(f"  -> Returning absolute URL from relative path: {abs_url}")
                         return abs_url
             
             # Otherwise, try to get URL from FileField (for backwards compatibility)
@@ -102,22 +81,17 @@ class VideoStatusSerializer(serializers.ModelSerializer):
                     url = obj.video_file.url
                     # If it's already a full URL, return as is
                     if url.startswith('http://') or url.startswith('https://'):
-                        print(f"  -> Returning FileField URL: {url}")
                         return url
                     # Otherwise build absolute URI
                     request = self.context.get('request')
                     if request is not None:
                         abs_url = request.build_absolute_uri(url)
-                        print(f"  -> Returning absolute URI: {abs_url}")
                         return abs_url
-                    print(f"  -> Returning relative URL: {url}")
                     return url
-            except (ValueError, AttributeError) as e:
+            except (ValueError, AttributeError):
                 # If we can't get the URL, return the video_file value itself
-                print(f"  -> FileField.url failed: {e}, returning string")
                 return str(obj.video_file) if obj.video_file else None
         
-        print(f"  -> Returning None (not completed or no file)")
         return None
 
 class UserSerializer(serializers.ModelSerializer):

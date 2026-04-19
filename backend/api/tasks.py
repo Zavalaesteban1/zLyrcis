@@ -260,22 +260,20 @@ def get_lyrics(title, artist):
         print("Genius API token not found. Set GENIUS_ACCESS_TOKEN in settings.")
         return None
     
-    # Check if we should use a proxy (for production environments)
-    proxy_url = os.environ.get('PROXY_URL')
-    
     # Set up Genius API client
-    if proxy_url:
-        print(f"Using proxy for Genius API requests")
-        genius = lyricsgenius.Genius(
-            genius_token,
-            proxies={'http': proxy_url, 'https': proxy_url}
-        )
-    else:
-        genius = lyricsgenius.Genius(genius_token)
-    
+    genius = lyricsgenius.Genius(genius_token)
     genius.verbose = False  # Turn off status messages
     genius.timeout = 30
     genius.sleep_time = 1.0  # Add delay to avoid rate limits
+    
+    # Configure proxy if provided (for production environments)
+    proxy_url = os.environ.get('PROXY_URL')
+    if proxy_url:
+        print(f"Using proxy for Genius API requests")
+        genius._session.proxies = {
+            'http': proxy_url,
+            'https': proxy_url
+        }
     
     def normalize_for_comparison(s):
         """Normalize string for fuzzy matching"""

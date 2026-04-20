@@ -463,7 +463,7 @@ const AgentPage: React.FC = () => {
           setModalOpen(false);
           try {
             if (pendingJobId) {
-              setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true, processingLabel: 'Applying configurations and generating video...' }]);
+              setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true, processingLabel: 'Generating video...' }]);
               await startVideoGeneration(pendingJobId, colors);
               // Start polling to detect when video is complete
               startPolling(pendingJobId);

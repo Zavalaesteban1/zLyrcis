@@ -32,7 +32,12 @@ export const useAgentChat = (options: UseAgentChatOptions = {}) => {
 
       // Handle customization prompt
       if (response.show_customization_modal && response.job_id) {
-        onCustomizationRequest?.(response.job_id, response.existing_variants);
+        // Delay opening modal to let user read the message first
+        const jobId = response.job_id;
+        const variants = response.existing_variants;
+        setTimeout(() => {
+          onCustomizationRequest?.(jobId, variants);
+        }, 1500); // 1.5 second delay
       } else if (response.is_song_request && response.song_request_data) {
         // Handle normal song request
         const { job_id, title, artist } = response.song_request_data;

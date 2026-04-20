@@ -29,3 +29,5 @@ google-auth>=2.0.0
 Pillow>=10.0.0
 cloudinary>=1.36.0
 django-cloudinary-storage>=0.3.0
+whisper-timestamped>=1.15.0
+torch>=2.0.0

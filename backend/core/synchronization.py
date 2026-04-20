@@ -187,13 +187,13 @@ class AdvancedLyricSynchronizer:
         """Main synchronization method that tries multiple approaches"""
         print("Starting advanced lyrics synchronization...")
         
-        # Method 1: Local Whisper Word-Level Sync (Highly Accurate)
+        # Method 1: Local Whisper Word-Level Sync (Best for accuracy)
         whisper_result = self._synchronize_with_local_whisper(lyrics_lines)
         if whisper_result and len(whisper_result) > len(lyrics_lines) * 0.7:
-            print("Using perfect Local Whisper word-level synchronization")
+            print("Using Local Whisper word-level synchronization")
             return whisper_result
 
-        # Method 2: Try enhanced Deepgram with audio features
+        # Method 2: Try enhanced Deepgram with audio features (fallback)
         deepgram_result = self._synchronize_with_enhanced_deepgram(lyrics_lines)
         if deepgram_result and len(deepgram_result) > len(lyrics_lines) * 0.7:
             print("Using enhanced Deepgram synchronization")
@@ -224,8 +224,13 @@ class AdvancedLyricSynchronizer:
             model = whisper.load_model("base", device="cpu")
             audio = whisper.load_audio(self.audio_path)
             
-            print("Transcribing audio to get word-level timestamps...")
-            result = whisper.transcribe(model, audio, language="en")
+            print("Transcribing audio with auto-detected language...")
+            # Let Whisper auto-detect the language by not specifying it
+            result = whisper.transcribe(model, audio)
+            
+            # Show what language Whisper detected
+            detected_lang = result.get("language", "unknown")
+            print(f"Whisper detected language: {detected_lang}")
             
             # Extract all words sequentially
             words = []
@@ -360,13 +365,14 @@ class AdvancedLyricSynchronizer:
                 payload = {"buffer": audio.read()}
             
             # Deepgram SDK v3.x API - base model includes word timestamps by default
+            # Remove language parameter to enable auto-detection for all languages
             options = {
                 "model": "nova-2",
-                "language": "en",
                 "smart_format": True,
                 "punctuate": True,
                 "utterances": True,
-                "diarize": False
+                "diarize": False,
+                "detect_language": True
             }
             
             response = await deepgram.listen.asyncprerecorded.v("1").transcribe_file(payload, options)

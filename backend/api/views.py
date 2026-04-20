@@ -1120,28 +1120,13 @@ def agent_chat(request):
             save_conversation_message(db_conversation, 'assistant', success_response)
             update_conversation_title(db_conversation, [{'role': 'user', 'content': message}])
 
-            # If not favorite-only, open customization modal instead of starting generation
+            # If not favorite-only, just return the message asking about customization
+            # Don't open modal yet - wait for user to say "yes"
             if not is_favorite_only:
-                # Collect existing variants for this song
-                existing_variants = []
-                seen_configs = set()
-                for v in VideoJob.objects.filter(spotify_url=spotify_url, status='completed', is_favorite_only=False):
-                    if (v.bg_color, v.text_color, v.karaoke_color) not in seen_configs and v.video_file:
-                        seen_configs.add((v.bg_color, v.text_color, v.karaoke_color))
-                        existing_variants.append({
-                            'id': str(v.id),
-                            'bg_color': v.bg_color,
-                            'text_color': v.text_color,
-                            'karaoke_color': v.karaoke_color,
-                            'song_title': v.song_title,
-                        })
-                
                 return Response({
                     'message': success_response,
                     'is_song_request': False,
-                    'show_customization_modal': True,
-                    'job_id': str(job.id),
-                    'existing_variants': existing_variants,
+                    'show_customization_modal': False,
                     'conversation_id': conversation_id
                 })
             else:

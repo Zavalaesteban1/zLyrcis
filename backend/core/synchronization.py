@@ -42,6 +42,14 @@ except ImportError:
     DEEPGRAM_AVAILABLE = False
     print("Deepgram SDK not installed. Install with: pip install deepgram-sdk")
 
+# Groq/OpenAI imports (for fast Whisper API)
+try:
+    from openai import OpenAI
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    print("OpenAI SDK not installed. Install with: pip install openai")
+
 
 @dataclass
 class AudioFeatures:
@@ -187,28 +195,166 @@ class AdvancedLyricSynchronizer:
         """Main synchronization method that tries multiple approaches"""
         print("Starting advanced lyrics synchronization...")
         
-        # Method 1: Local Whisper Word-Level Sync (Best for accuracy)
+        # SPECIAL CASE: If no lyrics provided (Genius failed), use Groq transcription only
+        if lyrics_lines is None or len(lyrics_lines) == 0:
+            print("⚠️  No Genius lyrics - using Groq transcription as lyrics (Groq-only mode)")
+            return self._synchronize_groq_only()
+        
+        # Method 1: Groq API (Fastest - 3-5 seconds on GPU)
+        groq_result = self._synchronize_with_groq(lyrics_lines)
+        if groq_result and len(groq_result) > len(lyrics_lines) * 0.7:
+            print("Using Groq API (Whisper large-v3 on GPU)")
+            return groq_result
+        
+        # Method 2: Local Whisper Word-Level Sync (Slowest but works offline)
         whisper_result = self._synchronize_with_local_whisper(lyrics_lines)
         if whisper_result and len(whisper_result) > len(lyrics_lines) * 0.7:
             print("Using Local Whisper word-level synchronization")
             return whisper_result
 
-        # Method 2: Try enhanced Deepgram with audio features (fallback)
+        # Method 3: Try enhanced Deepgram with audio features (fallback)
         deepgram_result = self._synchronize_with_enhanced_deepgram(lyrics_lines)
         if deepgram_result and len(deepgram_result) > len(lyrics_lines) * 0.7:
             print("Using enhanced Deepgram synchronization")
             return deepgram_result
         
-        # Method 3: Try audio analysis-based synchronization
+        # Method 4: Try audio analysis-based synchronization
         if self.audio_features:
             audio_result = self._synchronize_with_audio_analysis(lyrics_lines)
             if audio_result:
                 print("Using audio analysis-based synchronization")
                 return audio_result
         
-        # Method 4: Fallback to improved basic synchronization
+        # Method 5: Fallback to improved basic synchronization
         print("Using improved basic synchronization")
         return self._create_improved_basic_synchronization(lyrics_lines)
+    
+    def _synchronize_with_groq(self, lyrics_lines: List[str]) -> Optional[List[SyncedLyric]]:
+        """Fast synchronization using Groq API (Whisper large-v3 on GPU)"""
+        if not GROQ_AVAILABLE:
+            print("OpenAI SDK not available - skipping Groq. Install with: pip install openai")
+            return None
+            
+        try:
+            api_key = os.environ.get("GROQ_API_KEY")
+            if not api_key:
+                print("No GROQ_API_KEY found - skipping Groq API")
+                return None
+            
+            print("Using Groq API for ultra-fast Whisper transcription...")
+            
+            # Initialize Groq client (OpenAI-compatible)
+            client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.groq.com/openai/v1"
+            )
+            
+            # Open audio file and send to Groq
+            with open(self.audio_path, "rb") as audio_file:
+                transcription = client.audio.transcriptions.create(
+                    model="whisper-large-v3",  # or "distil-whisper-large-v3-en" for English-only (faster)
+                    file=audio_file,
+                    response_format="verbose_json",
+                    timestamp_granularities=["word"]
+                )
+            
+            # Extract language
+            detected_lang = getattr(transcription, 'language', 'en')
+            print(f"Groq detected language: {detected_lang}")
+            
+            # Extract words from response
+            words = []
+            if hasattr(transcription, 'words') and transcription.words:
+                for word_obj in transcription.words:
+                    words.append({
+                        "word": word_obj.word.strip(),
+                        "start": word_obj.start,
+                        "end": word_obj.end
+                    })
+            
+            if not words:
+                print("No words extracted from Groq response")
+                return None
+            
+            print(f"Groq returned {len(words)} words with perfect timestamps")
+            
+            # Match lyrics to word sequences using existing algorithm
+            synced_lyrics = self._match_lyrics_to_words(lyrics_lines, words, detected_lang)
+            
+            if synced_lyrics:
+                print(f"Successfully synced {len(synced_lyrics)} lyric lines using Groq API")
+            
+            return synced_lyrics
+            
+        except Exception as e:
+            print(f"Error in Groq synchronization: {e}")
+            traceback.print_exc()
+            return None
+    
+    def _synchronize_groq_only(self) -> Optional[List[SyncedLyric]]:
+        """Use ONLY Groq transcription (no Genius lyrics) - perfect for songs not on Genius"""
+        if not GROQ_AVAILABLE:
+            print("OpenAI SDK not available - cannot use Groq-only mode")
+            return None
+            
+        try:
+            api_key = os.environ.get("GROQ_API_KEY")
+            if not api_key:
+                print("No GROQ_API_KEY found - falling back to local Whisper")
+                return self._synchronize_with_local_whisper([])
+            
+            print("🎵 Groq-only mode: Using transcription as lyrics (no Genius matching needed)")
+            
+            # Initialize Groq client
+            client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.groq.com/openai/v1"
+            )
+            
+            # Transcribe with Groq - FORCE ENGLISH to avoid misdetection
+            # (Reggae, heavily accented music, or poor audio can confuse auto-detection)
+            with open(self.audio_path, "rb") as audio_file:
+                transcription = client.audio.transcriptions.create(
+                    model="whisper-large-v3",
+                    file=audio_file,
+                    response_format="verbose_json",
+                    timestamp_granularities=["segment"],  # Get segments, not just words
+                    language="en"  # Force English (prevents Khmer/wrong language detection)
+                )
+            
+            # Extract language (should be 'en' now)
+            detected_lang = getattr(transcription, 'language', 'en')
+            print(f"Groq detected language: {detected_lang} (forced English for Groq-only mode)")
+            
+            # Extract segments (these are natural phrase groupings from Whisper)
+            synced_lyrics = []
+            if hasattr(transcription, 'segments') and transcription.segments:
+                for seg in transcription.segments:
+                    text = seg.text.strip()
+                    if text:  # Skip empty segments
+                        synced_lyrics.append(SyncedLyric(
+                            text=text,
+                            start_time=seg.start,
+                            end_time=seg.end,
+                            duration=seg.end - seg.start,
+                            confidence=1.0,  # Perfect sync!
+                            method="groq_transcription_only",
+                            words=[]
+                        ))
+            
+            if not synced_lyrics:
+                print("No segments extracted from Groq response")
+                return None
+            
+            print(f"✓ Groq-only mode: {len(synced_lyrics)} lines transcribed with PERFECT sync")
+            print(f"  (No Genius matching needed - these are Groq's natural phrase groupings)")
+            
+            return synced_lyrics
+            
+        except Exception as e:
+            print(f"Error in Groq-only mode: {e}")
+            traceback.print_exc()
+            return None
     
     def _synchronize_with_local_whisper(self, lyrics_lines: List[str]) -> Optional[List[SyncedLyric]]:
         """Synchronize perfectly using whisper-timestamped for word-level bounding boxes"""
@@ -250,7 +396,7 @@ class AdvancedLyricSynchronizer:
             print(f"Local Whisper returned {len(words)} words with perfect timestamps")
             
             # Match lyrics to word sequences using existing improved algorithm
-            synced_lyrics = self._match_lyrics_to_words(lyrics_lines, words)
+            synced_lyrics = self._match_lyrics_to_words(lyrics_lines, words, detected_lang)
             
             if synced_lyrics:
                 print(f"Successfully synced {len(synced_lyrics)} lyric lines using local Whisper")
@@ -340,7 +486,9 @@ class AdvancedLyricSynchronizer:
                 print(f"DEBUG: Transcribed words span from {first_time:.2f}s to {last_time:.2f}s")
             
             # Match lyrics to word sequences using improved algorithm
-            synced_lyrics = self._match_lyrics_to_words(lyrics_lines, words)
+            # Deepgram doesn't always return language, default to English
+            detected_lang = "en"
+            synced_lyrics = self._match_lyrics_to_words(lyrics_lines, words, detected_lang)
             
             if synced_lyrics:
                 print(f"Successfully synced {len(synced_lyrics)} lyric lines using Deepgram")
@@ -383,7 +531,7 @@ class AdvancedLyricSynchronizer:
             traceback.print_exc()
             return None
     
-    def _match_lyrics_to_words(self, lyrics_lines: List[str], words: List) -> List[SyncedLyric]:
+    def _match_lyrics_to_words(self, lyrics_lines: List[str], words: List, detected_language: str = "en") -> List[SyncedLyric]:
         """Match lyrics lines to word sequences with improved algorithm"""
         synced_lyrics = []
         word_idx = 0
@@ -401,6 +549,7 @@ class AdvancedLyricSynchronizer:
             previous_end_time = synced_lyrics[-1].end_time if synced_lyrics else 0
             
             # Find the best matching sequence in transcribed words
+            # Note: detected_language available but not used in this branch's matching logic yet
             best_match = self._find_best_word_sequence(line_words, words, word_idx, previous_end_time)
             
             if best_match:
@@ -1070,17 +1219,19 @@ class AdvancedLyricSynchronizer:
         return synced_lyrics
 
 
-def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str]) -> List[Dict]:
+def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str] = None) -> List[Dict]:
     """
     Main function to synchronize lyrics using advanced methods.
     Returns list of dicts compatible with existing code.
+    
+    If lyrics_lines is None, uses Groq transcription as lyrics (Groq-only mode).
     """
     synchronizer = AdvancedLyricSynchronizer(audio_path)
     
     # Analyze audio features
     synchronizer.analyze_audio()
     
-    # Synchronize lyrics
+    # Synchronize lyrics (handles None for Groq-only mode)
     synced_lyrics = synchronizer.synchronize_lyrics(lyrics_lines)
     
     # Convert to format expected by existing code
@@ -1096,7 +1247,8 @@ def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str]) -> Lis
             "words": lyric.words if hasattr(lyric, 'words') else []
         })
     
-    print(f"Advanced synchronization complete: {len(result)} lyrics synced")
+    mode = "Groq-only" if lyrics_lines is None else "Genius+Groq matching"
+    print(f"Advanced synchronization complete: {len(result)} lyrics synced ({mode})")
     return result
 
 

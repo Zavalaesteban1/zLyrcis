@@ -80,19 +80,21 @@ def generate_lyric_video(job_id):
                 lyrics = get_lyrics(simplified_title, song_info['artist'])
                 
         if not lyrics:
-            raise ValueError("Could not find lyrics for this song")
-        
-        # Process lyrics into clean lines - AGGRESSIVELY CLEAN THEM
-        lyrics_lines = clean_lyrics(lyrics)
-        
-        # Double-check filtering - remove any metadata that might have slipped through
-        filtered_lyrics_lines = remove_metadata_from_lyrics(lyrics_lines)
+            print("⚠️  Genius lyrics not found - will use Groq transcription instead")
+            filtered_lyrics_lines = None  # Signal to use Groq-only mode
+        else:
+            # Process lyrics into clean lines - AGGRESSIVELY CLEAN THEM
+            lyrics_lines = clean_lyrics(lyrics)
+            
+            # Double-check filtering - remove any metadata that might have slipped through
+            filtered_lyrics_lines = remove_metadata_from_lyrics(lyrics_lines)
         
         # Create a temporary directory for processing
         with tempfile.TemporaryDirectory() as temp_dir:
             # CRITICAL FIX: Find and patch any SRT files that might be created by external systems
             # This must happen early in the process
-            patch_temp_directory_srt_files(temp_dir, filtered_lyrics_lines)
+            if filtered_lyrics_lines:  # Only patch if we have Genius lyrics
+                patch_temp_directory_srt_files(temp_dir, filtered_lyrics_lines)
             
             # 3. Get audio file (from local files or Spotify)
             audio_path = os.path.join(temp_dir, 'audio.mp3')
@@ -127,11 +129,15 @@ def generate_lyric_video(job_id):
             
             # Final fallback to basic timing
             if not synced_lyrics:
-                print("Using basic fallback synchronization method")
-                synced_lyrics = create_basic_synchronization(filtered_lyrics_lines, audio_duration)
+                if filtered_lyrics_lines:
+                    print("Using basic fallback synchronization method")
+                    synced_lyrics = create_basic_synchronization(filtered_lyrics_lines, audio_duration)
+                else:
+                    raise ValueError("No lyrics found and transcription failed")
             
             # CRITICAL FIX: One more check for SRT files before video generation
-            patch_temp_directory_srt_files(temp_dir, filtered_lyrics_lines)
+            if filtered_lyrics_lines:  # Only patch if we have Genius lyrics
+                patch_temp_directory_srt_files(temp_dir, filtered_lyrics_lines)
             
             # 5. Create lyric video with animated lyrics (now with ASS subtitles)
             video_path = os.path.join(temp_dir, 'output.mp4')

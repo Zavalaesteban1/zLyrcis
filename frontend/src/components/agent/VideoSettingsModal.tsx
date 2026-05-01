@@ -8,7 +8,7 @@ const Overlay = styled.div<{ isOpen: boolean }>`
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(5px);
   z-index: 1000;
   align-items: center;
@@ -17,14 +17,14 @@ const Overlay = styled.div<{ isOpen: boolean }>`
 `;
 
 const ModalContent = styled.div`
-  background: #1e1e1e;
+  background: white;
   border-radius: 16px;
   width: 100%;
   max-width: 900px;
   display: flex;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e0e0e0;
 
   @media (max-width: 768px) {
     flex-direction: column;
@@ -36,7 +36,7 @@ const ModalContent = styled.div`
 const PreviewSection = styled.div`
   flex: 2;
   padding: 30px;
-  background: #121212;
+  background: #f5f5f5;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -46,19 +46,17 @@ const PreviewSection = styled.div`
 const SettingsSection = styled.div`
   flex: 1;
   padding: 30px;
-  background: #1e1e1e;
+  background: white;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid #e0e0e0;
 `;
 
 const Title = styled.h2`
   margin: 0 0 20px 0;
   font-size: 1.5rem;
   font-weight: 600;
-  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #333;
 `;
 
 const VideoBox = styled.div<{ bgColor: string }>`
@@ -112,7 +110,7 @@ const Label = styled.label`
   display: block;
   margin-bottom: 10px;
   font-size: 0.9rem;
-  color: #ccc;
+  color: #666;
   font-weight: 500;
 `;
 
@@ -135,22 +133,23 @@ const InputRow = styled.div`
     }
     
     &::-webkit-color-swatch {
-      border: 2px solid rgba(255,255,255,0.2);
+      border: 2px solid #e0e0e0;
       border-radius: 50%;
     }
   }
 
   input[type="text"] {
     flex: 1;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: white;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    color: #333;
     padding: 10px 15px;
     border-radius: 8px;
     outline: none;
     font-family: monospace;
     &:focus {
-      border-color: #FF8E53;
+      border-color: #1DB954;
+      background: white;
     }
   }
 `;
@@ -166,13 +165,14 @@ const ColorToken = styled.button<{ color: string }>`
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 2px solid #e0e0e0;
   background: ${props => props.color};
   cursor: pointer;
   transition: transform 0.2s;
   
   &:hover {
     transform: scale(1.2);
+    border-color: #1DB954;
   }
 `;
 
@@ -193,17 +193,19 @@ const Button = styled.button<{ primary?: boolean }>`
   transition: all 0.2s;
   
   ${props => props.primary ? `
-    background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+    background: #1DB954;
     color: white;
     &:hover {
-      opacity: 0.9;
+      background: #169c46;
       transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(29, 185, 84, 0.3);
     }
   ` : `
-    background: rgba(255,255,255,0.1);
-    color: white;
+    background: #f5f5f5;
+    color: #333;
+    border: 1px solid #e0e0e0;
     &:hover {
-      background: rgba(255,255,255,0.2);
+      background: #e0e0e0;
     }
   `}
 `;
@@ -279,8 +281,8 @@ export const VideoSettingsModal: React.FC<VideoSettingsModalProps> = ({ isOpen, 
       <ModalContent>
         <PreviewSection>
           <div style={{ width: '100%', marginBottom: '20px' }}>
-            <h3 style={{ color: '#fff', opacity: 0.8, fontWeight: 500, fontSize: '1.2rem', margin: 0 }}>Live Preview</h3>
-            <p style={{ color: '#aaa', fontSize: '0.9rem', margin: '5px 0 0 0' }}>This is how your video will look</p>
+            <h3 style={{ color: '#333', fontWeight: 500, fontSize: '1.2rem', margin: 0 }}>Live Preview</h3>
+            <p style={{ color: '#666', fontSize: '0.9rem', margin: '5px 0 0 0' }}>This is how your video will look</p>
           </div>
           <VideoBox bgColor={useGradient ? 'gradient' : bgColor}>
             <PreviewTitle color={textColor}>Song Title</PreviewTitle>
@@ -296,7 +298,7 @@ export const VideoSettingsModal: React.FC<VideoSettingsModalProps> = ({ isOpen, 
 
           {existingVariants && existingVariants.length > 0 && (
             <SettingGroup>
-              <Label style={{ color: '#FF8E53', fontWeight: 'bold' }}>Previously Generated Styles</Label>
+              <Label style={{ color: '#1DB954', fontWeight: 'bold' }}>Previously Generated Styles</Label>
               {existingVariants.map(variant => {
                 const tColor = variant.text_color.startsWith('&H') ? assToHex(variant.text_color) : variant.text_color;
                 const kColor = variant.karaoke_color.startsWith('&H') ? assToHex(variant.karaoke_color) : variant.karaoke_color;
@@ -312,8 +314,8 @@ export const VideoSettingsModal: React.FC<VideoSettingsModalProps> = ({ isOpen, 
                       setSelectedVariantId(variant.id);
                     }}
                     style={{
-                      background: selectedVariantId === variant.id ? 'rgba(255,142,83,0.1)' : 'rgba(255,255,255,0.05)',
-                      border: `1px solid ${selectedVariantId === variant.id ? '#FF8E53' : 'rgba(255,255,255,0.1)'}`,
+                      background: selectedVariantId === variant.id ? 'rgba(29, 185, 84, 0.1)' : '#f5f5f5',
+                      border: `1px solid ${selectedVariantId === variant.id ? '#1DB954' : '#e0e0e0'}`,
                       borderRadius: '8px', padding: '10px', marginBottom: '10px', cursor: 'pointer',
                       display: 'flex', alignItems: 'center', gap: '10px'
                     }}
@@ -322,12 +324,12 @@ export const VideoSettingsModal: React.FC<VideoSettingsModalProps> = ({ isOpen, 
                       width: '40px', height: '40px', borderRadius: '6px',
                       background: variant.bg_color.startsWith('#') ? variant.bg_color : 'linear-gradient(135deg, #000428 0%, #004e92 100%)',
                       display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
-                      border: '1px solid rgba(255,255,255,0.2)'
+                      border: '1px solid #e0e0e0'
                     }}>
                       <div style={{ width: '60%', height: '4px', background: tColor, marginBottom: '4px', borderRadius: '2px' }} />
                       <div style={{ width: '40%', height: '4px', background: kColor, borderRadius: '2px' }} />
                     </div>
-                    <div style={{ flex: 1, fontSize: '0.85rem', color: '#ddd' }}>
+                    <div style={{ flex: 1, fontSize: '0.85rem', color: '#666' }}>
                       Select this style to skip generation time and instantly reuse!
                     </div>
                   </div>

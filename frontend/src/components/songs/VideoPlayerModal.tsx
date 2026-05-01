@@ -9,7 +9,7 @@ const VideoModal = styled.div`
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.8);
+  background-color: rgba(0, 0, 0, 0.4);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -20,10 +20,10 @@ const VideoModal = styled.div`
 const VideoContainer = styled.div`
   width: 90%;
   max-width: 800px;
-  background: #191414;
+  background: white;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   position: relative;
 `;
 
@@ -36,7 +36,7 @@ const VideoCloseButton = styled.button`
   position: absolute;
   top: 15px;
   right: 15px;
-  background: rgba(0, 0, 0, 0.5);
+  background: white;
   border: none;
   border-radius: 50%;
   width: 36px;
@@ -44,26 +44,31 @@ const VideoCloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: #333;
   cursor: pointer;
   transition: all 0.2s ease;
   z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   
   &:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: #1DB954;
+    color: white;
     transform: scale(1.1);
   }
 `;
 
 const VideoInfoBar = styled.div`
-  padding: 15px;
-  background: #191414;
-  color: white;
+  padding: 15px 20px;
+  background: white;
+  color: #333;
+  border-top: 1px solid #e0e0e0;
 `;
 
 const VideoTitle = styled.h4`
   font-size: 18px;
+  font-weight: 600;
   margin: 0 0 5px;
+  color: #333;
 `;
 
 const VideoArtist = styled.p`
@@ -81,9 +86,10 @@ const LoadingOverlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  color: white;
+  background: rgba(255, 255, 255, 0.95);
+  color: #333;
   font-size: 18px;
+  font-weight: 500;
   z-index: 5;
 `;
 

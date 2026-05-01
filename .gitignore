@@ -3,6 +3,8 @@
 backend/.env
 frontend/.env
 
+
+
 # Keep example files
 !.env.example
 !backend/.env.example
@@ -75,6 +77,11 @@ frontend/.env.production.local
 .DS_Store
 .idea/
 .vscode/
+.cursor/
+.superdesing/
+.windsurfrules
+CLAUDE.md
+default_ui_darkmode.css
 *.swp
 *.swo
 *~

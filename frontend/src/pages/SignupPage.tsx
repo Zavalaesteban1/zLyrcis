@@ -19,125 +19,88 @@ const SignupContainer = styled.div`
   width: 100%;
   max-width: 100vw;
   background-color: white;
-  background-image: linear-gradient(rgba(29, 185, 84, 0.03) 1px, transparent 1px), 
-                    linear-gradient(90deg, rgba(29, 185, 84, 0.03) 1px, transparent 1px);
-  background-size: 20px 20px;
-  color: #333;
+  background-image: linear-gradient(rgba(29, 185, 84, 0.04) 1px, transparent 1px), 
+                    linear-gradient(90deg, rgba(29, 185, 84, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: #1a1a1a;
   overflow-x: hidden;
   padding: 40px;
 `;
 
 const Logo = styled.div`
-  font-size: 42px;
+  font-size: 24px;
   font-weight: 700;
-  margin-bottom: 50px;
+  margin-bottom: 40px;
   display: flex;
   align-items: center;
-  gap: 15px;
-  color: #1DB954;
-  
-  @media (min-width: 1600px) {
-    font-size: 48px;
-    margin-bottom: 60px;
-  }
+  gap: 10px;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
   
   @media (max-width: 768px) {
-    font-size: 32px;
-    margin-bottom: 30px;
+    font-size: 20px;
+    margin-bottom: 24px;
   }
 `;
 
 const LogoIcon = styled.span`
   display: flex;
   align-items: center;
-  font-size: 48px;
-  
-  @media (min-width: 1600px) {
-    font-size: 54px;
-  }
+  color: #1DB954;
   
   @media (max-width: 768px) {
-    font-size: 36px;
+    font-size: 20px;
   }
 `;
 
 const SignupCard = styled.div`
   background-color: white;
-  border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
   width: 100%;
-  max-width: 650px;
-  padding: 60px 80px;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  
-  @media (min-width: 1600px) {
-    max-width: 750px;
-    padding: 70px 90px;
-  }
+  max-width: 480px;
+  padding: 48px;
+  border: 1px solid rgba(29, 185, 84, 0.1);
   
   @media (max-width: 768px) {
-    padding: 30px;
+    padding: 32px;
     max-width: 100%;
-    border-radius: 10px;
+    border-radius: 16px;
   }
 `;
 
 const SignupHeader = styled.div`
-  margin-bottom: 50px;
+  margin-bottom: 40px;
   text-align: center;
-  
-  @media (min-width: 1600px) {
-    margin-bottom: 60px;
-  }
-  
-  @media (max-width: 768px) {
-    margin-bottom: 30px;
-  }
 `;
 
 const SignupTitle = styled.h2`
-  font-size: 36px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 15px;
-  
-  @media (min-width: 1600px) {
-    font-size: 42px;
-    margin-bottom: 18px;
-  }
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
   
   @media (max-width: 768px) {
-    font-size: 28px;
-    margin-bottom: 10px;
+    font-size: 24px;
   }
 `;
 
 const SignupSubtitle = styled.p`
   color: #666;
-  font-size: 20px;
-  
-  @media (min-width: 1600px) {
-    font-size: 22px;
-  }
+  font-size: 15px;
+  margin: 0;
   
   @media (max-width: 768px) {
-    font-size: 16px;
+    font-size: 14px;
   }
 `;
 
 const Form = styled.form`
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 24px;
   width: 100%;
-  
-  @media (min-width: 1600px) {
-    gap: 32px;
-  }
-  
-  @media (max-width: 768px) {
-    gap: 20px;
-  }
 `;
 
 const InputContainer = styled.div`
@@ -146,49 +109,28 @@ const InputContainer = styled.div`
 `;
 
 const Label = styled.label`
-  font-size: 18px;
-  margin-bottom: 12px;
+  font-size: 14px;
+  margin-bottom: 8px;
   display: block;
-  color: #444;
-  font-weight: 500;
-  
-  @media (min-width: 1600px) {
-    font-size: 20px;
-    margin-bottom: 14px;
-  }
-  
-  @media (max-width: 768px) {
-    font-size: 14px;
-    margin-bottom: 8px;
-  }
+  color: #1a1a1a;
+  font-weight: 600;
 `;
 
 const Input = styled.input`
   width: 100%;
-  padding: 16px 20px;
-  border: 1px solid #e0e0e0;
+  padding: 12px 14px;
+  border: 1.5px solid #e8e8e8;
   border-radius: 10px;
-  background-color: white;
-  color: #333;
-  font-size: 18px;
-  transition: all 0.3s ease;
-  
-  @media (min-width: 1600px) {
-    padding: 18px 22px;
-    font-size: 20px;
-    border-radius: 12px;
-  }
-  
-  @media (max-width: 768px) {
-    padding: 12px 15px;
-    font-size: 16px;
-    border-radius: 8px;
-  }
+  background-color: #fafafa;
+  color: #1a1a1a;
+  font-size: 15px;
+  transition: all 0.2s ease;
   
   &:focus {
     outline: none;
     border-color: #1DB954;
-    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.1);
+    background-color: white;
+    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.08);
   }
   
   &::placeholder {
@@ -197,39 +139,25 @@ const Input = styled.input`
 `;
 
 const Button = styled.button`
-  padding: 18px;
+  padding: 13px;
   border: none;
   border-radius: 10px;
-  background-color: #1DB954;
+  background: linear-gradient(135deg, #1DB954 0%, #17a049 100%);
   color: white;
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  margin-top: 15px;
-  
-  @media (min-width: 1600px) {
-    padding: 20px;
-    font-size: 22px;
-    margin-top: 20px;
-    border-radius: 12px;
-  }
-  
-  @media (max-width: 768px) {
-    padding: 14px;
-    font-size: 16px;
-    margin-top: 5px;
-    border-radius: 8px;
-  }
+  gap: 10px;
+  margin-top: 8px;
+  box-shadow: 0 2px 8px rgba(29, 185, 84, 0.2);
   
   &:hover {
-    background-color: #169c46;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(29, 185, 84, 0.2);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(29, 185, 84, 0.3);
   }
   
   &:active {
@@ -237,49 +165,26 @@ const Button = styled.button`
   }
   
   &:disabled {
-    background-color: #a0a0a0;
+    background: #a0a0a0;
     cursor: not-allowed;
     transform: none;
-    box-shadow: none;
   }
 `;
 
 const ErrorMessage = styled.div`
   background-color: rgba(233, 20, 41, 0.1);
   color: #e91429;
-  padding: 16px 20px;
-  border-radius: 10px;
-  font-size: 18px;
-  border-left: 4px solid #e91429;
-  
-  @media (min-width: 1600px) {
-    padding: 18px 22px;
-    font-size: 20px;
-    border-radius: 12px;
-  }
-  
-  @media (max-width: 768px) {
-    padding: 12px 15px;
-    font-size: 14px;
-    border-radius: 8px;
-  }
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  border-left: 3px solid #e91429;
 `;
 
 const LinkContainer = styled.div`
-  margin-top: 35px;
+  margin-top: 32px;
   text-align: center;
   color: #666;
-  font-size: 18px;
-  
-  @media (min-width: 1600px) {
-    margin-top: 40px;
-    font-size: 20px;
-  }
-  
-  @media (max-width: 768px) {
-    margin-top: 25px;
-    font-size: 14px;
-  }
+  font-size: 14px;
   
   a {
     color: #1DB954;
@@ -294,27 +199,15 @@ const LinkContainer = styled.div`
 
 const LoadingSpinner = styled.div`
   display: inline-block;
-  width: 24px;
-  height: 24px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
   border-top-color: white;
   animation: spin 1s ease-in-out infinite;
 
   @keyframes spin {
     to { transform: rotate(360deg); }
-  }
-  
-  @media (min-width: 1600px) {
-    width: 28px;
-    height: 28px;
-    border-width: 3px;
-  }
-  
-  @media (max-width: 768px) {
-    width: 20px;
-    height: 20px;
-    border-width: 2px;
   }
 `;
 
@@ -370,14 +263,14 @@ const SignupPage: React.FC = () => {
   return (
     <SignupContainer>
       <Logo>
-        <LogoIcon>{MdMusicNote({ size: 48 })}</LogoIcon>
+        <LogoIcon>{MdMusicNote({ size: 24 })}</LogoIcon>
         zLyrics
       </Logo>
       
       <SignupCard>
         <SignupHeader>
           <SignupTitle>Create Account</SignupTitle>
-          <SignupSubtitle>Sign up to start creating amazing lyric videos</SignupSubtitle>
+          <SignupSubtitle>Get started in seconds</SignupSubtitle>
         </SignupHeader>
         
         <Form onSubmit={handleSubmit}>

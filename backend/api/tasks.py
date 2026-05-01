@@ -71,13 +71,17 @@ def generate_lyric_video(job_id):
         job.artist = song_info['artist']
         job.save()
         
-        # 2. Get lyrics from Genius
-        lyrics = get_lyrics(song_info['title'], song_info['artist'])
+        # 2. Get lyrics - Try Musixmatch first (better coverage), then Genius
+        lyrics = get_lyrics_from_musixmatch(spotify_track_id, song_info['title'], song_info['artist'])
+        
         if not lyrics:
-            # Try simplified title (removing parts in parentheses)
-            simplified_title = re.sub(r'\(.*?\)', '', song_info['title']).strip()
-            if simplified_title != song_info['title']:
-                lyrics = get_lyrics(simplified_title, song_info['artist'])
+            print("Musixmatch failed, trying Genius API...")
+            lyrics = get_lyrics(song_info['title'], song_info['artist'])
+            if not lyrics:
+                # Try simplified title (removing parts in parentheses)
+                simplified_title = re.sub(r'\(.*?\)', '', song_info['title']).strip()
+                if simplified_title != song_info['title']:
+                    lyrics = get_lyrics(simplified_title, song_info['artist'])
                 
         if not lyrics:
             print("⚠️  Genius lyrics not found - will use Groq transcription instead")
@@ -362,6 +366,82 @@ def get_lyrics(title, artist):
         return None
     except Exception as e:
         print(f"Error fetching lyrics: {e}")
+        traceback.print_exc()
+        return None
+
+
+def get_lyrics_from_musixmatch(spotify_track_id, title, artist):
+    """
+    Get lyrics from Musixmatch API using Spotify track ID
+    
+    API Endpoint: GET /ws/1.1/track.lyrics.get
+    Parameters:
+        - track_spotify_id: Spotify track ID
+        - apikey: Your Musixmatch API key
+    
+    Returns: Clean lyrics text or None
+    """
+    musixmatch_api_key = os.environ.get("MUSIXMATCH_API_KEY")
+    
+    if not musixmatch_api_key:
+        print("Musixmatch API key not found")
+        return None
+    
+    try:
+        print(f"Fetching lyrics from Musixmatch for: '{title}' by '{artist}'")
+        
+        # Call Musixmatch API with Spotify ID
+        url = "https://api.musixmatch.com/ws/1.1/track.lyrics.get"
+        params = {
+            "track_spotify_id": spotify_track_id,
+            "apikey": musixmatch_api_key
+        }
+        
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Check response status
+        status_code = data["message"]["header"]["status_code"]
+        
+        if status_code == 200:
+            lyrics_body = data["message"]["body"]["lyrics"]["lyrics_body"]
+            
+            # Remove Musixmatch footer (e.g., "...This Lyrics is NOT for Commercial use")
+            lyrics_body = re.sub(r'\n?\*+.*?This Lyrics.*?\*+.*$', '', lyrics_body, flags=re.IGNORECASE | re.DOTALL)
+            
+            print(f"✓ Musixmatch returned lyrics ({len(lyrics_body)} characters)")
+            
+            # DEBUG: Show EVERYTHING Musixmatch returned
+            lines = lyrics_body.split('\n')
+            print(f"\n{'='*80}")
+            print(f"MUSIXMATCH COMPLETE LYRICS - Total lines: {len(lines)}")
+            print(f"{'='*80}")
+            for i, line in enumerate(lines, 1):  # Show ALL lines
+                print(f"Line {i:3d}: {line}")
+            print(f"{'='*80}\n")
+            
+            return lyrics_body
+        elif status_code == 404:
+            print(f"✗ Musixmatch: Lyrics not found for this track")
+            return None
+        elif status_code == 401:
+            print(f"✗ Musixmatch: Authentication failed - check your API key")
+            return None
+        else:
+            print(f"✗ Musixmatch returned status: {status_code}")
+            return None
+            
+    except KeyError as e:
+        print(f"Error parsing Musixmatch response: {e}")
+        traceback.print_exc()
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching lyrics from Musixmatch: {e}")
+        traceback.print_exc()
+        return None
+    except Exception as e:
+        print(f"Unexpected error with Musixmatch: {e}")
         traceback.print_exc()
         return None
 

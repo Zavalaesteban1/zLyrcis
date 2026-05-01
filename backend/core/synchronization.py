@@ -277,6 +277,16 @@ class AdvancedLyricSynchronizer:
                 return None
             
             print(f"Groq returned {len(words)} words with perfect timestamps")
+
+            # DEBUG: Show EVERYTHING Groq transcribed
+            print(f"\n{'='*80}")
+            print(f"GROQ COMPLETE TRANSCRIPTION - Total words: {len(words)}")
+            print(f"{'='*80}")
+            transcribed_text = ' '.join([w['word'] for w in words])  # ALL words
+            print(f"Complete transcribed text:")
+            print(f"{transcribed_text}")
+            print(f"{'='*80}\n")
+            
             
             # Match lyrics to word sequences using existing algorithm
             synced_lyrics = self._match_lyrics_to_words(lyrics_lines, words, detected_lang)

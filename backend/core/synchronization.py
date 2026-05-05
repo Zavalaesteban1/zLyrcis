@@ -79,12 +79,13 @@ class SyncedLyric:
 class AdvancedLyricSynchronizer:
     """Advanced synchronization using multiple audio analysis techniques"""
     
-    def __init__(self, audio_path: str, config: Optional[SynchronizationConfig] = None):
+    def __init__(self, audio_path: str, config: Optional[SynchronizationConfig] = None, detected_language: Optional[str] = None):
         self.audio_path = audio_path
         self.audio_features = None
         self.config = config if config else (get_default_config() if CONFIG_AVAILABLE else None)
         self.sample_rate = self.config.AUDIO_SAMPLE_RATE if self.config else 22050
         self.y = None
+        self.detected_language = detected_language  # Store detected language from Spotify/metadata
         
     def analyze_audio(self) -> Optional[AudioFeatures]:
         """Perform comprehensive audio analysis"""
@@ -249,14 +250,25 @@ class AdvancedLyricSynchronizer:
                 base_url="https://api.groq.com/openai/v1"
             )
             
+            # Prepare transcription parameters
+            transcription_params = {
+                "model": "whisper-large-v3",
+                "file": None,  # Will be set in the with block
+                "response_format": "verbose_json",
+                "timestamp_granularities": ["word"]
+            }
+            
+            # Add language parameter if detected from metadata
+            if self.detected_language:
+                transcription_params["language"] = self.detected_language
+                print(f"Using detected language for Groq: {self.detected_language}")
+            else:
+                print("No language detected - Groq will auto-detect")
+            
             # Open audio file and send to Groq
             with open(self.audio_path, "rb") as audio_file:
-                transcription = client.audio.transcriptions.create(
-                    model="whisper-large-v3",  # or "distil-whisper-large-v3-en" for English-only (faster)
-                    file=audio_file,
-                    response_format="verbose_json",
-                    timestamp_granularities=["word"]
-                )
+                transcription_params["file"] = audio_file
+                transcription = client.audio.transcriptions.create(**transcription_params)
             
             # Extract language
             detected_lang = getattr(transcription, 'language', 'en')
@@ -277,6 +289,24 @@ class AdvancedLyricSynchronizer:
                 return None
             
             print(f"Groq returned {len(words)} words with perfect timestamps")
+
+            # DEBUG: Show EVERYTHING Groq transcribed
+            print(f"\n{'='*80}")
+            print(f"GROQ COMPLETE TRANSCRIPTION - Total words: {len(words)}")
+            print(f"{'='*80}")
+            transcribed_text = ' '.join([w['word'] for w in words])  # ALL words
+            print(f"Complete transcribed text:")
+            print(f"{transcribed_text}")
+            print(f"{'='*80}\n")
+            
+            # DEBUG: Show ALL word-level timestamps
+            print(f"{'='*80}")
+            print(f"GROQ WORD-LEVEL TIMESTAMPS - ALL {len(words)} WORDS")
+            print(f"{'='*80}")
+            for i, w in enumerate(words, 1):
+                print(f"Word {i:3d}: '{w['word']:20s}' → {w['start']:7.2f}s - {w['end']:7.2f}s")
+            print(f"{'='*80}\n")
+            
             
             # Match lyrics to word sequences using existing algorithm
             synced_lyrics = self._match_lyrics_to_words(lyrics_lines, words, detected_lang)
@@ -311,16 +341,25 @@ class AdvancedLyricSynchronizer:
                 base_url="https://api.groq.com/openai/v1"
             )
             
-            # Transcribe with Groq - FORCE ENGLISH to avoid misdetection
-            # (Reggae, heavily accented music, or poor audio can confuse auto-detection)
+            # Prepare transcription parameters
+            transcription_params = {
+                "model": "whisper-large-v3",
+                "file": None,  # Will be set in the with block
+                "response_format": "verbose_json",
+                "timestamp_granularities": ["segment"]  # Get segments, not just words
+            }
+            
+            # Use detected language if available, otherwise let Groq auto-detect
+            if self.detected_language:
+                transcription_params["language"] = self.detected_language
+                print(f"Using detected language for Groq-only mode: {self.detected_language}")
+            else:
+                print("No language detected - Groq will auto-detect (may be inaccurate)")
+            
+            # Transcribe with Groq
             with open(self.audio_path, "rb") as audio_file:
-                transcription = client.audio.transcriptions.create(
-                    model="whisper-large-v3",
-                    file=audio_file,
-                    response_format="verbose_json",
-                    timestamp_granularities=["segment"],  # Get segments, not just words
-                    language="en"  # Force English (prevents Khmer/wrong language detection)
-                )
+                transcription_params["file"] = audio_file
+                transcription = client.audio.transcriptions.create(**transcription_params)
             
             # Extract language (should be 'en' now)
             detected_lang = getattr(transcription, 'language', 'en')
@@ -370,9 +409,17 @@ class AdvancedLyricSynchronizer:
             model = whisper.load_model("base", device="cpu")
             audio = whisper.load_audio(self.audio_path)
             
-            print("Transcribing audio with auto-detected language...")
-            # Let Whisper auto-detect the language by not specifying it
-            result = whisper.transcribe(model, audio)
+            # Prepare transcription parameters
+            transcribe_params = {}
+            
+            # Use detected language if available
+            if self.detected_language:
+                transcribe_params["language"] = self.detected_language
+                print(f"Transcribing audio with detected language: {self.detected_language}")
+            else:
+                print("Transcribing audio with auto-detected language...")
+            
+            result = whisper.transcribe(model, audio, **transcribe_params)
             
             # Show what language Whisper detected
             detected_lang = result.get("language", "unknown")
@@ -1219,14 +1266,20 @@ class AdvancedLyricSynchronizer:
         return synced_lyrics
 
 
-def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str] = None) -> List[Dict]:
+def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str] = None, lyrics_source: str = None, detected_language: str = None) -> List[Dict]:
     """
     Main function to synchronize lyrics using advanced methods.
     Returns list of dicts compatible with existing code.
     
+    Args:
+        audio_path: Path to audio file
+        lyrics_lines: List of lyric lines (None for Groq-only mode)
+        lyrics_source: Name of lyrics service ("Musixmatch", "Genius", etc.)
+        detected_language: ISO 639-1 language code detected from Spotify metadata (e.g., 'es', 'en', 'fr')
+    
     If lyrics_lines is None, uses Groq transcription as lyrics (Groq-only mode).
     """
-    synchronizer = AdvancedLyricSynchronizer(audio_path)
+    synchronizer = AdvancedLyricSynchronizer(audio_path, detected_language=detected_language)
     
     # Analyze audio features
     synchronizer.analyze_audio()
@@ -1247,7 +1300,14 @@ def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str] = None)
             "words": lyric.words if hasattr(lyric, 'words') else []
         })
     
-    mode = "Groq-only" if lyrics_lines is None else "Genius+Groq matching"
+    # Determine the mode description for logging
+    if lyrics_lines is None:
+        mode = "Groq-only (transcription as lyrics)"
+    elif lyrics_source:
+        mode = f"{lyrics_source}+Groq matching"
+    else:
+        mode = "Lyrics+Groq matching"  # Generic fallback if source unknown
+    
     print(f"Advanced synchronization complete: {len(result)} lyrics synced ({mode})")
     return result
 

@@ -29,10 +29,10 @@ const PageContainer = styled.div`
   width: 100%;
   max-width: 100vw;
   background-color: white;
-  background-image: linear-gradient(rgba(29, 185, 84, 0.03) 1px, transparent 1px), 
-                    linear-gradient(90deg, rgba(29, 185, 84, 0.03) 1px, transparent 1px);
-  background-size: 20px 20px;
-  color: #333;
+  background-image: linear-gradient(rgba(29, 185, 84, 0.04) 1px, transparent 1px), 
+                    linear-gradient(90deg, rgba(29, 185, 84, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: #1a1a1a;
   overflow-x: hidden;
   position: relative;
 `;
@@ -43,39 +43,38 @@ const Header = styled.header`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 40px;
-  background-color: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  padding: 16px 48px;
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   z-index: 100;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(29, 185, 84, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   @media (max-width: 768px) {
-    padding: 15px 20px;
+    padding: 12px 24px;
   }
 `;
 
 const HeaderLogo = styled.div`
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 700;
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #1DB954;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
   
   @media (max-width: 768px) {
-    font-size: 24px;
-    gap: 8px;
-  }
-  
-  @media (max-width: 480px) {
     font-size: 20px;
+    gap: 8px;
   }
 `;
 
 const LogoIcon = styled.span`
   display: flex;
   align-items: center;
+  color: #1DB954;
 `;
 
 const HeaderButtons = styled.div`
@@ -84,36 +83,47 @@ const HeaderButtons = styled.div`
 `;
 
 const HeaderButton = styled.button`
-  padding: 10px 20px;
-  border-radius: 30px;
-  font-size: 16px;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   
   @media (max-width: 768px) {
-    padding: 8px 16px;
-    font-size: 14px;
+    padding: 6px 16px;
+    font-size: 13px;
   }
 `;
 
 const LoginButton = styled(HeaderButton)`
   background-color: transparent;
-  border: 2px solid #1DB954;
-  color: #1DB954;
+  border: 1px solid rgba(29, 185, 84, 0.2);
+  color: #1a1a1a;
   
   &:hover {
-    background-color: rgba(29, 185, 84, 0.1);
+    background-color: rgba(29, 185, 84, 0.05);
+    border-color: rgba(29, 185, 84, 0.3);
+  }
+  
+  &:active {
+    transform: scale(0.98);
   }
 `;
 
 const SignupButton = styled(HeaderButton)`
-  background-color: #1DB954;
-  border: 2px solid #1DB954;
+  background: linear-gradient(135deg, #1DB954 0%, #17a049 100%);
+  border: 1px solid transparent;
   color: white;
+  box-shadow: 0 2px 8px rgba(29, 185, 84, 0.2);
   
   &:hover {
-    background-color: #169c46;
+    box-shadow: 0 4px 16px rgba(29, 185, 84, 0.3);
+    transform: translateY(-1px);
+  }
+  
+  &:active {
+    transform: translateY(0);
   }
 `;
 
@@ -121,99 +131,130 @@ const HeroSection = styled.section`
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 100px 40px;
+  padding: 140px 48px 120px;
   text-align: center;
   
   @media (max-width: 768px) {
-    padding: 60px 20px;
+    padding: 80px 24px 60px;
   }
 `;
 
 const HeroTitle = styled.h1`
-  font-size: 56px;
-  font-weight: 800;
-  color: #333;
-  margin-bottom: 24px;
-  line-height: 1.2;
+  font-size: 72px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 20px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
   max-width: 900px;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 8s ease-in-out infinite;
+  
+  @keyframes shimmer {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
   
   @media (max-width: 768px) {
-    font-size: 32px;
+    font-size: 48px;
     margin-bottom: 16px;
   }
   
   @media (max-width: 480px) {
-    font-size: 28px;
+    font-size: 36px;
   }
 `;
 
 const HeroSubtitle = styled.p`
-  font-size: 22px;
+  font-size: 18px;
   color: #666;
-  margin-bottom: 40px;
+  margin-bottom: 48px;
   line-height: 1.6;
-  max-width: 800px;
+  max-width: 500px;
+  font-weight: 400;
   
   @media (max-width: 768px) {
-    font-size: 18px;
-    margin-bottom: 30px;
+    font-size: 16px;
+    margin-bottom: 36px;
   }
 `;
 
 const PrimaryButton = styled.button`
-  padding: 18px 36px;
-  background-color: #1DB954;
+  padding: 16px 40px;
+  background: linear-gradient(135deg, #1DB954 0%, #17a049 100%);
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   color: white;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(29, 185, 84, 0.25);
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+  }
   
   &:hover {
-    background-color: #169c46;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(29, 185, 84, 0.2);
+    box-shadow: 0 8px 24px rgba(29, 185, 84, 0.35);
+    
+    &::before {
+      left: 100%;
+    }
+  }
+  
+  &:active {
+    transform: translateY(0);
   }
   
   @media (max-width: 768px) {
-    padding: 14px 28px;
-    font-size: 16px;
+    padding: 14px 32px;
+    font-size: 15px;
   }
 `;
 
 const FeatureSection = styled.section`
-  padding: 80px 40px;
-  background-color: rgba(29, 185, 84, 0.05);
+  padding: 100px 48px;
+  background: transparent;
   
   @media (max-width: 768px) {
-    padding: 60px 20px;
+    padding: 60px 24px;
   }
 `;
 
 const SectionTitle = styled.h2`
-  font-size: 42px;
+  font-size: 48px;
   font-weight: 700;
-  color: #333;
-  margin-bottom: 20px;
+  color: #1a1a1a;
+  margin-bottom: 80px;
   text-align: center;
+  letter-spacing: -0.02em;
   
   @media (max-width: 768px) {
-    font-size: 28px;
-  }
-  
-  @media (max-width: 480px) {
-    font-size: 24px;
+    font-size: 32px;
+    margin-bottom: 48px;
   }
 `;
 
 const SectionSubtitle = styled.p`
-  font-size: 20px;
+  font-size: 18px;
   color: #666;
-  margin-bottom: 60px;
+  margin-bottom: 64px;
   text-align: center;
-  max-width: 800px;
+  max-width: 600px;
   margin-left: auto;
   margin-right: auto;
   
@@ -225,13 +266,14 @@ const SectionSubtitle = styled.p`
 
 const FeatureList = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 40px;
-  max-width: 1200px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 48px;
+  max-width: 1100px;
   margin: 0 auto;
   
-  @media (max-width: 768px) {
-    gap: 30px;
+  @media (max-width: 968px) {
+    grid-template-columns: 1fr;
+    gap: 40px;
   }
 `;
 
@@ -240,106 +282,61 @@ const FeatureItem = styled.div`
   flex-direction: column;
   align-items: center;
   text-align: center;
+  padding: 40px 32px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(29, 185, 84, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  &:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 16px 40px rgba(29, 185, 84, 0.12);
+    border-color: rgba(29, 185, 84, 0.2);
+    background: rgba(255, 255, 255, 0.8);
+  }
 `;
 
 const FeatureIcon = styled.div`
-  width: 80px;
-  height: 80px;
-  border-radius: 20px;
-  background-color: rgba(29, 185, 84, 0.1);
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(29, 185, 84, 0.1) 0%, rgba(29, 185, 84, 0.05) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 36px;
+  font-size: 32px;
   color: #1DB954;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  transition: all 0.3s ease;
+  
+  ${FeatureItem}:hover & {
+    transform: scale(1.1);
+    background: linear-gradient(135deg, rgba(29, 185, 84, 0.15) 0%, rgba(29, 185, 84, 0.08) 100%);
+  }
 `;
 
 const FeatureTitle = styled.h3`
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
-  color: #333;
-  margin-bottom: 12px;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
 `;
 
 const FeatureDescription = styled.p`
-  font-size: 16px;
+  font-size: 15px;
   color: #666;
-  line-height: 1.6;
-  max-width: 300px;
-  margin: 0 auto;
-`;
-
-const PartnershipSection = styled.section`
-  padding: 80px 40px;
-  background-color: white;
-  
-  @media (max-width: 768px) {
-    padding: 60px 20px;
-  }
-`;
-
-const PartnerList = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 40px;
-  max-width: 1200px;
-  margin: 0 auto;
-  
-  @media (max-width: 768px) {
-    gap: 30px;
-  }
-`;
-
-const PartnerItem = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 30px;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-  
-  &:hover {
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-    transform: translateY(-5px);
-  }
-`;
-
-const PartnerIcon = styled.div`
-  width: 80px;
-  height: 80px;
-  border-radius: 20px;
-  background-color: rgba(29, 185, 84, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 36px;
-  color: #1DB954;
-  margin-bottom: 20px;
-`;
-
-const PartnerTitle = styled.h3`
-  font-size: 24px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 12px;
-`;
-
-const PartnerDescription = styled.p`
-  font-size: 16px;
-  color: #666;
-  line-height: 1.6;
-  max-width: 300px;
-  margin: 0 auto;
+  line-height: 1.5;
+  margin: 0;
 `;
 
 const CTASection = styled.section`
-  padding: 100px 40px;
+  padding: 120px 48px;
   text-align: center;
   
   @media (max-width: 768px) {
-    padding: 60px 20px;
+    padding: 80px 24px;
   }
 `;
 
@@ -350,25 +347,44 @@ const ModalOverlay = styled.div<{ isOpen: boolean }>`
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(0, 0, 0, 0.4);
   display: ${props => props.isOpen ? 'flex' : 'none'};
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  backdrop-filter: blur(5px);
+  backdrop-filter: blur(12px);
+  animation: ${props => props.isOpen ? 'fadeIn 0.2s ease-out' : 'none'};
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 `;
 
 const ModalContent = styled.div`
   background-color: white;
-  border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   width: 100%;
-  max-width: 500px;
-  padding: 40px;
+  max-width: 480px;
+  padding: 48px;
   position: relative;
+  border: 1px solid rgba(29, 185, 84, 0.1);
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
   
   @media (max-width: 768px) {
-    padding: 30px;
+    padding: 32px;
     width: 90%;
   }
 `;
@@ -377,37 +393,47 @@ const ModalCloseButton = styled.button`
   position: absolute;
   top: 20px;
   right: 20px;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.05);
   border: none;
-  font-size: 24px;
+  font-size: 20px;
   cursor: pointer;
   color: #666;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
   
   &:hover {
-    color: #333;
+    background: rgba(0, 0, 0, 0.08);
+    color: #1a1a1a;
+  }
+  
+  &:active {
+    transform: scale(0.95);
   }
 `;
 
 const ModalTitle = styled.h2`
-  font-size: 28px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 10px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 8px;
   text-align: center;
+  letter-spacing: -0.01em;
   
   @media (max-width: 768px) {
-    font-size: 24px;
+    font-size: 22px;
   }
 `;
 
 const ModalSubtitle = styled.p`
   color: #666;
-  font-size: 16px;
+  font-size: 14px;
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 32px;
 `;
 
 // Login form components - reusing most of the existing login form styles
@@ -424,27 +450,28 @@ const InputContainer = styled.div`
 `;
 
 const Label = styled.label`
-  font-size: 16px;
+  font-size: 14px;
   margin-bottom: 8px;
   display: block;
-  color: #444;
-  font-weight: 500;
+  color: #1a1a1a;
+  font-weight: 600;
 `;
 
 const Input = styled.input`
   width: 100%;
-  padding: 14px 16px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background-color: white;
-  color: #333;
-  font-size: 16px;
-  transition: all 0.3s ease;
+  padding: 12px 14px;
+  border: 1.5px solid #e8e8e8;
+  border-radius: 10px;
+  background-color: #fafafa;
+  color: #1a1a1a;
+  font-size: 15px;
+  transition: all 0.2s ease;
   
   &:focus {
     outline: none;
     border-color: #1DB954;
-    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.1);
+    background-color: white;
+    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.08);
   }
   
   &::placeholder {
@@ -453,28 +480,35 @@ const Input = styled.input`
 `;
 
 const Button = styled.button`
-  padding: 14px;
+  padding: 13px;
   border: none;
-  border-radius: 8px;
-  background-color: #1DB954;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #1DB954 0%, #17a049 100%);
   color: white;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-top: 10px;
+  margin-top: 8px;
+  box-shadow: 0 2px 8px rgba(29, 185, 84, 0.2);
   
   &:hover {
-    background-color: #169c46;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(29, 185, 84, 0.3);
+  }
+  
+  &:active {
+    transform: translateY(0);
   }
   
   &:disabled {
-    background-color: #a0a0a0;
+    background: #a0a0a0;
     cursor: not-allowed;
+    transform: none;
   }
 `;
 
@@ -544,10 +578,12 @@ const LoadingSpinner = styled.div`
 `;
 
 const Footer = styled.footer`
-  background-color: #f9f9f9;
-  padding: 40px;
+  background: transparent;
+  padding: 40px 48px;
   text-align: center;
-  color: #666;
+  color: #999;
+  font-size: 14px;
+  border-top: 1px solid rgba(29, 185, 84, 0.1);
 `;
 
 const LandingPage: React.FC = () => {
@@ -659,40 +695,39 @@ const LandingPage: React.FC = () => {
       
       {/* Hero section */}
       <HeroSection>
-        <HeroTitle>Talk to AI About Music</HeroTitle>
+        <HeroTitle>Music Ai Simple.</HeroTitle>
         <HeroSubtitle>
-          Discover new songs, chat about artists, or just explore music with AI.
+        Generate lyric videos with Ai. Learn.
         </HeroSubtitle>
         <PrimaryButton onClick={openSignupModal}>Get Started</PrimaryButton>
       </HeroSection>
       
       {/* Features section */}
       <FeatureSection>
-        <SectionTitle>What You Can Do</SectionTitle>
-        <SectionSubtitle>Discover music through AI</SectionSubtitle>
+        <SectionTitle>Features</SectionTitle>
         
         <FeatureList>
           <FeatureItem>
-            <FeatureIcon>{RiRobot2Line({ size: 36 })}</FeatureIcon>
-            <FeatureTitle>Chat About Music</FeatureTitle>
+            <FeatureIcon>{RiRobot2Line({ size: 32 })}</FeatureIcon>
+            <FeatureTitle>AI Chat Agent</FeatureTitle>
             <FeatureDescription>
-              Have natural conversations with our AI about your favorite artists and discover new songs.
+              Request songs, customize videos
             </FeatureDescription>
           </FeatureItem>
           
           <FeatureItem>
-            <FeatureIcon>{BsSpotify({ size: 36 })}</FeatureIcon>
-            <FeatureTitle>Get Recommendations</FeatureTitle>
+            <FeatureIcon>{MdVideoLibrary({ size: 32 })}</FeatureIcon>
+            <FeatureTitle>Video Generation</FeatureTitle>
             <FeatureDescription>
-              Receive personalized song suggestions based on your preferences, complete with Spotify links and album art.
+              Create custom lyric videos instantly
             </FeatureDescription>
           </FeatureItem>
           
           <FeatureItem>
-            <FeatureIcon>{MdVideoLibrary({ size: 36 })}</FeatureIcon>
-            <FeatureTitle>Build Your Collection</FeatureTitle>
+            <FeatureIcon>{MdLyrics({ size: 32 })}</FeatureIcon>
+            <FeatureTitle>Learn Lyrics</FeatureTitle>
             <FeatureDescription>
-              Save your favorite songs and create a personalized music library that grows with your conversations.
+              Build a collection to practice
             </FeatureDescription>
           </FeatureItem>
         </FeatureList>
@@ -700,9 +735,8 @@ const LandingPage: React.FC = () => {
       
       {/* Call to action section */}
       <CTASection>
-        <SectionTitle>Discover music with AI</SectionTitle>
-        <SectionSubtitle>Join and start building your music collection today</SectionSubtitle>
-        <PrimaryButton onClick={openSignupModal}>Create Account</PrimaryButton>
+        <SectionTitle>Start creating lyric videos</SectionTitle>
+        <PrimaryButton onClick={openSignupModal}>Get Started</PrimaryButton>
       </CTASection>
       
       {/* Footer */}
@@ -718,7 +752,7 @@ const LandingPage: React.FC = () => {
           </ModalCloseButton>
           
           <ModalTitle>Welcome Back</ModalTitle>
-          <ModalSubtitle>Sign in to continue creating amazing lyric videos</ModalSubtitle>
+          <ModalSubtitle>Sign in to continue</ModalSubtitle>
           
           <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
             <GoogleLoginButton>
@@ -796,8 +830,8 @@ const LandingPage: React.FC = () => {
             {MdClose({ size: 24 })}
           </ModalCloseButton>
           
-          <ModalTitle>Create Your Account</ModalTitle>
-          <ModalSubtitle>Join zLyrics and start creating amazing lyric videos</ModalSubtitle>
+          <ModalTitle>Get Started</ModalTitle>
+          <ModalSubtitle>Create your account</ModalSubtitle>
           
           <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
             <GoogleLoginButton>

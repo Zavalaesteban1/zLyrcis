@@ -131,7 +131,14 @@ def generate_lyric_video(job_id):
             # Try advanced synchronization first (includes multiple methods)
             if ADVANCED_SYNC_AVAILABLE:
                 print("Using advanced synchronization system")
-                synced_lyrics = synchronize_lyrics_advanced(audio_path, filtered_lyrics_lines, lyrics_source=lyrics_source)
+                # Pass detected language from Spotify metadata
+                detected_language = song_info.get('language')
+                synced_lyrics = synchronize_lyrics_advanced(
+                    audio_path, 
+                    filtered_lyrics_lines, 
+                    lyrics_source=lyrics_source,
+                    detected_language=detected_language
+                )
             
             # If advanced sync not available, try Deepgram
             if not synced_lyrics and DEEPGRAM_AVAILABLE:
@@ -240,8 +247,72 @@ def extract_spotify_track_id(spotify_url):
     return None
 
 
+def infer_language_from_markets(available_markets):
+    """
+    Infer track language from Spotify available markets.
+    Returns ISO 639-1 language code (e.g., 'es', 'en', 'fr')
+    """
+    if not available_markets:
+        return None
+    
+    # Language inference based on market presence
+    spanish_markets = {'ES', 'MX', 'AR', 'CL', 'CO', 'PE', 'VE', 'EC', 'GT', 'CU', 'BO', 'DO', 'HN', 'PY', 'SV', 'NI', 'CR', 'PA', 'UY'}
+    portuguese_markets = {'BR', 'PT'}
+    french_markets = {'FR', 'CA', 'BE', 'CH'}
+    german_markets = {'DE', 'AT', 'CH'}
+    italian_markets = {'IT', 'CH'}
+    
+    markets_set = set(available_markets)
+    
+    # Count matches for each language
+    spanish_count = len(markets_set & spanish_markets)
+    portuguese_count = len(markets_set & portuguese_markets)
+    french_count = len(markets_set & french_markets)
+    german_count = len(markets_set & german_markets)
+    italian_count = len(markets_set & italian_markets)
+    
+    # If track is available in Spanish-speaking markets but NOT in US/UK/CA (English markets)
+    # it's likely Spanish
+    english_markets = {'US', 'GB', 'CA', 'AU', 'NZ', 'IE'}
+    english_count = len(markets_set & english_markets)
+    
+    # Strong Spanish signal: available in 3+ Spanish markets
+    if spanish_count >= 3:
+        print(f"Language detected: Spanish (found in {spanish_count} Spanish-speaking markets)")
+        return 'es'
+    
+    # Portuguese signal
+    if portuguese_count >= 1:
+        print(f"Language detected: Portuguese (found in {portuguese_count} Portuguese-speaking markets)")
+        return 'pt'
+    
+    # French signal
+    if french_count >= 1:
+        print(f"Language detected: French (found in {french_count} French-speaking markets)")
+        return 'fr'
+    
+    # German signal
+    if german_count >= 1:
+        print(f"Language detected: German (found in {german_count} German-speaking markets)")
+        return 'de'
+    
+    # Italian signal
+    if italian_count >= 1:
+        print(f"Language detected: Italian (found in {italian_count} Italian-speaking markets)")
+        return 'it'
+    
+    # Default to English if available in English markets or worldwide
+    if english_count > 0 or len(markets_set) > 20:
+        print(f"Language detected: English (found in {english_count} English-speaking markets or worldwide release)")
+        return 'en'
+    
+    # Cannot determine
+    print(f"Language detection: Unable to determine from markets (found {len(markets_set)} markets)")
+    return None
+
+
 def get_spotify_track_info(track_id):
-    """Get track information from Spotify API"""
+    """Get track information from Spotify API including language detection"""
     # Get Spotify API credentials
     client_id = settings.SPOTIFY_CLIENT_ID
     client_secret = settings.SPOTIFY_CLIENT_SECRET
@@ -255,6 +326,10 @@ def get_spotify_track_info(track_id):
     # Get track details
     track = sp.track(track_id)
     
+    # Infer language from available markets
+    available_markets = track.get('available_markets', [])
+    detected_language = infer_language_from_markets(available_markets)
+    
     # Extract relevant information
     song_info = {
         'title': track['name'],
@@ -262,7 +337,8 @@ def get_spotify_track_info(track_id):
         'duration_ms': track['duration_ms'],
         'album': track['album']['name'],
         'release_date': track['album']['release_date'],
-        'image_url': track['album']['images'][0]['url'] if track['album']['images'] else None
+        'image_url': track['album']['images'][0]['url'] if track['album']['images'] else None,
+        'language': detected_language  # Add detected language
     }
     
     return song_info

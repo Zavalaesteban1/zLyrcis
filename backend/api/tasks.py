@@ -73,18 +73,25 @@ def generate_lyric_video(job_id):
         
         # 2. Get lyrics - Try Musixmatch first (better coverage), then Genius
         lyrics = get_lyrics_from_musixmatch(spotify_track_id, song_info['title'], song_info['artist'])
+        lyrics_source = None  # Track which service provided lyrics
         
-        if not lyrics:
+        if lyrics:
+            lyrics_source = "Musixmatch"
+        else:
             print("Musixmatch failed, trying Genius API...")
             lyrics = get_lyrics(song_info['title'], song_info['artist'])
-            if not lyrics:
+            if lyrics:
+                lyrics_source = "Genius"
+            else:
                 # Try simplified title (removing parts in parentheses)
                 simplified_title = re.sub(r'\(.*?\)', '', song_info['title']).strip()
                 if simplified_title != song_info['title']:
                     lyrics = get_lyrics(simplified_title, song_info['artist'])
+                    if lyrics:
+                        lyrics_source = "Genius"
                 
         if not lyrics:
-            print("⚠️  Genius lyrics not found - will use Groq transcription instead")
+            print("⚠️  Lyrics not found - will use Groq transcription instead")
             filtered_lyrics_lines = None  # Signal to use Groq-only mode
         else:
             # Process lyrics into clean lines - AGGRESSIVELY CLEAN THEM
@@ -124,7 +131,7 @@ def generate_lyric_video(job_id):
             # Try advanced synchronization first (includes multiple methods)
             if ADVANCED_SYNC_AVAILABLE:
                 print("Using advanced synchronization system")
-                synced_lyrics = synchronize_lyrics_advanced(audio_path, filtered_lyrics_lines)
+                synced_lyrics = synchronize_lyrics_advanced(audio_path, filtered_lyrics_lines, lyrics_source=lyrics_source)
             
             # If advanced sync not available, try Deepgram
             if not synced_lyrics and DEEPGRAM_AVAILABLE:

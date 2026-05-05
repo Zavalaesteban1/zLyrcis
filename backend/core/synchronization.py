@@ -277,6 +277,24 @@ class AdvancedLyricSynchronizer:
                 return None
             
             print(f"Groq returned {len(words)} words with perfect timestamps")
+
+            # DEBUG: Show EVERYTHING Groq transcribed
+            print(f"\n{'='*80}")
+            print(f"GROQ COMPLETE TRANSCRIPTION - Total words: {len(words)}")
+            print(f"{'='*80}")
+            transcribed_text = ' '.join([w['word'] for w in words])  # ALL words
+            print(f"Complete transcribed text:")
+            print(f"{transcribed_text}")
+            print(f"{'='*80}\n")
+            
+            # DEBUG: Show ALL word-level timestamps
+            print(f"{'='*80}")
+            print(f"GROQ WORD-LEVEL TIMESTAMPS - ALL {len(words)} WORDS")
+            print(f"{'='*80}")
+            for i, w in enumerate(words, 1):
+                print(f"Word {i:3d}: '{w['word']:20s}' → {w['start']:7.2f}s - {w['end']:7.2f}s")
+            print(f"{'='*80}\n")
+            
             
             # Match lyrics to word sequences using existing algorithm
             synced_lyrics = self._match_lyrics_to_words(lyrics_lines, words, detected_lang)
@@ -1219,10 +1237,15 @@ class AdvancedLyricSynchronizer:
         return synced_lyrics
 
 
-def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str] = None) -> List[Dict]:
+def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str] = None, lyrics_source: str = None) -> List[Dict]:
     """
     Main function to synchronize lyrics using advanced methods.
     Returns list of dicts compatible with existing code.
+    
+    Args:
+        audio_path: Path to audio file
+        lyrics_lines: List of lyric lines (None for Groq-only mode)
+        lyrics_source: Name of lyrics service ("Musixmatch", "Genius", etc.)
     
     If lyrics_lines is None, uses Groq transcription as lyrics (Groq-only mode).
     """
@@ -1247,7 +1270,14 @@ def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str] = None)
             "words": lyric.words if hasattr(lyric, 'words') else []
         })
     
-    mode = "Groq-only" if lyrics_lines is None else "Genius+Groq matching"
+    # Determine the mode description for logging
+    if lyrics_lines is None:
+        mode = "Groq-only (transcription as lyrics)"
+    elif lyrics_source:
+        mode = f"{lyrics_source}+Groq matching"
+    else:
+        mode = "Lyrics+Groq matching"  # Generic fallback if source unknown
+    
     print(f"Advanced synchronization complete: {len(result)} lyrics synced ({mode})")
     return result
 

@@ -4,10 +4,10 @@ import { useUser } from '../contexts/UserContext';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
-import { MdMusicNote, MdAdd, MdClose, MdMenu } from 'react-icons/md';
+import { MdMusicNote, MdAdd, MdClose, MdMenu, MdHistory } from 'react-icons/md';
 import { FiPlusCircle } from 'react-icons/fi';
 import { RiRobot2Line } from 'react-icons/ri';
-import { BsArrowsExpand, BsArrowsCollapse, BsChatDots } from 'react-icons/bs';
+import { BsArrowsExpand, BsArrowsCollapse } from 'react-icons/bs';
 
 // Import hooks
 import { useConversationManager, Message } from '../hooks/useConversationManager';
@@ -395,7 +395,7 @@ const AgentPage: React.FC = () => {
       >
         {chatSidebarOpen ?
           MdClose({ size: 20 }) :
-          BsChatDots({ size: 18 })
+          MdHistory({ size: 20 })
         }
       </Styles.ChatSidebarToggle>
 
@@ -445,7 +445,7 @@ const AgentPage: React.FC = () => {
                   title="Conversation History"
                   style={windowWidth <= 768 ? { padding: '8px' } : {}}
                 >
-                  {BsChatDots({ size: windowWidth <= 768 ? 18 : 16 })}
+                  {MdHistory({ size: windowWidth <= 768 ? 20 : 18 })}
                 </Styles.IconButton>
 
                 {/* Button to toggle scrollbars - hide on mobile */}

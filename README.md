@@ -4,7 +4,6 @@ Generate synchronized lyric videos from Spotify tracks with AI-powered timing an
 
 ## Features
 
-- **Automatic Audio Download** - No manual audio management! Downloads from Deezer via Telegram bot
 - **AI-Powered Synchronization** - Advanced lyric-to-audio alignment using Deepgram + audio analysis
 - **AI Chat Agent** - Conversational interface to request songs naturally
 - **Video Library** - Manage your collection with album artwork
@@ -13,10 +12,10 @@ Generate synchronized lyric videos from Spotify tracks with AI-powered timing an
 
 ## Tech Stack
 
-**Backend:** Django, Celery, Redis, FFmpeg, librosa, Telethon  
+**Backend:** Django, Celery, Redis, FFmpeg, librosa  
 **Frontend:** React, TypeScript, Styled Components  
 **Database:** MySQL (easily switchable to PostgreSQL)  
-**APIs:** Spotify, Genius, Deepgram, Anthropic Claude, Telegram
+**APIs:** Spotify, Genius, Deepgram, Anthropic Claude
 
 ---
 
@@ -215,28 +214,12 @@ GOOGLE_CLIENT_ID=your_google_client_id
 # Deepgram API (optional, enhances sync quality)
 DEEPGRAM_API_KEY=your_deepgram_key
 
-# Telegram (optional, for automatic audio downloads)
-TELEGRAM_API_ID=your_telegram_api_id
-TELEGRAM_API_HASH=your_telegram_api_hash
-TELEGRAM_PHONE=+1234567890
-TELEGRAM_DEEZER_BOT=@deezload2bot
-
 # Celery settings
 CELERY_BROKER_URL=redis://localhost:6379/0
 CELERY_RESULT_BACKEND=redis://localhost:6379/0
 ```
 
-**4. Set up Telegram (Optional but Recommended):**
-
-If you want automatic audio downloads:
-```bash
-python manage.py setup_telegram
-# Follow the prompts to authenticate with your phone
-```
-
-See [Telegram Setup Guide](backend/README.md#telegram-audio-download-setup) for detailed instructions.
-
-**5. Run database migrations:**
+**4. Run database migrations:**
 ```bash
 python manage.py migrate
 python manage.py createsuperuser  # Optional: create admin user
@@ -287,19 +270,6 @@ REACT_APP_GOOGLE_CLIENT_ID=your_google_client_id
 1. Visit [Deepgram Console](https://console.deepgram.com/)
 2. Sign up for free tier (45,000 minutes free)
 3. Create an API key
-
-### Telegram API (Optional but Recommended)
-1. Visit [my.telegram.org/apps](https://my.telegram.org/apps)
-2. Log in with your phone number
-3. Click "API Development Tools"
-4. Create a new application:
-   - App title: "Lyric Video Generator"
-   - Short name: "lyric-gen"
-   - Platform: Other
-5. Copy the **api_id** and **api_hash**
-6. Run `python manage.py setup_telegram` to authenticate
-
-**What it does:** Automatically downloads high-quality MP3 files from Deezer via Telegram bot. No manual audio file management needed!
 
 ### Google OAuth (Optional)
 1. Visit [Google Cloud Console](https://console.cloud.google.com/)

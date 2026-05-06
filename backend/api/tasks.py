@@ -93,12 +93,17 @@ def generate_lyric_video(job_id):
         if not lyrics:
             print("⚠️  Lyrics not found - will use Groq transcription instead")
             filtered_lyrics_lines = None  # Signal to use Groq-only mode
+            detected_language = None
         else:
             # Process lyrics into clean lines - AGGRESSIVELY CLEAN THEM
             lyrics_lines = clean_lyrics(lyrics)
             
             # Double-check filtering - remove any metadata that might have slipped through
             filtered_lyrics_lines = remove_metadata_from_lyrics(lyrics_lines)
+            
+            # DETECT LANGUAGE FROM ACTUAL LYRICS TEXT
+            detected_language = detect_language_from_lyrics(filtered_lyrics_lines)
+            print(f"✓ Language detected from lyrics: {detected_language}")
         
         # Create a temporary directory for processing
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -131,8 +136,7 @@ def generate_lyric_video(job_id):
             # Try advanced synchronization first (includes multiple methods)
             if ADVANCED_SYNC_AVAILABLE:
                 print("Using advanced synchronization system")
-                # Pass detected language from Spotify metadata
-                detected_language = song_info.get('language')
+                # Use language detected from lyrics text
                 synced_lyrics = synchronize_lyrics_advanced(
                     audio_path, 
                     filtered_lyrics_lines, 
@@ -247,72 +251,53 @@ def extract_spotify_track_id(spotify_url):
     return None
 
 
-def infer_language_from_markets(available_markets):
+def detect_language_from_lyrics(lyrics_lines):
     """
-    Infer track language from Spotify available markets.
-    Returns ISO 639-1 language code (e.g., 'es', 'en', 'fr')
+    Detect language from actual lyrics text using common word analysis.
+    Returns 'es' for Spanish, 'en' for English, or None if uncertain.
     """
-    if not available_markets:
+    if not lyrics_lines:
         return None
     
-    # Language inference based on market presence
-    spanish_markets = {'ES', 'MX', 'AR', 'CL', 'CO', 'PE', 'VE', 'EC', 'GT', 'CU', 'BO', 'DO', 'HN', 'PY', 'SV', 'NI', 'CR', 'PA', 'UY'}
-    portuguese_markets = {'BR', 'PT'}
-    french_markets = {'FR', 'CA', 'BE', 'CH'}
-    german_markets = {'DE', 'AT', 'CH'}
-    italian_markets = {'IT', 'CH'}
+    # Join first 10 lines for analysis
+    sample_text = ' '.join([line for line in lyrics_lines[:10] if line.strip()]).lower()
     
-    markets_set = set(available_markets)
+    if len(sample_text) < 20:
+        return None
     
-    # Count matches for each language
-    spanish_count = len(markets_set & spanish_markets)
-    portuguese_count = len(markets_set & portuguese_markets)
-    french_count = len(markets_set & french_markets)
-    german_count = len(markets_set & german_markets)
-    italian_count = len(markets_set & italian_markets)
+    # Common Spanish words (high frequency)
+    spanish_indicators = ['el', 'la', 'los', 'las', 'de', 'que', 'en', 'con', 'mi', 'tu', 'su', 'me', 'te', 'se', 'por', 'para', 'como', 'esta', 'pero', 'cuando', 'todo', 'bien', 'más', 'muy']
     
-    # If track is available in Spanish-speaking markets but NOT in US/UK/CA (English markets)
-    # it's likely Spanish
-    english_markets = {'US', 'GB', 'CA', 'AU', 'NZ', 'IE'}
-    english_count = len(markets_set & english_markets)
+    # Common English words (high frequency)
+    english_indicators = ['the', 'and', 'you', 'that', 'was', 'for', 'are', 'with', 'his', 'they', 'this', 'have', 'from', 'one', 'had', 'but', 'what', 'all', 'were', 'when', 'your', 'can', 'said', 'there']
     
-    # Strong Spanish signal: available in 3+ Spanish markets
-    if spanish_count >= 3:
-        print(f"Language detected: Spanish (found in {spanish_count} Spanish-speaking markets)")
+    # Count occurrences
+    words = sample_text.split()
+    spanish_count = sum(1 for word in words if word in spanish_indicators)
+    english_count = sum(1 for word in words if word in english_indicators)
+    
+    print(f"Language detection: {spanish_count} Spanish indicators, {english_count} English indicators in lyrics sample")
+    
+    # Clear winner
+    if spanish_count > english_count * 1.5:
+        print(f"Language detected: Spanish (from lyrics text analysis)")
         return 'es'
-    
-    # Portuguese signal
-    if portuguese_count >= 1:
-        print(f"Language detected: Portuguese (found in {portuguese_count} Portuguese-speaking markets)")
-        return 'pt'
-    
-    # French signal
-    if french_count >= 1:
-        print(f"Language detected: French (found in {french_count} French-speaking markets)")
-        return 'fr'
-    
-    # German signal
-    if german_count >= 1:
-        print(f"Language detected: German (found in {german_count} German-speaking markets)")
-        return 'de'
-    
-    # Italian signal
-    if italian_count >= 1:
-        print(f"Language detected: Italian (found in {italian_count} Italian-speaking markets)")
-        return 'it'
-    
-    # Default to English if available in English markets or worldwide
-    if english_count > 0 or len(markets_set) > 20:
-        print(f"Language detected: English (found in {english_count} English-speaking markets or worldwide release)")
+    elif english_count > spanish_count * 1.5:
+        print(f"Language detected: English (from lyrics text analysis)")
+        return 'en'
+    elif spanish_count > english_count:
+        print(f"Language detected: Spanish (slight dominance in lyrics)")
+        return 'es'
+    elif english_count > spanish_count:
+        print(f"Language detected: English (slight dominance in lyrics)")
         return 'en'
     
-    # Cannot determine
-    print(f"Language detection: Unable to determine from markets (found {len(markets_set)} markets)")
+    print(f"Language detection: Inconclusive from lyrics")
     return None
 
 
 def get_spotify_track_info(track_id):
-    """Get track information from Spotify API including language detection"""
+    """Get track information from Spotify API"""
     # Get Spotify API credentials
     client_id = settings.SPOTIFY_CLIENT_ID
     client_secret = settings.SPOTIFY_CLIENT_SECRET
@@ -326,19 +311,14 @@ def get_spotify_track_info(track_id):
     # Get track details
     track = sp.track(track_id)
     
-    # Infer language from available markets
-    available_markets = track.get('available_markets', [])
-    detected_language = infer_language_from_markets(available_markets)
-    
-    # Extract relevant information
+    # Extract relevant information (no language detection from markets)
     song_info = {
         'title': track['name'],
         'artist': track['artists'][0]['name'],
         'duration_ms': track['duration_ms'],
         'album': track['album']['name'],
         'release_date': track['album']['release_date'],
-        'image_url': track['album']['images'][0]['url'] if track['album']['images'] else None,
-        'language': detected_language  # Add detected language
+        'image_url': track['album']['images'][0]['url'] if track['album']['images'] else None
     }
     
     return song_info

@@ -56,7 +56,7 @@ const AgentPage: React.FC = () => {
     deleteConversation,
     replaceConversationId,
     setActiveConversationId
-  } = useConversationManager();
+  } = useConversationManager({ disableAutoLoad: !!location.state?.autoStartSong });
 
   // UI state
   const [input, setInput] = useState('');
@@ -235,31 +235,39 @@ const AgentPage: React.FC = () => {
   }, [input, isSendingMessage, activeConversationId, isCompactMode, createNewConversation, sendMessage]);
 
   const handleSongSelect = useCallback(async (song: SongSuggestion) => {
-    if (!song.spotify_url) {
-      setMessages(prev => [...prev, { text: `Sorry, this song is not available on Spotify.`, isUser: false }]);
-      return;
-    }
-    
-    // Create or use existing conversation
-    let convId = activeConversationId;
-    if (!convId) {
-      convId = createNewConversation();
-    }
+    // Always start a new conversation for a new search request
+    const convId = createNewConversation();
+
     if (isCompactMode) {
       setIsCompactMode(false);
     }
 
-    setMessages(prev => [...prev, { text: `Manual Search: ${song.title} by ${song.artist}`, isUser: true }]);
-    setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true, processingLabel: `🎵 Generating video for ${song.title}...` }]);
-    
-    try {
-      const job = await submitSpotifyLink(song.spotify_url);
-      startPolling(job.id);
-    } catch (err) {
-      setMessages(prev => prev.filter(msg => !msg.isProcessing));
-      setMessages(prev => [...prev, { text: `Sorry, there was an error submitting the song request.`, isUser: false }]);
+    const userMessage = `Create a lyric video for ${song.title} by ${song.artist}`;
+
+    // Add user message and typing indicator, replacing any existing messages from previous conversations
+    setMessages([
+      { text: userMessage, isUser: true },
+      { text: '...', isUser: false, isProcessing: false }
+    ]);
+
+    // Send message using the hook
+    const response = await sendMessage(userMessage, convId);
+
+    // Remove only the typing indicator (not processing indicators)
+    setMessages(prev => prev.filter(msg => !(msg.text === '...' && !msg.isProcessing)));
+
+    if (response) {
+      // For favorite-only songs, delay showing the response to sync with the "adding" indicator
+      if (response.is_favorite_only && response.message) {
+        setTimeout(() => {
+          setMessages(prev => prev.filter(msg => !msg.isProcessing));
+          setMessages(prev => [...prev, { text: response.message, isUser: false }]);
+        }, 2000);
+      } else if (response.message) {
+        setMessages(prev => [...prev, { text: response.message, isUser: false }]);
+      }
     }
-  }, [activeConversationId, createNewConversation, isCompactMode, setMessages, startPolling]);
+  }, [activeConversationId, createNewConversation, isCompactMode, setMessages, sendMessage]);
 
   // Handle auto-starting a song from navigation state
   useEffect(() => {

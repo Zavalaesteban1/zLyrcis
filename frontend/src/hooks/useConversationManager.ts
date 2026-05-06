@@ -25,7 +25,7 @@ const WELCOME_MESSAGE: Message = {
   isUser: false
 };
 
-export const useConversationManager = () => {
+export const useConversationManager = (options?: { disableAutoLoad?: boolean }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
@@ -52,23 +52,6 @@ export const useConversationManager = () => {
     };
 
     loadConversationsList();
-  }, []);
-
-  // Load active conversation on mount
-  useEffect(() => {
-    if (isInitialized.current) return;
-
-    const loadActiveConversation = async () => {
-      const savedId = localStorage.getItem(getConversationIdKey());
-
-      if (savedId) {
-        await loadConversation(savedId);
-      }
-
-      isInitialized.current = true;
-    };
-
-    loadActiveConversation();
   }, []);
 
   // Save conversations list to localStorage
@@ -144,6 +127,27 @@ export const useConversationManager = () => {
       setActiveConversationId(id);
     }
   }, []);
+
+  // Load active conversation on mount
+  useEffect(() => {
+    if (isInitialized.current) return;
+
+    const loadActiveConversation = async () => {
+      isInitialized.current = true;
+      
+      if (options?.disableAutoLoad) {
+        return;
+      }
+
+      const savedId = localStorage.getItem(getConversationIdKey());
+
+      if (savedId) {
+        await loadConversation(savedId);
+      }
+    };
+
+    loadActiveConversation();
+  }, [options?.disableAutoLoad, loadConversation]);
 
   // Create new conversation
   const createNewConversation = useCallback(() => {

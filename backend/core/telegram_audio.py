@@ -14,6 +14,7 @@ from django.conf import settings
 
 try:
     from telethon import TelegramClient, events
+    from telethon.sessions import StringSession
     from telethon.errors import (
         SessionPasswordNeededError,
         PhoneNumberInvalidError,
@@ -27,6 +28,7 @@ except ImportError:
     TELETHON_AVAILABLE = False
     # Create dummy classes for type hints when Telethon is not available
     TelegramClient = None
+    StringSession = None
     Message = None
     MessageMediaDocument = None
     logging.warning("Telethon not installed. Telegram audio download will not be available.")
@@ -118,11 +120,21 @@ async def _init_telegram_client():
     """
     config = _get_telegram_config()
     
-    # Session file path (store in backend directory)
-    session_path = Path(__file__).parent.parent / config['session_file']
+    # Check if we have a session string (production) or file (development)
+    session_string = os.getenv('TELEGRAM_SESSION_STRING')
+    
+    if session_string:
+        # Production: Use StringSession from environment variable
+        logger.info("Using StringSession from environment variable")
+        session = StringSession(session_string)
+    else:
+        # Development: Use file-based session
+        logger.info("Using file-based session")
+        session_path = Path(__file__).parent.parent / config['session_file']
+        session = str(session_path)
     
     client = TelegramClient(
-        str(session_path),
+        session,
         config['api_id'],
         config['api_hash']
     )
@@ -137,7 +149,7 @@ async def _init_telegram_client():
             # This will only happen during initial setup or if session expired
             # For production, session should already be established via setup command
             raise TelegramAuthenticationError(
-                "Telegram session not authorized. Please run 'python manage.py setup_telegram' first."
+                "Telegram session not authorized. Please run 'python manage.py setup_telegram' first or set TELEGRAM_SESSION_STRING."
             )
         
         logger.info("Telegram client authenticated successfully")
@@ -145,7 +157,7 @@ async def _init_telegram_client():
         
     except AuthKeyUnregisteredError:
         raise TelegramAuthenticationError(
-            "Telegram session expired or invalid. Please run 'python manage.py setup_telegram' again."
+            "Telegram session expired or invalid. Please run 'python manage.py setup_telegram' again or regenerate SESSION_STRING."
         )
     except Exception as e:
         logger.error(f"Failed to initialize Telegram client: {e}")

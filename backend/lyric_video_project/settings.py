@@ -252,12 +252,13 @@ TELEGRAM_API_HASH = os.getenv('TELEGRAM_API_HASH', '')
 TELEGRAM_PHONE = os.getenv('TELEGRAM_PHONE', '')
 TELEGRAM_DEEZER_BOT = os.getenv('TELEGRAM_DEEZER_BOT', '@deezload2bot')
 
-# Session file path - use absolute path in production
+# Session file path - only used for development (production uses SESSION_STRING env var)
 if os.getenv('RAILWAY_ENVIRONMENT'):
-    # Production: save to /app/backend/
-    TELEGRAM_SESSION_FILE = '/app/backend/telegram_session'
+    # Production uses TELEGRAM_SESSION_STRING environment variable (no file needed)
+    TELEGRAM_SESSION_FILE = '/tmp/telegram_session'  # Dummy path, not actually used
+    print("✓ Production mode: Using TELEGRAM_SESSION_STRING environment variable")
 else:
-    # Development: save to backend directory
+    # Development: use file-based session
     TELEGRAM_SESSION_FILE = os.path.join(BASE_DIR, 'telegram_session')
 
 TELEGRAM_DOWNLOAD_TIMEOUT = int(os.getenv('TELEGRAM_DOWNLOAD_TIMEOUT', '180'))

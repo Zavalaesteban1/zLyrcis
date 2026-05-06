@@ -246,10 +246,19 @@ SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID', '')
 SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET', '')
 GENIUS_ACCESS_TOKEN = os.getenv('GENIUS_ACCESS_TOKEN', '')
 
+# Telegram settings for audio download
+TELEGRAM_API_ID = os.getenv('TELEGRAM_API_ID', '')
+TELEGRAM_API_HASH = os.getenv('TELEGRAM_API_HASH', '')
+TELEGRAM_PHONE = os.getenv('TELEGRAM_PHONE', '')
+TELEGRAM_DEEZER_BOT = os.getenv('TELEGRAM_DEEZER_BOT', '@deezload2bot')
+TELEGRAM_SESSION_FILE = os.getenv('TELEGRAM_SESSION_FILE', 'telegram_session')
+TELEGRAM_DOWNLOAD_TIMEOUT = int(os.getenv('TELEGRAM_DOWNLOAD_TIMEOUT', '180'))
+
 # Debug information about loaded credentials (remove in production)
 print(f"Environment setup - SPOTIFY_CLIENT_ID loaded: {'Yes' if SPOTIFY_CLIENT_ID else 'No'}")
 print(f"Environment setup - SPOTIFY_CLIENT_SECRET loaded: {'Yes' if SPOTIFY_CLIENT_SECRET else 'No'}")
 print(f"Environment setup - GENIUS_ACCESS_TOKEN loaded: {'Yes' if GENIUS_ACCESS_TOKEN else 'No'}")
+print(f"Environment setup - TELEGRAM_API_ID loaded: {'Yes' if TELEGRAM_API_ID else 'No'}")
 
 # Explicitly set Spotipy environment variables
 if SPOTIFY_CLIENT_ID:

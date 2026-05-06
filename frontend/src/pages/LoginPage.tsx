@@ -1,594 +1,13 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import styled, { createGlobalStyle } from 'styled-components';
+import { useNavigate } from 'react-router-dom';
 import { login, googleLogin, LoginCredentials } from '../services/api';
-import { MdMusicNote, MdVideoLibrary, MdLyrics, MdClose, MdBusinessCenter, MdSchool } from 'react-icons/md';
-import { BsSpotify } from 'react-icons/bs';
+import { MdMusicNote, MdVideoLibrary, MdLyrics, MdClose } from 'react-icons/md';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { RiRobot2Line } from 'react-icons/ri';
-import { FaGuitar, FaTicketAlt, FaHandshake } from 'react-icons/fa';
+import '../styles/LoginPage.css';
 
-// Global style to hide scrollbars
-const GlobalStyle = createGlobalStyle`
-  body, div {
-    /* Hide scrollbar for Chrome, Safari and Opera */
-    &::-webkit-scrollbar {
-      display: none;
-    }
-    
-    /* Hide scrollbar for IE, Edge and Firefox */
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
-  }
-`;
-
-// Styled components
-const PageContainer = styled.div`
-  min-height: 100vh;
-  width: 100%;
-  max-width: 100vw;
-  background-color: white;
-  background-image: linear-gradient(rgba(29, 185, 84, 0.04) 1px, transparent 1px), 
-                    linear-gradient(90deg, rgba(29, 185, 84, 0.04) 1px, transparent 1px);
-  background-size: 24px 24px;
-  color: #1a1a1a;
-  overflow-x: hidden;
-  position: relative;
-`;
-
-const Header = styled.header`
-  position: sticky;
-  top: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 48px;
-  background-color: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  z-index: 100;
-  border-bottom: 1px solid rgba(29, 185, 84, 0.1);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-  @media (max-width: 768px) {
-    padding: 12px 24px;
-  }
-`;
-
-const HeaderLogo = styled.div`
-  font-size: 24px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #1a1a1a;
-  letter-spacing: -0.02em;
-  
-  @media (max-width: 768px) {
-    font-size: 20px;
-    gap: 8px;
-  }
-`;
-
-const LogoIcon = styled.span`
-  display: flex;
-  align-items: center;
-  color: #1DB954;
-`;
-
-const HeaderButtons = styled.div`
-  display: flex;
-  gap: 16px;
-`;
-
-const HeaderButton = styled.button`
-  padding: 8px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  
-  @media (max-width: 768px) {
-    padding: 6px 16px;
-    font-size: 13px;
-  }
-`;
-
-const LoginButton = styled(HeaderButton)`
-  background-color: transparent;
-  border: 1px solid rgba(29, 185, 84, 0.2);
-  color: #1a1a1a;
-  
-  &:hover {
-    background-color: rgba(29, 185, 84, 0.05);
-    border-color: rgba(29, 185, 84, 0.3);
-  }
-  
-  &:active {
-    transform: scale(0.98);
-  }
-`;
-
-const SignupButton = styled(HeaderButton)`
-  background: linear-gradient(135deg, #1DB954 0%, #17a049 100%);
-  border: 1px solid transparent;
-  color: white;
-  box-shadow: 0 2px 8px rgba(29, 185, 84, 0.2);
-  
-  &:hover {
-    box-shadow: 0 4px 16px rgba(29, 185, 84, 0.3);
-    transform: translateY(-1px);
-  }
-  
-  &:active {
-    transform: translateY(0);
-  }
-`;
-
-const HeroSection = styled.section`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 140px 48px 120px;
-  text-align: center;
-  
-  @media (max-width: 768px) {
-    padding: 80px 24px 60px;
-  }
-`;
-
-const HeroTitle = styled.h1`
-  font-size: 72px;
-  font-weight: 700;
-  color: #1a1a1a;
-  margin-bottom: 20px;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-  max-width: 900px;
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: shimmer 8s ease-in-out infinite;
-  
-  @keyframes shimmer {
-    0%, 100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-  }
-  
-  @media (max-width: 768px) {
-    font-size: 48px;
-    margin-bottom: 16px;
-  }
-  
-  @media (max-width: 480px) {
-    font-size: 36px;
-  }
-`;
-
-const HeroSubtitle = styled.p`
-  font-size: 18px;
-  color: #666;
-  margin-bottom: 48px;
-  line-height: 1.6;
-  max-width: 500px;
-  font-weight: 400;
-  
-  @media (max-width: 768px) {
-    font-size: 16px;
-    margin-bottom: 36px;
-  }
-`;
-
-const PrimaryButton = styled.button`
-  padding: 16px 40px;
-  background: linear-gradient(135deg, #1DB954 0%, #17a049 100%);
-  border: none;
-  border-radius: 12px;
-  color: white;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 16px rgba(29, 185, 84, 0.25);
-  position: relative;
-  overflow: hidden;
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left 0.5s;
-  }
-  
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(29, 185, 84, 0.35);
-    
-    &::before {
-      left: 100%;
-    }
-  }
-  
-  &:active {
-    transform: translateY(0);
-  }
-  
-  @media (max-width: 768px) {
-    padding: 14px 32px;
-    font-size: 15px;
-  }
-`;
-
-const FeatureSection = styled.section`
-  padding: 100px 48px;
-  background: transparent;
-  
-  @media (max-width: 768px) {
-    padding: 60px 24px;
-  }
-`;
-
-const SectionTitle = styled.h2`
-  font-size: 48px;
-  font-weight: 700;
-  color: #1a1a1a;
-  margin-bottom: 80px;
-  text-align: center;
-  letter-spacing: -0.02em;
-  
-  @media (max-width: 768px) {
-    font-size: 32px;
-    margin-bottom: 48px;
-  }
-`;
-
-const SectionSubtitle = styled.p`
-  font-size: 18px;
-  color: #666;
-  margin-bottom: 64px;
-  text-align: center;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
-  
-  @media (max-width: 768px) {
-    font-size: 16px;
-    margin-bottom: 40px;
-  }
-`;
-
-const FeatureList = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 48px;
-  max-width: 1100px;
-  margin: 0 auto;
-  
-  @media (max-width: 968px) {
-    grid-template-columns: 1fr;
-    gap: 40px;
-  }
-`;
-
-const FeatureItem = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 40px 32px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(29, 185, 84, 0.1);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  
-  &:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 16px 40px rgba(29, 185, 84, 0.12);
-    border-color: rgba(29, 185, 84, 0.2);
-    background: rgba(255, 255, 255, 0.8);
-  }
-`;
-
-const FeatureIcon = styled.div`
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(29, 185, 84, 0.1) 0%, rgba(29, 185, 84, 0.05) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  color: #1DB954;
-  margin-bottom: 24px;
-  transition: all 0.3s ease;
-  
-  ${FeatureItem}:hover & {
-    transform: scale(1.1);
-    background: linear-gradient(135deg, rgba(29, 185, 84, 0.15) 0%, rgba(29, 185, 84, 0.08) 100%);
-  }
-`;
-
-const FeatureTitle = styled.h3`
-  font-size: 20px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 8px;
-  letter-spacing: -0.01em;
-`;
-
-const FeatureDescription = styled.p`
-  font-size: 15px;
-  color: #666;
-  line-height: 1.5;
-  margin: 0;
-`;
-
-const CTASection = styled.section`
-  padding: 120px 48px;
-  text-align: center;
-  
-  @media (max-width: 768px) {
-    padding: 80px 24px;
-  }
-`;
-
-// Modal components
-const ModalOverlay = styled.div<{ isOpen: boolean }>`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.4);
-  display: ${props => props.isOpen ? 'flex' : 'none'};
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  backdrop-filter: blur(12px);
-  animation: ${props => props.isOpen ? 'fadeIn 0.2s ease-out' : 'none'};
-  
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-`;
-
-const ModalContent = styled.div`
-  background-color: white;
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-  width: 100%;
-  max-width: 480px;
-  padding: 48px;
-  position: relative;
-  border: 1px solid rgba(29, 185, 84, 0.1);
-  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  
-  @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  @media (max-width: 768px) {
-    padding: 32px;
-    width: 90%;
-  }
-`;
-
-const ModalCloseButton = styled.button`
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: rgba(0, 0, 0, 0.05);
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
-  color: #666;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background: rgba(0, 0, 0, 0.08);
-    color: #1a1a1a;
-  }
-  
-  &:active {
-    transform: scale(0.95);
-  }
-`;
-
-const ModalTitle = styled.h2`
-  font-size: 24px;
-  font-weight: 700;
-  color: #1a1a1a;
-  margin-bottom: 8px;
-  text-align: center;
-  letter-spacing: -0.01em;
-  
-  @media (max-width: 768px) {
-    font-size: 22px;
-  }
-`;
-
-const ModalSubtitle = styled.p`
-  color: #666;
-  font-size: 14px;
-  text-align: center;
-  margin-bottom: 32px;
-`;
-
-// Login form components - reusing most of the existing login form styles
-const Form = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  width: 100%;
-`;
-
-const InputContainer = styled.div`
-  position: relative;
-  width: 100%;
-`;
-
-const Label = styled.label`
-  font-size: 14px;
-  margin-bottom: 8px;
-  display: block;
-  color: #1a1a1a;
-  font-weight: 600;
-`;
-
-const Input = styled.input`
-  width: 100%;
-  padding: 12px 14px;
-  border: 1.5px solid #e8e8e8;
-  border-radius: 10px;
-  background-color: #fafafa;
-  color: #1a1a1a;
-  font-size: 15px;
-  transition: all 0.2s ease;
-  
-  &:focus {
-    outline: none;
-    border-color: #1DB954;
-    background-color: white;
-    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.08);
-  }
-  
-  &::placeholder {
-    color: #999;
-  }
-`;
-
-const Button = styled.button`
-  width: 50%;
-  box-sizing: border-box;
-  padding: 13px;
-  border: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #1DB954 0%, #17a049 100%);
-  color: white;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin: 8px auto 0;
-  box-shadow: 0 2px 8px rgba(29, 185, 84, 0.2);
-  
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(29, 185, 84, 0.3);
-  }
-  
-  &:active {
-    transform: translateY(0);
-  }
-  
-  &:disabled {
-    background: #a0a0a0;
-    cursor: not-allowed;
-    transform: none;
-  }
-`;
-
-const ErrorMessage = styled.div`
-  background-color: rgba(233, 20, 41, 0.1);
-  color: #e91429;
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  border-left: 4px solid #e91429;
-`;
-
-const OrDivider = styled.div`
-  display: flex;
-  align-items: center;
-  margin: 20px 0;
-  color: #666;
-  
-  &::before, &::after {
-    content: '';
-    flex: 1;
-    border-bottom: 1px solid #e0e0e0;
-  }
-  
-  span {
-    margin: 0 15px;
-    font-size: 14px;
-  }
-`;
-
-const GoogleLoginButton = styled.div`
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  margin-bottom: 10px;
-`;
-
-const LinkContainer = styled.div`
-  margin-top: 24px;
-  text-align: center;
-  color: #666;
-  font-size: 14px;
-  
-  a {
-    color: #1DB954;
-    text-decoration: none;
-    font-weight: 600;
-    
-    &:hover {
-      text-decoration: underline;
-    }
-  }
-`;
-
-const LoadingSpinner = styled.div`
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: white;
-  animation: spin 1s ease-in-out infinite;
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-`;
-
-const Footer = styled.footer`
-  background: transparent;
-  padding: 40px 48px;
-  text-align: center;
-  color: #999;
-  font-size: 14px;
-  border-top: 1px solid rgba(29, 185, 84, 0.1);
-`;
-
-const LandingPage: React.FC = () => {
+const LoginPage: React.FC = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSignupModalOpen, setIsSignupModalOpen] = useState(false);
   const [credentials, setCredentials] = useState<LoginCredentials>({
@@ -599,7 +18,6 @@ const LandingPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   
-  // Google Client ID
   const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -680,195 +98,388 @@ const LandingPage: React.FC = () => {
   };
   
   return (
-    <PageContainer>
-      <GlobalStyle />
-      {/* Header with login/signup buttons */}
-      <Header>
-        <HeaderLogo>
-          <LogoIcon>{MdMusicNote({ size: 28 })}</LogoIcon>
-          zLyrics
-        </HeaderLogo>
-        
-        <HeaderButtons>
-          <LoginButton onClick={openLoginModal}>Log In</LoginButton>
-          <SignupButton onClick={openSignupModal}>Sign Up</SignupButton>
-        </HeaderButtons>
-      </Header>
-      
-      {/* Hero section */}
-      <HeroSection>
-        <HeroTitle>Music Ai Simple.</HeroTitle>
-        <HeroSubtitle>
-        Generate lyric videos with Ai. Learn.
-        </HeroSubtitle>
-        <PrimaryButton onClick={openSignupModal}>Get Started</PrimaryButton>
-      </HeroSection>
-      
-      {/* Features section */}
-      <FeatureSection>
-        <SectionTitle>Features</SectionTitle>
-        
-        <FeatureList>
-          <FeatureItem>
-            <FeatureIcon>{RiRobot2Line({ size: 32 })}</FeatureIcon>
-            <FeatureTitle>AI Chat Agent</FeatureTitle>
-            <FeatureDescription>
-              Request songs, customize videos
-            </FeatureDescription>
-          </FeatureItem>
+    <div className="login-page-container">
+      {/* Header */}
+      <header className="login-header">
+        <div className="header-content">
+          <div className="header-logo">
+            <div className="logo-icon">
+              {MdMusicNote({ size: 28, color: '#1DB954' })}
+            </div>
+            zLyrics
+          </div>
           
-          <FeatureItem>
-            <FeatureIcon>{MdVideoLibrary({ size: 32 })}</FeatureIcon>
-            <FeatureTitle>Video Generation</FeatureTitle>
-            <FeatureDescription>
-              Create custom lyric videos instantly
-            </FeatureDescription>
-          </FeatureItem>
-          
-          <FeatureItem>
-            <FeatureIcon>{MdLyrics({ size: 32 })}</FeatureIcon>
-            <FeatureTitle>Learn Lyrics</FeatureTitle>
-            <FeatureDescription>
-              Build a collection to practice
-            </FeatureDescription>
-          </FeatureItem>
-        </FeatureList>
-      </FeatureSection>
+          <div className="header-buttons">
+            <button className="header-button login-button" onClick={openLoginModal}>
+              Log In
+            </button>
+            <button className="header-button signup-button" onClick={openSignupModal}>
+              Sign Up
+            </button>
+          </div>
+        </div>
+      </header>
       
-      {/* Call to action section */}
-      <CTASection>
-        <SectionTitle>Start creating lyric videos</SectionTitle>
-        <PrimaryButton onClick={openSignupModal}>Get Started</PrimaryButton>
-      </CTASection>
+      {/* Hero Section */}
+      <section className="hero-section">
+        <div className="hero-decorative-blur" />
+
+        <h1 className="hero-title">
+          Create Lyric Videos <br />
+          <span className="hero-title-italic">In Minutes.</span>
+        </h1>
+
+        <p className="hero-subtitle">
+          Generate lyric videos with Ai. Learn music.
+        </p>
+
+        <button className="primary-button" onClick={openSignupModal}>
+          <span>Start Generating</span>
+          <span className="primary-button-arrow">→</span>
+        </button>
+      </section>
+      
+      {/* Features Section */}
+      <section className="features-section">
+        <div className="features-header">
+          <div>
+            <h2 className="section-title">
+              Less Noise. <span className="hero-title-italic">More Signal.</span>
+            </h2>
+            <p className="section-subtitle">
+              Our visual engine handles the heavy lifting, giving you more time to focus on the creative direction.
+            </p>
+          </div>
+        </div>
+
+        <div className="feature-grid">
+          {/* Feature 1: AI Chat Agent */}
+          <div className="feature-card">
+            <div className="feature-corner-tl" />
+            <div className="feature-corner-tr" />
+            
+            <div className="feature-visual">
+              <div className="visual-mockup chat-mockup">
+                <div className="scanning-line" />
+                <div className="chat-prompt">
+                  <span className="prompt-icon">▶</span>
+                  <span className="prompt-text">"Create a lyric video for Breathe in the air by Pink Floyd"</span>
+                </div>
+                <div className="ai-generating">
+                  <div className="generating-text">
+                    <span className="generating-icon">{RiRobot2Line({ size: 20, color: '#1DB954' })}</span>
+                    <span>AI Generating</span>
+                    <div className="dot-animation">
+                      <span className="dot">.</span>
+                      <span className="dot">.</span>
+                      <span className="dot">.</span>
+                    </div>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-fill"></div>
+                  </div>
+                  <div className="generating-steps">
+                    <div className="step completed">✓ Analyzing lyrics</div>
+                    <div className="step active">⟳ Syncing timestamps</div>
+                    <div className="step">○ Rendering video</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="feature-content">
+              <div className="feature-info">
+                <div className="feature-icon-container">
+                  {RiRobot2Line({ size: 16, color: '#1DB954' })}
+                </div>
+                <h3 className="feature-title">AI Chat Agent</h3>
+              </div>
+              
+              <div className="feature-meta">
+                <div className="feature-indicator" />
+              </div>
+            </div>
+          </div>
+
+          {/* Feature 2: Lyric Sync */}
+          <div className="feature-card">
+            <div className="feature-corner-tl" />
+            <div className="feature-corner-tr" />
+            
+            <div className="feature-visual">
+              <div className="visual-mockup lyric-sync-mockup">
+                <div className="scanning-line" />
+                <div className="lyric-sync-container">
+                  <div className="lyric-line">
+                    <span className="timestamp">00:12</span>
+                    <div className="lyric-text">
+                      <span className="word sync-word-1">One</span>
+                      <span className="word sync-word-2">carat</span>
+                      <span className="word sync-word-3">drip</span>
+                      <span className="word sync-word-4">down</span>
+                      <span className="word sync-word-5">my</span>
+                      <span className="word sync-word-6">fang</span>
+                    </div>
+                  </div>
+                  <div className="lyric-line">
+                    <span className="timestamp">00:15</span>
+                    <div className="lyric-text">
+                      <span className="word sync-word-7">Drugs</span>
+                      <span className="word sync-word-8">runnin'</span>
+                      <span className="word sync-word-9">deep</span>
+                      <span className="word sync-word-10">through</span>
+                      <span className="word sync-word-11">my</span>
+                      <span className="word sync-word-12">vein</span>
+                    </div>
+                  </div>
+                  <div className="lyric-line">
+                    <span className="timestamp">00:18</span>
+                    <div className="lyric-text">
+                      <span className="word sync-word-13">I'm</span>
+                      <span className="word sync-word-14">takin'</span>
+                      <span className="word sync-word-15">drugs,</span>
+                      <span className="word sync-word-16">healin'</span>
+                      <span className="word sync-word-17">the</span>
+                      <span className="word sync-word-18">pain</span>
+                    </div>
+                  </div>
+                  <div className="lyric-line">
+                    <span className="timestamp">00:21</span>
+                    <div className="lyric-text">
+                      <span className="word sync-word-19">Let</span>
+                      <span className="word sync-word-20">the</span>
+                      <span className="word sync-word-21">paint</span>
+                      <span className="word sync-word-22">drip</span>
+                      <span className="word sync-word-23">on</span>
+                      <span className="word sync-word-24">my</span>
+                      <span className="word sync-word-25">main</span>
+                    </div>
+                  </div>
+                  <div className="lyric-line">
+                    <span className="timestamp">00:24</span>
+                    <div className="lyric-text">
+                      <span className="word sync-word-26">Let</span>
+                      <span className="word sync-word-27">the</span>
+                      <span className="word sync-word-28">paint</span>
+                      <span className="word sync-word-29">drip,</span>
+                      <span className="word sync-word-30">me</span>
+                      <span className="word sync-word-31">and</span>
+                      <span className="word sync-word-32">Wave</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="feature-content">
+              <div className="feature-info">
+                <div className="feature-icon-container">
+                  {MdLyrics({ size: 16, color: '#1DB954' })}
+                </div>
+                <h3 className="feature-title">Lyric Sync</h3>
+              </div>
+              
+              <div className="feature-meta">
+                <div className="feature-indicator" />
+              </div>
+            </div>
+          </div>
+
+          {/* Feature 3: Video Library */}
+          <div className="feature-card">
+            <div className="feature-corner-tl" />
+            <div className="feature-corner-tr" />
+            
+            <div className="feature-visual">
+              <div className="visual-mockup library-mockup library-video-mockup">
+                <div className="scanning-line" />
+                <video 
+                  className="library-video"
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline
+                >
+                  <source src="/assets/zLyricsSongLibrary.mov" type="video/quicktime" />
+                  <source src="/assets/zLyricsSongLibrary.mov" type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+            </div>
+
+            <div className="feature-content">
+              <div className="feature-info">
+                <div className="feature-icon-container">
+                  {MdVideoLibrary({ size: 16, color: '#1DB954' })}
+                </div>
+                <h3 className="feature-title">Video Library</h3>
+              </div>
+              
+              <div className="feature-meta">
+                <div className="feature-indicator" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      {/* CTA Section */}
+      <section className="cta-section">
+        <div className="cta-content-centered">
+          <h2 className="cta-title">
+            Elevate your music <span className="hero-title-italic">learning</span>
+          </h2>
+          <button className="cta-button" onClick={openSignupModal}>
+            GET STARTED NOW
+          </button>
+        </div>
+      </section>
       
       {/* Footer */}
-      <Footer>
-        <p>© 2025 zLyrics. All rights reserved.</p>
-      </Footer>
+      <footer className="footer">
+        <p>© 2025 zLyrics // All rights reserved // Made for creators</p>
+      </footer>
       
       {/* Login Modal */}
-      <ModalOverlay isOpen={isLoginModalOpen}>
-        <ModalContent>
-          <ModalCloseButton onClick={closeModals}>
-            {MdClose({ size: 24 })}
-          </ModalCloseButton>
-          
-          <ModalTitle>Welcome Back</ModalTitle>
-          <ModalSubtitle>Sign in to continue</ModalSubtitle>
-          
-          <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-            <GoogleLoginButton>
-              <GoogleLogin
-                onSuccess={handleGoogleLoginSuccess}
-                onError={handleGoogleLoginError}
-                useOneTap
-                theme="outline"
-                size="large"
-                text="signin_with"
-                shape="rectangular"
-                width="100%"
-              />
-            </GoogleLoginButton>
-          </GoogleOAuthProvider>
-          
-          <OrDivider>
-            <span>OR</span>
-          </OrDivider>
-          
-          <Form onSubmit={handleSubmit}>
-            <InputContainer>
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                name="username"
-                type="text"
-                placeholder="Enter your username"
-                value={credentials.username}
-                onChange={handleChange}
-                disabled={isLoading}
-              />
-            </InputContainer>
+      {isLoginModalOpen && (
+        <div className="modal-overlay" onClick={closeModals}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-button" onClick={closeModals}>
+              {MdClose({ size: 24 })}
+            </button>
             
-            <InputContainer>
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Enter your password"
-                value={credentials.password}
-                onChange={handleChange}
-                disabled={isLoading}
-              />
-            </InputContainer>
+            <h2 className="modal-title">Welcome Back</h2>
+            <p className="modal-subtitle">Sign in to continue</p>
             
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  Signing In
-                  <LoadingSpinner />
-                </>
-              ) : (
-                'Sign In'
-              )}
-            </Button>
+            <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+              <div className="google-login-container">
+                <GoogleLogin
+                  onSuccess={handleGoogleLoginSuccess}
+                  onError={handleGoogleLoginError}
+                  useOneTap
+                  theme="outline"
+                  size="large"
+                  text="signin_with"
+                  shape="rectangular"
+                  width="100%"
+                />
+              </div>
+            </GoogleOAuthProvider>
             
-            {error && <ErrorMessage>{error}</ErrorMessage>}
-          </Form>
-          
-          <LinkContainer>
-            Don't have an account? <a href="#" onClick={(e) => {
-              e.preventDefault();
-              openSignupModal();
-            }}>Sign up</a>
-          </LinkContainer>
-        </ModalContent>
-      </ModalOverlay>
+            <div className="or-divider">
+              <span>OR</span>
+            </div>
+            
+            <form className="login-form" onSubmit={handleSubmit}>
+              <div className="input-container">
+                <label htmlFor="username" className="input-label">Username</label>
+                <input
+                  id="username"
+                  name="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={credentials.username}
+                  onChange={handleChange}
+                  disabled={isLoading}
+                  className="input-field"
+                />
+              </div>
+              
+              <div className="input-container">
+                <label htmlFor="password" className="input-label">Password</label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={credentials.password}
+                  onChange={handleChange}
+                  disabled={isLoading}
+                  className="input-field"
+                />
+              </div>
+              
+              <button type="submit" disabled={isLoading} className="submit-button">
+                {isLoading ? (
+                  <>
+                    Signing In
+                    <div className="loading-spinner" />
+                  </>
+                ) : (
+                  'Sign In'
+                )}
+              </button>
+              
+              {error && <div className="error-message">{error}</div>}
+            </form>
+            
+            <div className="link-container">
+              Don't have an account?{' '}
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openSignupModal();
+                }}
+              >
+                Sign up
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Signup Modal */}
-      <ModalOverlay isOpen={isSignupModalOpen}>
-        <ModalContent>
-          <ModalCloseButton onClick={closeModals}>
-            {MdClose({ size: 24 })}
-          </ModalCloseButton>
-          
-          <ModalTitle>Get Started</ModalTitle>
-          <ModalSubtitle>Create your account</ModalSubtitle>
-          
-          <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-            <GoogleLoginButton>
-              <GoogleLogin
-                onSuccess={handleGoogleLoginSuccess}
-                onError={handleGoogleLoginError}
-                useOneTap
-                theme="outline"
-                size="large"
-                text="signup_with"
-                shape="rectangular"
-                width="100%"
-              />
-            </GoogleLoginButton>
-          </GoogleOAuthProvider>
-          
-          <OrDivider>
-            <span>OR</span>
-          </OrDivider>
-          
-          {/* In a real app, you'd have a separate signup form here */}
-          <Button onClick={() => navigate('/signup')}>
-            Continue with Email
-          </Button>
-          
-          <LinkContainer>
-            Already have an account? <a href="#" onClick={(e) => {
-              e.preventDefault();
-              openLoginModal();
-            }}>Sign in</a>
-          </LinkContainer>
-        </ModalContent>
-      </ModalOverlay>
-    </PageContainer>
+      {isSignupModalOpen && (
+        <div className="modal-overlay" onClick={closeModals}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-button" onClick={closeModals}>
+              {MdClose({ size: 24 })}
+            </button>
+            
+            <h2 className="modal-title">Get Started</h2>
+            <p className="modal-subtitle">Create your account</p>
+            
+            <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+              <div className="google-login-container">
+                <GoogleLogin
+                  onSuccess={handleGoogleLoginSuccess}
+                  onError={handleGoogleLoginError}
+                  useOneTap
+                  theme="outline"
+                  size="large"
+                  text="signup_with"
+                  shape="rectangular"
+                  width="100%"
+                />
+              </div>
+            </GoogleOAuthProvider>
+            
+            <div className="or-divider">
+              <span>OR</span>
+            </div>
+            
+            <button className="submit-button" onClick={() => navigate('/signup')}>
+              Continue with Email
+            </button>
+            
+            <div className="link-container">
+              Already have an account?{' '}
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openLoginModal();
+                }}
+              >
+                Sign in
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
-export default LandingPage; 
+export default LoginPage;

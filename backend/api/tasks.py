@@ -477,12 +477,25 @@ def get_lyrics_from_musixmatch(spotify_track_id, title, artist):
             
             # DEBUG: Show EVERYTHING Musixmatch returned
             lines = lyrics_body.split('\n')
-            print(f"\n{'='*80}")
-            print(f"MUSIXMATCH COMPLETE LYRICS - Total lines: {len(lines)}")
-            print(f"{'='*80}")
-            for i, line in enumerate(lines, 1):  # Show ALL lines
-                print(f"Line {i:3d}: {line}")
-            print(f"{'='*80}\n")
+            
+            output_lines = [
+                f"\n{'='*80}",
+                f"MUSIXMATCH COMPLETE LYRICS - Total lines: {len(lines)}",
+                f"{'='*80}"
+            ]
+            for i, line in enumerate(lines, 1):
+                output_lines.append(f"Line {i:3d}: {line}")
+            output_lines.append(f"{'='*80}\n")
+            
+            output_str = '\n'.join(output_lines)
+            print(output_str)
+            
+            if os.environ.get("DEBUG") == "True":
+                try:
+                    with open("debug.log", "a", encoding="utf-8") as f:
+                        f.write(output_str)
+                except Exception as e:
+                    print(f"Failed to write to debug file: {e}")
             
             return lyrics_body
         elif status_code == 404:

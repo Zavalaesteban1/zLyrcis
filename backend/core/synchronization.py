@@ -291,21 +291,33 @@ class AdvancedLyricSynchronizer:
             print(f"Groq returned {len(words)} words with perfect timestamps")
 
             # DEBUG: Show EVERYTHING Groq transcribed
-            print(f"\n{'='*80}")
-            print(f"GROQ COMPLETE TRANSCRIPTION - Total words: {len(words)}")
-            print(f"{'='*80}")
+            output_lines = [
+                f"\n{'='*80}",
+                f"GROQ COMPLETE TRANSCRIPTION - Total words: {len(words)}",
+                f"{'='*80}"
+            ]
             transcribed_text = ' '.join([w['word'] for w in words])  # ALL words
-            print(f"Complete transcribed text:")
-            print(f"{transcribed_text}")
-            print(f"{'='*80}\n")
-            
-            # DEBUG: Show ALL word-level timestamps
-            print(f"{'='*80}")
-            print(f"GROQ WORD-LEVEL TIMESTAMPS - ALL {len(words)} WORDS")
-            print(f"{'='*80}")
+            output_lines.extend([
+                "Complete transcribed text:",
+                transcribed_text,
+                f"{'='*80}\n",
+                f"{'='*80}",
+                f"GROQ WORD-LEVEL TIMESTAMPS - ALL {len(words)} WORDS",
+                f"{'='*80}"
+            ])
             for i, w in enumerate(words, 1):
-                print(f"Word {i:3d}: '{w['word']:20s}' → {w['start']:7.2f}s - {w['end']:7.2f}s")
-            print(f"{'='*80}\n")
+                output_lines.append(f"Word {i:3d}: '{w['word']:20s}' → {w['start']:7.2f}s - {w['end']:7.2f}s")
+            output_lines.append(f"{'='*80}\n")
+            
+            output_str = '\n'.join(output_lines)
+            print(output_str)
+            
+            if os.environ.get("DEBUG") == "True":
+                try:
+                    with open("debug.log", "a", encoding="utf-8") as f:
+                        f.write(output_str + "\n")
+                except Exception as e:
+                    print(f"Failed to write to debug file: {e}")
             
             
             # Match lyrics to word sequences using existing algorithm
@@ -385,8 +397,21 @@ class AdvancedLyricSynchronizer:
                 print("No segments extracted from Groq response")
                 return None
             
-            print(f"✓ Groq-only mode: {len(synced_lyrics)} lines transcribed with PERFECT sync")
-            print(f"  (No Genius matching needed - these are Groq's natural phrase groupings)")
+            msg1 = f"✓ Groq-only mode: {len(synced_lyrics)} lines transcribed with PERFECT sync"
+            msg2 = "  (No Genius matching needed - these are Groq's natural phrase groupings)"
+            print(msg1)
+            print(msg2)
+            
+            if os.environ.get("DEBUG") == "True":
+                try:
+                    with open("debug.log", "a", encoding="utf-8") as f:
+                        f.write(f"\n{'='*80}\nGROQ-ONLY MODE TRANSCRIPTION\n{'='*80}\n")
+                        f.write(msg1 + "\n" + msg2 + "\n\n")
+                        for i, line in enumerate(synced_lyrics, 1):
+                            f.write(f"Line {i:3d}: [{line.start_time:7.2f}s - {line.end_time:7.2f}s] {line.text}\n")
+                        f.write(f"{'='*80}\n")
+                except Exception as e:
+                    print(f"Failed to write to debug file: {e}")
             
             return synced_lyrics
             
@@ -602,8 +627,8 @@ class AdvancedLyricSynchronizer:
             if best_match:
                 start_idx, end_idx, confidence = best_match
                 
-                # Extract sequence of matched words
-                matched_words = []
+                # Extract sequence of matched words from Groq
+                groq_sequence = []
                 for k in range(start_idx, end_idx + 1):
                     w = words[k]
                     if isinstance(w, dict):
@@ -614,7 +639,56 @@ class AdvancedLyricSynchronizer:
                         m_word = w.word if hasattr(w, 'word') else ''
                         m_start = w.start if hasattr(w, 'start') else 0
                         m_end = w.end if hasattr(w, 'end') else m_start + 0.5
-                    matched_words.append({"word": m_word.strip(), "start": m_start, "end": m_end})
+                    groq_sequence.append({"word": m_word.strip(), "start": m_start, "end": m_end})
+
+                # Sanitize hallucinations: Map original Musixmatch words onto Groq timings
+                matched_words = []
+                matcher = SequenceMatcher(None, 
+                    [w.lower() for w in line_words], 
+                    [w['word'].lower() for w in groq_sequence]
+                )
+                
+                for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+                    if tag == 'equal' or tag == 'replace':
+                        # Map Musixmatch words to Groq word slots
+                        musix_w = line_words[i1:i2]
+                        groq_w = groq_sequence[j1:j2]
+                        
+                        for m_idx, word_text in enumerate(musix_w):
+                            g_idx = min(m_idx, len(groq_w) - 1)
+                            if g_idx >= 0:
+                                slot = groq_w[g_idx]
+                                matched_words.append({
+                                    "word": word_text,
+                                    "start": slot["start"],
+                                    "end": slot["end"]
+                                })
+                            else:
+                                last_time = matched_words[-1]["end"] if matched_words else 0
+                                matched_words.append({
+                                    "word": word_text,
+                                    "start": last_time,
+                                    "end": last_time + 0.2
+                                })
+                    elif tag == 'delete':
+                        # Musixmatch words that Groq missed
+                        musix_w = line_words[i1:i2]
+                        if matched_words:
+                            last_time = matched_words[-1]["end"]
+                        else:
+                            if j2 < len(groq_sequence):
+                                last_time = max(0, groq_sequence[j2]["start"] - (len(musix_w) * 0.2))
+                            else:
+                                last_time = 0
+                                
+                        for word_text in musix_w:
+                            matched_words.append({
+                                "word": word_text,
+                                "start": last_time,
+                                "end": last_time + 0.2
+                            })
+                            last_time += 0.2
+                    # Note: We ignore 'insert' because those are extra Groq words (hallucinations)
 
                 # Extract start/end times - handle both dict and object formats
                 start_word = words[start_idx]
@@ -651,35 +725,75 @@ class AdvancedLyricSynchronizer:
                 
                 word_idx = end_idx + 1
             else:
-                # No match found - estimate based on previous timing and ADVANCE word_idx
-                print(f"  Line {line_num}: No match found, using estimation")
-                if synced_lyrics:
-                    last_end = synced_lyrics[-1].end_time
-                    estimated_duration = max(2.0, min(len(line) * 0.05, 5.0))  # Cap at 5 seconds
+                # No match found - use forced mapping to prioritize Musixmatch words with Groq timings
+                print(f"  Line {line_num}: No match found, forcing Musixmatch words onto Groq timings")
+                
+                N = len(line_words)
+                if word_idx < len(words):
+                    end_idx = min(word_idx + N - 1, len(words) - 1)
                     
+                    matched_words = []
+                    
+                    for k in range(N):
+                        # Map Musixmatch word to the corresponding Groq word slot (or the last available one)
+                        groq_k = min(word_idx + k, end_idx)
+                        w = words[groq_k]
+                        
+                        if isinstance(w, dict):
+                            m_start = w.get('start', 0)
+                            m_end = w.get('end', m_start + 0.5)
+                        else:
+                            m_start = w.start if hasattr(w, 'start') else 0
+                            m_end = w.end if hasattr(w, 'end') else m_start + 0.5
+                            
+                        # Use the Musixmatch word but keep the Groq timing
+                        matched_words.append({
+                            "word": line_words[k],
+                            "start": m_start,
+                            "end": m_end
+                        })
+                        
+                    start_time = matched_words[0]['start']
+                    end_time = matched_words[-1]['end']
+                    
+                    if end_time <= start_time:
+                        end_time = start_time + 2.0
+                        
+                    duration = end_time - start_time
+                    MAX_DURATION = 12.0
+                    
+                    if duration > MAX_DURATION:
+                        print(f"  WARNING: Forced mapping line {line_num} has excessive duration ({duration:.2f}s), capping at {MAX_DURATION}s")
+                        end_time = start_time + MAX_DURATION
+                        duration = MAX_DURATION
+                        
                     synced_lyrics.append(SyncedLyric(
                         text=line,
-                        start_time=last_end + 0.5,
-                        end_time=last_end + 0.5 + estimated_duration,
-                        duration=estimated_duration,
+                        start_time=start_time,
+                        end_time=end_time,
+                        duration=duration,
                         confidence=0.3,
-                        method="estimated"
+                        method="forced_musixmatch_mapping",
+                        words=matched_words
                     ))
                     
-                    # CRITICAL FIX: Advance word_idx to avoid getting stuck
-                    # Skip ahead by estimated number of words for this line (force advance to escape ambient noise clusters)
-                    estimated_words = max(10, len(line_words) * 2)
-                    word_idx = min(word_idx + estimated_words, len(words) - 1)
+                    # Advance by exactly the number of words we mapped, so we don't skip over audio
+                    word_idx = end_idx + 1
                 else:
-                    synced_lyrics.append(SyncedLyric(
-                        text=line,
-                        start_time=5.0,  # Default start
-                        end_time=7.0,
-                        duration=2.0,
-                        confidence=0.2,
-                        method="default"
-                    ))
-                    word_idx = min(5, len(words) - 1)  # Skip first few words
+                    # We ran out of Groq words entirely, use standard estimation based on previous line
+                    print(f"  Line {line_num}: Ran out of transcribed words, using standard estimation")
+                    if synced_lyrics:
+                        last_end = synced_lyrics[-1].end_time
+                        estimated_duration = max(2.0, min(len(line) * 0.05, 5.0))
+                        
+                        synced_lyrics.append(SyncedLyric(
+                            text=line,
+                            start_time=last_end + 0.5,
+                            end_time=last_end + 0.5 + estimated_duration,
+                            duration=estimated_duration,
+                            confidence=0.1,
+                            method="estimated_end"
+                        ))
         
         # POST-PROCESSING: Validate and fix any remaining timing issues
         synced_lyrics = self._post_process_timing(synced_lyrics)
@@ -898,8 +1012,16 @@ class AdvancedLyricSynchronizer:
                 else:
                     proximity_bonus = 1.0
                 
-                # Combined score with duration and proximity consideration
-                score = (similarity * 0.7 + length_bonus * 0.3) * duration_penalty * proximity_bonus
+                # Word skip penalty: Heavily penalize skipping over large amounts of transcribed words.
+                # This prevents matching a repeated chorus later in the song instead of the current one.
+                word_gap = i - start_idx
+                if word_gap > 0:
+                    word_skip_penalty = max(0.1, 1.0 - (word_gap * 0.02))
+                else:
+                    word_skip_penalty = 1.0
+                
+                # Combined score with duration, proximity, and word skip consideration
+                score = (similarity * 0.7 + length_bonus * 0.3) * duration_penalty * proximity_bonus * word_skip_penalty
                 
                 # Lower threshold to 0.5 for better matching with slang/variations
                 if score > best_score and score > 0.5:

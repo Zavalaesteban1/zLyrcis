@@ -33,8 +33,8 @@ export const Sidebar = styled.div<{ isOpen: boolean }>`
 
 export const SidebarToggle = styled.button`
   position: fixed;
-  top: 20px;
-  left: 20px;
+  bottom: 20px;
+  right: 20px;
   z-index: 200;
   background-color: #1DB954;
   color: white;

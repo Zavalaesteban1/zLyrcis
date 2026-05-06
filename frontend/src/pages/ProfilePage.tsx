@@ -382,7 +382,7 @@ const ProfilePage: React.FC = () => {
         <GlobalStyle />
         <AppLayout>
           <Sidebar isOpen={sidebarOpen}>
-            <Logo>🎵</Logo>
+            <Logo>{MdMusicNote({ size: 36 })}</Logo>
             <NavMenu>
               <NavItem to="/" data-tooltip="Home">
                 <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
@@ -423,7 +423,7 @@ const ProfilePage: React.FC = () => {
         <GlobalStyle />
         <AppLayout>
         <Sidebar isOpen={sidebarOpen}>
-          <Logo>🎵</Logo>
+          <Logo>{MdMusicNote({ size: 36 })}</Logo>
           <NavMenu>
             <NavItem to="/" data-tooltip="Home">
               <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
@@ -467,7 +467,7 @@ const ProfilePage: React.FC = () => {
       <GlobalStyle />
       <AppLayout>
       <Sidebar isOpen={sidebarOpen}>
-        <Logo>🎵</Logo>
+        <Logo>{MdMusicNote({ size: 36 })}</Logo>
         <NavMenu>
           <NavItem to="/" data-tooltip="Home">
             <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>

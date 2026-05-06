@@ -758,7 +758,7 @@ const HomePage: React.FC = () => {
         <GlobalStyle />
         <AppLayout>
           <Sidebar isOpen={sidebarOpen}>
-            <Logo>🎵</Logo>
+            <Logo>{MdMusicNote({ size: 36 })}</Logo>
             <NavMenu>
               <NavItem to="/" active data-tooltip="Home">
                 <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
@@ -797,7 +797,7 @@ const HomePage: React.FC = () => {
       <GlobalStyle />
       <AppLayout>
       <Sidebar isOpen={sidebarOpen}>
-        <Logo>🎵</Logo>
+        <Logo>{MdMusicNote({ size: 36 })}</Logo>
           <NavMenu>
             <NavItem to="/" active data-tooltip="Home">
               <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>

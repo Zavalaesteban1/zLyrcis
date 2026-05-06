@@ -4,10 +4,10 @@ import { useUser } from '../contexts/UserContext';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
-import { MdMusicNote, MdAdd, MdClose, MdMenu } from 'react-icons/md';
+import { MdMusicNote, MdAdd, MdClose, MdMenu, MdHistory } from 'react-icons/md';
 import { FiPlusCircle } from 'react-icons/fi';
 import { RiRobot2Line } from 'react-icons/ri';
-import { BsArrowsExpand, BsArrowsCollapse, BsChatDots } from 'react-icons/bs';
+import { BsArrowsExpand, BsArrowsCollapse } from 'react-icons/bs';
 
 // Import hooks
 import { useConversationManager, Message } from '../hooks/useConversationManager';
@@ -56,7 +56,7 @@ const AgentPage: React.FC = () => {
     deleteConversation,
     replaceConversationId,
     setActiveConversationId
-  } = useConversationManager();
+  } = useConversationManager({ disableAutoLoad: !!location.state?.autoStartSong });
 
   // UI state
   const [input, setInput] = useState('');
@@ -234,39 +234,56 @@ const AgentPage: React.FC = () => {
     }
   }, [input, isSendingMessage, activeConversationId, isCompactMode, createNewConversation, sendMessage]);
 
-  const handleSongSelect = useCallback(async (song: SongSuggestion) => {
-    if (!song.spotify_url) {
-      setMessages(prev => [...prev, { text: `Sorry, this song is not available on Spotify.`, isUser: false }]);
-      return;
-    }
-    
-    // Create or use existing conversation
+  const handleSongSelect = useCallback(async (song: SongSuggestion, forceNewConversation: boolean = false) => {
+    // Determine whether to use existing or create new conversation
     let convId = activeConversationId;
-    if (!convId) {
+    if (forceNewConversation || !convId) {
       convId = createNewConversation();
     }
+
     if (isCompactMode) {
       setIsCompactMode(false);
     }
 
-    setMessages(prev => [...prev, { text: `Manual Search: ${song.title} by ${song.artist}`, isUser: true }]);
-    setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true, processingLabel: `🎵 Generating video for ${song.title}...` }]);
-    
-    try {
-      const job = await submitSpotifyLink(song.spotify_url);
-      startPolling(job.id);
-    } catch (err) {
-      setMessages(prev => prev.filter(msg => !msg.isProcessing));
-      setMessages(prev => [...prev, { text: `Sorry, there was an error submitting the song request.`, isUser: false }]);
+    const userMessage = `Create a lyric video for ${song.title} by ${song.artist}`;
+
+    const newMessages: Message[] = [
+      { text: userMessage, isUser: true },
+      { text: '...', isUser: false, isProcessing: false }
+    ];
+
+    if (forceNewConversation) {
+      setMessages(newMessages);
+    } else {
+      setMessages(prev => [...prev, ...newMessages]);
     }
-  }, [activeConversationId, createNewConversation, isCompactMode, setMessages, startPolling]);
+
+    // Send message using the hook
+    const response = await sendMessage(userMessage, convId);
+
+    // Remove only the typing indicator (not processing indicators)
+    setMessages(prev => prev.filter(msg => !(msg.text === '...' && !msg.isProcessing)));
+
+    if (response) {
+      // For favorite-only songs, delay showing the response to sync with the "adding" indicator
+      if (response.is_favorite_only && response.message) {
+        setTimeout(() => {
+          setMessages(prev => prev.filter(msg => !msg.isProcessing));
+          setMessages(prev => [...prev, { text: response.message, isUser: false }]);
+        }, 2000);
+      } else if (response.message) {
+        setMessages(prev => [...prev, { text: response.message, isUser: false }]);
+      }
+    }
+  }, [activeConversationId, createNewConversation, isCompactMode, setMessages, sendMessage]);
 
   // Handle auto-starting a song from navigation state
   useEffect(() => {
     const autoStartSong = location.state?.autoStartSong;
     if (autoStartSong && !autoStartProcessed.current) {
       autoStartProcessed.current = true;
-      handleSongSelect(autoStartSong);
+      // When navigating from home, force a new conversation
+      handleSongSelect(autoStartSong, true);
       
       // Clear the state so it doesn't trigger again on refresh
       window.history.replaceState({}, document.title);
@@ -323,7 +340,7 @@ const AgentPage: React.FC = () => {
       {/* Main navigation sidebar - always visible on desktop, toggleable on mobile */}
       <Styles.Sidebar isOpen={sidebarOpen}>
         <Styles.Logo>
-          🎵
+          {MdMusicNote({ size: 36 })}
         </Styles.Logo>
         <Styles.NavMenu>
           <Styles.NavItem to="/" data-tooltip="Home">
@@ -378,7 +395,7 @@ const AgentPage: React.FC = () => {
       >
         {chatSidebarOpen ?
           MdClose({ size: 20 }) :
-          BsChatDots({ size: 18 })
+          MdHistory({ size: 20 })
         }
       </Styles.ChatSidebarToggle>
 
@@ -392,28 +409,15 @@ const AgentPage: React.FC = () => {
               </Styles.CompactChatIcon>
               <Styles.CompactChatTitle>Lyric Video Assistant</Styles.CompactChatTitle>
             </Styles.CompactChatHeader>
-            <Styles.CompactChatInput>
-              <Styles.InputRow>
-                <Styles.Textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask me about music..."
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  disabled={isSendingMessage}
-                  rows={1}
-                  autoFocus
-                />
-                <Styles.SendButton onClick={handleSend} disabled={isSendingMessage}>
-                  {isSendingMessage ? 'Sending...' : 'Send'}
-                </Styles.SendButton>
-              </Styles.InputRow>
-              <Styles.HelperText>Press Enter to send, Shift+Enter for a new line</Styles.HelperText>
-            </Styles.CompactChatInput>
+            <ChatInterface
+              messages={messages}
+              input={input}
+              isLoading={isSendingMessage}
+              onInputChange={setInput}
+              onSend={handleSend}
+              onSongSelect={handleSongSelect}
+              hideMessages={true}
+            />
           </Styles.CompactChatContainer>
         ) : (
           <Styles.ChatContainer>
@@ -441,7 +445,7 @@ const AgentPage: React.FC = () => {
                   title="Conversation History"
                   style={windowWidth <= 768 ? { padding: '8px' } : {}}
                 >
-                  {BsChatDots({ size: windowWidth <= 768 ? 18 : 16 })}
+                  {MdHistory({ size: windowWidth <= 768 ? 20 : 18 })}
                 </Styles.IconButton>
 
                 {/* Button to toggle scrollbars - hide on mobile */}
@@ -478,6 +482,7 @@ const AgentPage: React.FC = () => {
               isLoading={isSendingMessage}
               onInputChange={setInput}
               onSend={handleSend}
+              onSongSelect={handleSongSelect}
               showScrollbars={showScrollbars}
             />
           </Styles.ChatContainer>

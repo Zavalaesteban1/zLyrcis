@@ -24,6 +24,21 @@ except ImportError:
     ADVANCED_SYNC_AVAILABLE = False
     print("Advanced synchronization not available")
 
+# Import Telegram audio download
+try:
+    from core.telegram_audio import (
+        download_audio_from_telegram,
+        TelegramConfigurationError,
+        TelegramAuthenticationError,
+        TelegramTimeoutError,
+        TelegramBotNotFoundError,
+        TelegramFileNotReceivedError
+    )
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("Telegram audio download not available")
+
 # Import Deepgram SDK
 try:
     from deepgram import DeepgramClient
@@ -112,11 +127,11 @@ def generate_lyric_video(job_id):
             if filtered_lyrics_lines:  # Only patch if we have Genius lyrics
                 patch_temp_directory_srt_files(temp_dir, filtered_lyrics_lines)
             
-            # 3. Get audio file (from local files or Spotify)
+            # 3. Get audio file (from Cloudinary cache, Telegram download, or local files)
             audio_path = os.path.join(temp_dir, 'audio.mp3')
             
-            # Try to get audio (Cloudinary first, then local fallback)
-            audio_found = get_audio(song_info['title'], song_info['artist'], audio_path)
+            # Try to get audio (Cloudinary → Telegram → local fallback)
+            audio_found = get_audio(song_info['title'], song_info['artist'], audio_path, job.spotify_url)
             
             # If no local audio, download from Spotify
             if not audio_found:
@@ -636,13 +651,68 @@ def download_audio(track_id, output_path):
         return None
 
 
-def get_audio(song_title, artist, output_path):
+def upload_audio_to_library(audio_path, title, artist):
     """
-    Find matching audio file from Cloudinary (primary) or local audio_files directory (fallback).
+    Upload audio file to Cloudinary audio-library folder for future caching
     
-    Priority:
-    1. Cloudinary audio-library folder (production)
-    2. Local audio_files directory (development)
+    Args:
+        audio_path: Path to local MP3 file
+        title: Song title
+        artist: Artist name
+    
+    Returns:
+        str: Cloudinary URL if successful, None otherwise
+    """
+    if not CLOUDINARY_AVAILABLE:
+        print("Cloudinary not available, skipping upload")
+        return None
+    
+    try:
+        # Sanitize filename: "Artist - Title.mp3"
+        def sanitize_filename(s):
+            # Remove special characters but keep spaces and dashes
+            return re.sub(r'[^\w\s-]', '', s).strip()
+        
+        safe_artist = sanitize_filename(artist)
+        safe_title = sanitize_filename(title)
+        filename = f"{safe_artist} - {safe_title}"
+        
+        print(f"Uploading audio to Cloudinary: {filename}")
+        
+        # Upload to Cloudinary
+        result = cloudinary.uploader.upload(
+            audio_path,
+            resource_type='video',
+            folder='audio-library',
+            public_id=filename,
+            overwrite=False,
+            invalidate=True
+        )
+        
+        url = result.get('secure_url')
+        print(f"✓ Uploaded to Cloudinary: {url}")
+        return url
+        
+    except Exception as e:
+        print(f"⚠️  Failed to upload to Cloudinary: {e}")
+        return None
+
+
+def get_audio(song_title, artist, output_path, spotify_url=None):
+    """
+    Find matching audio file from:
+    1. Cloudinary audio-library (primary cache)
+    2. Telegram Deezer bot download (if Spotify URL provided and not in cache)
+    3. Local audio_files directory (last resort fallback)
+    
+    Args:
+        song_title: Song title
+        artist: Artist name  
+        output_path: Where to save the audio file
+        spotify_url: Optional Spotify URL for Telegram download
+    
+    Returns:
+        bool: True if audio was found/downloaded, False otherwise
     """
     
     # Normalize song title and artist for comparison
@@ -688,14 +758,23 @@ def get_audio(song_title, artist, output_path):
                 if ' - ' in filename:
                     parts = filename.split(' - ', 1)
                     if len(parts) == 2:
+                        # Calculate separate scores for artist and title
+                        artist_score1 = string_similarity(normalize_string(parts[0]), normalized_artist)
+                        title_score1 = string_similarity(normalize_string(parts[1]), normalized_title)
+                        
+                        artist_score2 = string_similarity(normalize_string(parts[0]), normalized_title)
+                        title_score2 = string_similarity(normalize_string(parts[1]), normalized_artist)
+                        
                         # Try both "Artist - Title" and "Title - Artist" formats
-                        score1 = (string_similarity(normalize_string(parts[0]), normalized_artist) * 0.5 +
-                                  string_similarity(normalize_string(parts[1]), normalized_title) * 0.5)
-                        
-                        score2 = (string_similarity(normalize_string(parts[0]), normalized_title) * 0.5 +
-                                  string_similarity(normalize_string(parts[1]), normalized_artist) * 0.5)
-                        
-                        score = max(score1, score2)
+                        # IMPORTANT: Both artist AND title must match well (minimum 0.75 each)
+                        if artist_score1 >= 0.75 and title_score1 >= 0.75:
+                            score = (artist_score1 + title_score1) / 2
+                        elif artist_score2 >= 0.75 and title_score2 >= 0.75:
+                            score = (artist_score2 + title_score2) / 2
+                        else:
+                            # If either artist or title doesn't match well, use lower score
+                            score = max(artist_score1 * 0.5 + title_score1 * 0.5,
+                                      artist_score2 * 0.5 + title_score2 * 0.5)
                 
                 # Strategy 2: No separator - try matching patterns
                 else:
@@ -724,7 +803,8 @@ def get_audio(song_title, artist, output_path):
                 if score > 0.5:
                     print(f"  Cloudinary candidate: '{filename}' - score: {score:.2f}")
                 
-                if score > best_score and score > 0.65:
+                # Require strong match (0.80+) to avoid false positives with similar artist names
+                if score > best_score and score > 0.80:
                     best_score = score
                     best_match = resource
             
@@ -748,9 +828,55 @@ def get_audio(song_title, artist, output_path):
                 
         except Exception as e:
             print(f"⚠️  Cloudinary error: {e}")
-            print("Falling back to local audio search...")
+            print("Falling back to next method...")
     
-    # FALLBACK TO LOCAL DIRECTORY (Development)
+    # TRY TELEGRAM DOWNLOAD (if Spotify URL provided and Cloudinary didn't have it)
+    if spotify_url and TELEGRAM_AVAILABLE:
+        try:
+            print("Not in cache, attempting Telegram download...")
+            
+            # Download from Telegram
+            telegram_file = download_audio_from_telegram(spotify_url, song_title, artist)
+            
+            if telegram_file and telegram_file.exists():
+                print(f"✓ Downloaded via Telegram: {telegram_file}")
+                
+                # Copy to output path
+                import shutil
+                shutil.copy2(telegram_file, output_path)
+                
+                # Upload to Cloudinary for future caching
+                print("Uploading to Cloudinary for future requests...")
+                upload_audio_to_library(str(telegram_file), song_title, artist)
+                
+                # Clean up telegram temp file
+                try:
+                    telegram_file.unlink()
+                    print("Cleaned up temporary Telegram file")
+                except:
+                    pass
+                
+                return True
+            else:
+                print("✗ Telegram download did not return a file")
+                
+        except TelegramConfigurationError as e:
+            print(f"⚠️  Telegram not configured: {e}")
+        except TelegramAuthenticationError as e:
+            print(f"⚠️  Telegram authentication failed: {e}")
+        except TelegramTimeoutError as e:
+            print(f"⚠️  Telegram timeout: {e}")
+        except (TelegramBotNotFoundError, TelegramFileNotReceivedError) as e:
+            print(f"⚠️  Telegram download failed: {e}")
+        except Exception as e:
+            print(f"⚠️  Unexpected Telegram error: {e}")
+            traceback.print_exc()
+    elif spotify_url and not TELEGRAM_AVAILABLE:
+        print("⚠️  Telegram download not available (library not installed)")
+    elif not spotify_url:
+        print("⚠️  No Spotify URL provided, skipping Telegram download")
+    
+    # FALLBACK TO LOCAL DIRECTORY (Last Resort)
     project_root = Path(__file__).resolve().parent.parent.parent
     audio_dir = project_root / 'audio_files'
     
@@ -775,13 +901,22 @@ def get_audio(song_title, artist, output_path):
             if ' - ' in filename:
                 parts = filename.split(' - ', 1)
                 if len(parts) == 2:
-                    score1 = (string_similarity(normalize_string(parts[0]), normalized_artist) * 0.5 +
-                              string_similarity(normalize_string(parts[1]), normalized_title) * 0.5)
+                    # Calculate separate scores for artist and title
+                    artist_score1 = string_similarity(normalize_string(parts[0]), normalized_artist)
+                    title_score1 = string_similarity(normalize_string(parts[1]), normalized_title)
                     
-                    score2 = (string_similarity(normalize_string(parts[0]), normalized_title) * 0.5 +
-                              string_similarity(normalize_string(parts[1]), normalized_artist) * 0.5)
+                    artist_score2 = string_similarity(normalize_string(parts[0]), normalized_title)
+                    title_score2 = string_similarity(normalize_string(parts[1]), normalized_artist)
                     
-                    score = max(score1, score2)
+                    # Both artist AND title must match well (minimum 0.75 each)
+                    if artist_score1 >= 0.75 and title_score1 >= 0.75:
+                        score = (artist_score1 + title_score1) / 2
+                    elif artist_score2 >= 0.75 and title_score2 >= 0.75:
+                        score = (artist_score2 + title_score2) / 2
+                    else:
+                        # If either doesn't match well, use lower score
+                        score = max(artist_score1 * 0.5 + title_score1 * 0.5,
+                                  artist_score2 * 0.5 + title_score2 * 0.5)
             
             # Strategy 2: No separator
             else:
@@ -810,7 +945,8 @@ def get_audio(song_title, artist, output_path):
             if score > 0.5:
                 print(f"  Local candidate: '{filename}' - score: {score:.2f}")
             
-            if score > best_score and score > 0.65:
+            # Require strong match (0.80+) to avoid false positives
+            if score > best_score and score > 0.80:
                 best_score = score
                 best_match = file_path
     

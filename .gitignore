@@ -97,5 +97,9 @@ htmlcov/
 celerybeat-schedule
 celerybeat.pid
 
+# Telegram session files (contain authentication data)
+*.session
+*.session-journal
+
 # Redis dump
 dump.rdb 

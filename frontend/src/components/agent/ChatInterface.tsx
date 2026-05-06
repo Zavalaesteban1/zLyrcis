@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, ChangeEvent, KeyboardEvent } from 'react';
-import { MdSend } from 'react-icons/md';
+import { MdSend, MdSearch, MdClose } from 'react-icons/md';
 import { Message } from '../../hooks/useConversationManager';
+import { searchSongs, SongSuggestion } from '../../services/api';
 import * as Styles from '../../styles/AgentPageStyles';
 
 interface ChatInterfaceProps {
@@ -9,7 +10,9 @@ interface ChatInterfaceProps {
   isLoading: boolean;
   onInputChange: (value: string) => void;
   onSend: () => void;
+  onSongSelect?: (song: SongSuggestion) => void;
   showScrollbars?: boolean;
+  hideMessages?: boolean;
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
@@ -18,12 +21,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   isLoading,
   onInputChange,
   onSend,
-  showScrollbars = false
+  onSongSelect,
+  showScrollbars = false,
+  hideMessages = false
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [newestMessageIdx, setNewestMessageIdx] = useState(-1);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  // Search states
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<SongSuggestion[]>([]);
 
   // Track window resize for mobile detection
   useEffect(() => {
@@ -69,12 +79,45 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setNewestMessageIdx(messages.length);
   };
 
+  const handleSearchToggle = async () => {
+    if (isSearchMode) {
+      // Close search mode
+      setIsSearchMode(false);
+      setSearchResults([]);
+    } else {
+      // Open search mode and search if input exists
+      setIsSearchMode(true);
+      if (input.trim()) {
+        setIsSearching(true);
+        try {
+          const results = await searchSongs(input.trim());
+          setSearchResults(results);
+        } catch (error) {
+          console.error("Error searching songs:", error);
+          setSearchResults([]);
+        } finally {
+          setIsSearching(false);
+        }
+      }
+    }
+  };
+
+  const handleResultClick = (song: SongSuggestion) => {
+    setIsSearchMode(false);
+    setSearchResults([]);
+    onInputChange(''); // clear the input
+    if (onSongSelect) {
+      onSongSelect(song);
+    }
+  };
+
   return (
     <>
-      <Styles.ChatMessages className={showScrollbars ? 'show-scrollbar' : ''}>
-        {messages.map((message, index) => {
-          // Check if this is a typing/processing indicator
-          if (message.text === '...') {
+      {!hideMessages && (
+        <Styles.ChatMessages className={showScrollbars ? 'show-scrollbar' : ''}>
+          {messages.map((message, index) => {
+            // Check if this is a typing/processing indicator
+            if (message.text === '...') {
             return (
               <Styles.AssistantTypingIndicator key={index} isProcessing={message.isProcessing}>
                 {message.isProcessing && (
@@ -104,18 +147,54 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         })}
         <div ref={messagesEndRef} />
       </Styles.ChatMessages>
+      )}
       
       <Styles.ChatInput>
-        <Styles.InputRow>
-          <Styles.Textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onInputChange(e.target.value)}
-            placeholder="Ask me about music..."
-            onKeyDown={handleKeyPress}
-            disabled={isLoading}
-            rows={1}
-          />
+        <Styles.InputRowWrapper>
+          {isSearchMode && (
+            <Styles.ChatSearchOverlay>
+              {isSearching ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>Searching...</div>
+              ) : searchResults.length > 0 ? (
+                searchResults.map(song => (
+                  <Styles.ChatSearchResultItem key={song.id} onClick={() => handleResultClick(song)}>
+                    {song.album_cover ? (
+                      <Styles.ChatSearchAlbumCover src={song.album_cover} alt={song.title} />
+                    ) : (
+                      <div style={{ width: '40px', height: '40px', backgroundColor: '#e0e0e0', borderRadius: '4px', marginRight: '12px' }} />
+                    )}
+                    <Styles.ChatSearchSongInfo>
+                      <Styles.ChatSearchSongTitle>{song.title}</Styles.ChatSearchSongTitle>
+                      <Styles.ChatSearchSongMeta>{song.artist} • {song.runtime}</Styles.ChatSearchSongMeta>
+                    </Styles.ChatSearchSongInfo>
+                  </Styles.ChatSearchResultItem>
+                ))
+              ) : input.trim() ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>No results found</div>
+              ) : (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>Type a song name and click search again to see results</div>
+              )}
+            </Styles.ChatSearchOverlay>
+          )}
+          
+          <Styles.InputRow>
+            <Styles.SearchToggleButton 
+              onClick={handleSearchToggle} 
+              isActive={isSearchMode}
+              title={isSearchMode ? "Close search" : "Search for a song"}
+            >
+              {isSearchMode ? MdClose({ size: 20 }) : MdSearch({ size: 20 })}
+            </Styles.SearchToggleButton>
+            
+            <Styles.Textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onInputChange(e.target.value)}
+              placeholder="Ask me about music or search a song..."
+              onKeyDown={handleKeyPress}
+              disabled={isLoading}
+              rows={1}
+            />
           <Styles.SendButton onClick={handleSendClick} disabled={isLoading}>
             {isLoading ? 'Sending...' : (
               <>
@@ -124,8 +203,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </>
             )}
           </Styles.SendButton>
-        </Styles.InputRow>
-        <Styles.HelperText>Press Enter to send, Shift+Enter for a new line</Styles.HelperText>
+          </Styles.InputRow>
+          <Styles.HelperText>Press Enter to send, Shift+Enter for a new line</Styles.HelperText>
+        </Styles.InputRowWrapper>
       </Styles.ChatInput>
     </>
   );

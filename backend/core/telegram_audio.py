@@ -25,6 +25,10 @@ try:
     TELETHON_AVAILABLE = True
 except ImportError:
     TELETHON_AVAILABLE = False
+    # Create dummy classes for type hints when Telethon is not available
+    TelegramClient = None
+    Message = None
+    MessageMediaDocument = None
     logging.warning("Telethon not installed. Telegram audio download will not be available.")
 
 
@@ -101,12 +105,12 @@ def _get_telegram_config() -> dict:
     }
 
 
-async def _init_telegram_client() -> TelegramClient:
+async def _init_telegram_client():
     """
     Initialize and authenticate Telegram client
     
     Returns:
-        TelegramClient: Authenticated Telegram client
+        TelegramClient: Authenticated Telegram client (if available)
     
     Raises:
         TelegramAuthenticationError: If authentication fails
@@ -148,7 +152,7 @@ async def _init_telegram_client() -> TelegramClient:
         raise TelegramAuthenticationError(f"Failed to connect to Telegram: {str(e)}")
 
 
-async def _send_to_deezer_bot(client: TelegramClient, spotify_url: str, bot_username: str, timeout: int) -> Optional[Path]:
+async def _send_to_deezer_bot(client, spotify_url: str, bot_username: str, timeout: int) -> Optional[Path]:
     """
     Send Spotify link to Deezer bot and wait for audio file response
     
@@ -188,10 +192,10 @@ async def _send_to_deezer_bot(client: TelegramClient, spotify_url: str, bot_user
         async def message_handler(event):
             nonlocal downloaded_file
             
-            message: Message = event.message
+            message = event.message
             
             # Check if message contains an audio file
-            if message.media and isinstance(message.media, MessageMediaDocument):
+            if message.media and hasattr(message.media, 'document'):
                 document = message.media.document
                 
                 # Check if it's an audio file (MP3)

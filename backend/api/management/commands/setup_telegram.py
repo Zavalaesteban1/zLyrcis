@@ -105,7 +105,14 @@ class Command(BaseCommand):
                     await client.disconnect()
                     return
             
-            # Test the setup
+            # Disconnect the client BEFORE testing (SQLite can only be opened by one client)
+            await client.disconnect()
+            self.stdout.write('Authentication complete. Disconnecting...\n')
+            
+            # Wait a moment for the session file to be fully released
+            await asyncio.sleep(1)
+            
+            # Test the setup with a new client connection
             self.stdout.write('\nTesting Telegram setup...\n')
             success = await test_telegram_setup(test_url)
             
@@ -124,7 +131,7 @@ class Command(BaseCommand):
         
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'\nError: {e}\n'))
-        
-        finally:
-            await client.disconnect()
-            self.stdout.write('Disconnected from Telegram.\n')
+            try:
+                await client.disconnect()
+            except:
+                pass

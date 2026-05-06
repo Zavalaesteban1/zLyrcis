@@ -758,14 +758,23 @@ def get_audio(song_title, artist, output_path, spotify_url=None):
                 if ' - ' in filename:
                     parts = filename.split(' - ', 1)
                     if len(parts) == 2:
+                        # Calculate separate scores for artist and title
+                        artist_score1 = string_similarity(normalize_string(parts[0]), normalized_artist)
+                        title_score1 = string_similarity(normalize_string(parts[1]), normalized_title)
+                        
+                        artist_score2 = string_similarity(normalize_string(parts[0]), normalized_title)
+                        title_score2 = string_similarity(normalize_string(parts[1]), normalized_artist)
+                        
                         # Try both "Artist - Title" and "Title - Artist" formats
-                        score1 = (string_similarity(normalize_string(parts[0]), normalized_artist) * 0.5 +
-                                  string_similarity(normalize_string(parts[1]), normalized_title) * 0.5)
-                        
-                        score2 = (string_similarity(normalize_string(parts[0]), normalized_title) * 0.5 +
-                                  string_similarity(normalize_string(parts[1]), normalized_artist) * 0.5)
-                        
-                        score = max(score1, score2)
+                        # IMPORTANT: Both artist AND title must match well (minimum 0.75 each)
+                        if artist_score1 >= 0.75 and title_score1 >= 0.75:
+                            score = (artist_score1 + title_score1) / 2
+                        elif artist_score2 >= 0.75 and title_score2 >= 0.75:
+                            score = (artist_score2 + title_score2) / 2
+                        else:
+                            # If either artist or title doesn't match well, use lower score
+                            score = max(artist_score1 * 0.5 + title_score1 * 0.5,
+                                      artist_score2 * 0.5 + title_score2 * 0.5)
                 
                 # Strategy 2: No separator - try matching patterns
                 else:
@@ -794,7 +803,8 @@ def get_audio(song_title, artist, output_path, spotify_url=None):
                 if score > 0.5:
                     print(f"  Cloudinary candidate: '{filename}' - score: {score:.2f}")
                 
-                if score > best_score and score > 0.65:
+                # Require strong match (0.80+) to avoid false positives with similar artist names
+                if score > best_score and score > 0.80:
                     best_score = score
                     best_match = resource
             
@@ -891,13 +901,22 @@ def get_audio(song_title, artist, output_path, spotify_url=None):
             if ' - ' in filename:
                 parts = filename.split(' - ', 1)
                 if len(parts) == 2:
-                    score1 = (string_similarity(normalize_string(parts[0]), normalized_artist) * 0.5 +
-                              string_similarity(normalize_string(parts[1]), normalized_title) * 0.5)
+                    # Calculate separate scores for artist and title
+                    artist_score1 = string_similarity(normalize_string(parts[0]), normalized_artist)
+                    title_score1 = string_similarity(normalize_string(parts[1]), normalized_title)
                     
-                    score2 = (string_similarity(normalize_string(parts[0]), normalized_title) * 0.5 +
-                              string_similarity(normalize_string(parts[1]), normalized_artist) * 0.5)
+                    artist_score2 = string_similarity(normalize_string(parts[0]), normalized_title)
+                    title_score2 = string_similarity(normalize_string(parts[1]), normalized_artist)
                     
-                    score = max(score1, score2)
+                    # Both artist AND title must match well (minimum 0.75 each)
+                    if artist_score1 >= 0.75 and title_score1 >= 0.75:
+                        score = (artist_score1 + title_score1) / 2
+                    elif artist_score2 >= 0.75 and title_score2 >= 0.75:
+                        score = (artist_score2 + title_score2) / 2
+                    else:
+                        # If either doesn't match well, use lower score
+                        score = max(artist_score1 * 0.5 + title_score1 * 0.5,
+                                  artist_score2 * 0.5 + title_score2 * 0.5)
             
             # Strategy 2: No separator
             else:
@@ -926,7 +945,8 @@ def get_audio(song_title, artist, output_path, spotify_url=None):
             if score > 0.5:
                 print(f"  Local candidate: '{filename}' - score: {score:.2f}")
             
-            if score > best_score and score > 0.65:
+            # Require strong match (0.80+) to avoid false positives
+            if score > best_score and score > 0.80:
                 best_score = score
                 best_match = file_path
     

@@ -251,7 +251,15 @@ TELEGRAM_API_ID = os.getenv('TELEGRAM_API_ID', '')
 TELEGRAM_API_HASH = os.getenv('TELEGRAM_API_HASH', '')
 TELEGRAM_PHONE = os.getenv('TELEGRAM_PHONE', '')
 TELEGRAM_DEEZER_BOT = os.getenv('TELEGRAM_DEEZER_BOT', '@deezload2bot')
-TELEGRAM_SESSION_FILE = os.getenv('TELEGRAM_SESSION_FILE', 'telegram_session')
+
+# Session file path - use absolute path in production
+if os.getenv('RAILWAY_ENVIRONMENT'):
+    # Production: save to /app/backend/
+    TELEGRAM_SESSION_FILE = '/app/backend/telegram_session'
+else:
+    # Development: save to backend directory
+    TELEGRAM_SESSION_FILE = os.path.join(BASE_DIR, 'telegram_session')
+
 TELEGRAM_DOWNLOAD_TIMEOUT = int(os.getenv('TELEGRAM_DOWNLOAD_TIMEOUT', '180'))
 
 # Debug information about loaded credentials (remove in production)

@@ -622,26 +622,63 @@ div::-webkit-scrollbar {
   font-size: 13px;
   color: var(--foreground);
   line-height: 1.4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lyric-text .word {
   transition: all 0.3s ease;
+  color: var(--muted-foreground);
 }
 
-.lyric-line.active .lyric-text {
-  font-weight: 600;
-  color: var(--primary);
-}
-
-.lyric-text.highlighted {
-  animation: highlightPulse 2s ease-in-out infinite;
-}
-
-@keyframes highlightPulse {
-  0%, 100% {
-    opacity: 1;
+/* Word-by-word highlighting animation across all lines */
+@keyframes wordHighlight {
+  0%, 5% {
+    color: var(--primary);
+    font-weight: 700;
+    transform: scale(1.08);
   }
-  50% {
-    opacity: 0.7;
+  10%, 100% {
+    color: var(--muted-foreground);
+    font-weight: 400;
+    transform: scale(1);
   }
 }
+
+/* Generate delays for each word across all lines */
+.sync-word-1 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 0s; }
+.sync-word-2 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 0.5s; }
+.sync-word-3 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 1s; }
+.sync-word-4 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 1.5s; }
+.sync-word-5 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 2s; }
+.sync-word-6 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 2.5s; }
+.sync-word-7 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 3s; }
+.sync-word-8 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 3.5s; }
+.sync-word-9 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 4s; }
+.sync-word-10 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 4.5s; }
+.sync-word-11 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 5s; }
+.sync-word-12 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 5.5s; }
+.sync-word-13 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 6s; }
+.sync-word-14 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 6.5s; }
+.sync-word-15 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 7s; }
+.sync-word-16 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 7.5s; }
+.sync-word-17 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 8s; }
+.sync-word-18 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 8.5s; }
+.sync-word-19 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 9s; }
+.sync-word-20 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 9.5s; }
+.sync-word-21 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 10s; }
+.sync-word-22 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 10.5s; }
+.sync-word-23 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 11s; }
+.sync-word-24 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 11.5s; }
+.sync-word-25 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 12s; }
+.sync-word-26 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 12.5s; }
+.sync-word-27 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 13s; }
+.sync-word-28 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 13.5s; }
+.sync-word-29 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 14s; }
+.sync-word-30 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 14.5s; }
+.sync-word-31 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 15s; }
+.sync-word-32 { animation: wordHighlight 16s ease-in-out infinite; animation-delay: 15.5s; }
 
 /* Library Mockup */
 .library-mockup {

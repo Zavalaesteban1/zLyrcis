@@ -337,7 +337,7 @@ const LoginPage: React.FC = () => {
       
       {/* Footer */}
       <footer className="footer">
-        <p>© 2025 zLyrics // All rights reserved // Made for creators</p>
+        <p>© 2026 zLyrics // All rights reserved // Made for creators</p>
       </footer>
       
       {/* Login Modal */}

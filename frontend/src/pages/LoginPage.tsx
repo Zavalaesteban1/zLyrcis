@@ -480,6 +480,8 @@ const Input = styled.input`
 `;
 
 const Button = styled.button`
+  width: 50%;
+  box-sizing: border-box;
   padding: 13px;
   border: none;
   border-radius: 10px;
@@ -493,7 +495,7 @@ const Button = styled.button`
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-top: 8px;
+  margin: 8px auto 0;
   box-shadow: 0 2px 8px rgba(29, 185, 84, 0.2);
   
   &:hover {

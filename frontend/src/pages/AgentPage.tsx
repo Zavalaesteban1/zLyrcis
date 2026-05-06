@@ -340,7 +340,7 @@ const AgentPage: React.FC = () => {
       {/* Main navigation sidebar - always visible on desktop, toggleable on mobile */}
       <Styles.Sidebar isOpen={sidebarOpen}>
         <Styles.Logo>
-          🎵
+          {MdMusicNote({ size: 36 })}
         </Styles.Logo>
         <Styles.NavMenu>
           <Styles.NavItem to="/" data-tooltip="Home">

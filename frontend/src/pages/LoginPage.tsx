@@ -125,8 +125,8 @@ const LoginPage: React.FC = () => {
         <div className="hero-decorative-blur" />
 
         <h1 className="hero-title">
-          Music AI <br />
-          <span className="hero-title-italic">Simplified.</span>
+          Create Lyric Videos <br />
+          <span className="hero-title-italic">In Minutes.</span>
         </h1>
 
         <p className="hero-subtitle">
@@ -143,7 +143,6 @@ const LoginPage: React.FC = () => {
       <section className="features-section">
         <div className="features-header">
           <div>
-            <div className="features-badge">Feature_Engine_v4</div>
             <h2 className="section-title">
               Less Noise. <span className="hero-title-italic">More Signal.</span>
             </h2>
@@ -164,14 +163,27 @@ const LoginPage: React.FC = () => {
                 <div className="scanning-line" />
                 <div className="chat-prompt">
                   <span className="prompt-icon">▶</span>
-                  <span className="prompt-text">"Make the lyrics flow like liquid mercury..."</span>
+                  <span className="prompt-text">"Create a lyric video for Breathe in the air by Pink Floyd"</span>
                 </div>
-                <div className="chat-suggestions">
-                  <div className="suggestion-box"></div>
-                  <div className="suggestion-box"></div>
-                  <div className="suggestion-box"></div>
+                <div className="ai-generating">
+                  <div className="generating-text">
+                    <span className="generating-icon">{RiRobot2Line({ size: 20, color: '#1DB954' })}</span>
+                    <span>AI Generating</span>
+                    <div className="dot-animation">
+                      <span className="dot">.</span>
+                      <span className="dot">.</span>
+                      <span className="dot">.</span>
+                    </div>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-fill"></div>
+                  </div>
+                  <div className="generating-steps">
+                    <div className="step completed">✓ Analyzing lyrics</div>
+                    <div className="step active">⟳ Syncing timestamps</div>
+                    <div className="step">○ Rendering video</div>
+                  </div>
                 </div>
-                <div className="bot-watermark">{RiRobot2Line({ size: 48, color: 'rgba(29, 185, 84, 0.1)' })}</div>
               </div>
             </div>
 
@@ -184,7 +196,6 @@ const LoginPage: React.FC = () => {
               </div>
               
               <div className="feature-meta">
-                <div className="feature-mod">MOD_01</div>
                 <div className="feature-indicator" />
               </div>
             </div>
@@ -201,23 +212,23 @@ const LoginPage: React.FC = () => {
                 <div className="lyric-sync-container">
                   <div className="lyric-line">
                     <span className="timestamp">00:12</span>
-                    <span className="lyric-text">Living fast through the night</span>
+                    <span className="lyric-text">One carat drip down my fang</span>
                   </div>
                   <div className="lyric-line active">
                     <span className="timestamp">00:15</span>
-                    <span className="lyric-text highlighted">Got ice dripping on my chains</span>
+                    <span className="lyric-text highlighted">Drugs runnin' deep through my vein</span>
                   </div>
                   <div className="lyric-line">
                     <span className="timestamp">00:18</span>
-                    <span className="lyric-text">Running wild breaking lanes</span>
+                    <span className="lyric-text">I'm takin' drugs, healin' the pain</span>
                   </div>
                   <div className="lyric-line">
                     <span className="timestamp">00:21</span>
-                    <span className="lyric-text">Nothing's stopping me today</span>
+                    <span className="lyric-text">Let the paint drip on my main</span>
                   </div>
                   <div className="lyric-line">
                     <span className="timestamp">00:24</span>
-                    <span className="lyric-text">Watch the colors fade away</span>
+                    <span className="lyric-text">Let the paint drip, me and Wave</span>
                   </div>
                 </div>
               </div>
@@ -232,7 +243,6 @@ const LoginPage: React.FC = () => {
               </div>
               
               <div className="feature-meta">
-                <div className="feature-mod">MOD_02</div>
                 <div className="feature-indicator" />
               </div>
             </div>
@@ -269,7 +279,6 @@ const LoginPage: React.FC = () => {
               </div>
               
               <div className="feature-meta">
-                <div className="feature-mod">MOD_03</div>
                 <div className="feature-indicator" />
               </div>
             </div>
@@ -279,17 +288,13 @@ const LoginPage: React.FC = () => {
       
       {/* CTA Section */}
       <section className="cta-section">
-        <div className="cta-grid">
-          <div className="cta-content">
-            <h2 className="cta-title">
-              Elevate your music <span className="hero-title-italic">learning </span>
-            </h2>
-          </div>
-          <div className="cta-button-container">
-            <button className="cta-button" onClick={openSignupModal}>
-              GET STARTED NOW
-            </button>
-          </div>
+        <div className="cta-content-centered">
+          <h2 className="cta-title">
+            Elevate your music <span className="hero-title-italic">learning</span>
+          </h2>
+          <button className="cta-button" onClick={openSignupModal}>
+            GET STARTED NOW
+          </button>
         </div>
       </section>
       

@@ -897,7 +897,7 @@ export const HelperText = styled.div`
   font-size: 12px;
   color: #888;
   margin-top: 4px;
-  padding-left: 12px;
+  padding-left: 0px;
   align-self: flex-start;
   
   @media (max-width: 768px) {
@@ -1150,4 +1150,116 @@ export const CompactChatIcon = styled.div`
     font-size: 20px;
     margin-right: 12px;
   }
+`;
+
+export const ChatSearchOverlay = styled.div`
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: 100%;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 20;
+  padding: 8px 0;
+  
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+  }
+`;
+
+export const ChatSearchResultItem = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  
+  &:hover {
+    background-color: rgba(29, 185, 84, 0.05);
+  }
+`;
+
+export const ChatSearchAlbumCover = styled.img`
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+  margin-right: 12px;
+`;
+
+export const ChatSearchSongInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+`;
+
+export const ChatSearchSongTitle = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+`;
+
+export const ChatSearchSongMeta = styled.div`
+  font-size: 12px;
+  color: #666;
+  margin-top: 2px;
+`;
+
+export const SearchToggleButton = styled.button<{ isActive?: boolean }>`
+  background-color: ${props => props.isActive ? '#f1f1f1' : 'transparent'};
+  color: ${props => props.isActive ? '#e91429' : '#666'};
+  border: none;
+  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  margin-left: -8px;
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  
+  &:hover {
+    background-color: ${props => props.isActive ? '#ffebee' : 'rgba(0, 0, 0, 0.05)'};
+    color: ${props => props.isActive ? '#d32f2f' : '#333'};
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  svg {
+    font-size: 28px;
+  }
+  
+  @media (max-width: 768px) {
+    width: 46px;
+    height: 46px;
+    margin-right: 8px;
+    
+    svg {
+      font-size: 24px;
+    }
+  }
+`;
+
+export const InputRowWrapper = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
 `; 

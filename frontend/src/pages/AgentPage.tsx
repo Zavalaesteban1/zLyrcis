@@ -234,9 +234,12 @@ const AgentPage: React.FC = () => {
     }
   }, [input, isSendingMessage, activeConversationId, isCompactMode, createNewConversation, sendMessage]);
 
-  const handleSongSelect = useCallback(async (song: SongSuggestion) => {
-    // Always start a new conversation for a new search request
-    const convId = createNewConversation();
+  const handleSongSelect = useCallback(async (song: SongSuggestion, forceNewConversation: boolean = false) => {
+    // Determine whether to use existing or create new conversation
+    let convId = activeConversationId;
+    if (forceNewConversation || !convId) {
+      convId = createNewConversation();
+    }
 
     if (isCompactMode) {
       setIsCompactMode(false);
@@ -244,11 +247,16 @@ const AgentPage: React.FC = () => {
 
     const userMessage = `Create a lyric video for ${song.title} by ${song.artist}`;
 
-    // Add user message and typing indicator, replacing any existing messages from previous conversations
-    setMessages([
+    const newMessages: Message[] = [
       { text: userMessage, isUser: true },
       { text: '...', isUser: false, isProcessing: false }
-    ]);
+    ];
+
+    if (forceNewConversation) {
+      setMessages(newMessages);
+    } else {
+      setMessages(prev => [...prev, ...newMessages]);
+    }
 
     // Send message using the hook
     const response = await sendMessage(userMessage, convId);
@@ -274,7 +282,8 @@ const AgentPage: React.FC = () => {
     const autoStartSong = location.state?.autoStartSong;
     if (autoStartSong && !autoStartProcessed.current) {
       autoStartProcessed.current = true;
-      handleSongSelect(autoStartSong);
+      // When navigating from home, force a new conversation
+      handleSongSelect(autoStartSong, true);
       
       // Clear the state so it doesn't trigger again on refresh
       window.history.replaceState({}, document.title);
@@ -400,28 +409,15 @@ const AgentPage: React.FC = () => {
               </Styles.CompactChatIcon>
               <Styles.CompactChatTitle>Lyric Video Assistant</Styles.CompactChatTitle>
             </Styles.CompactChatHeader>
-            <Styles.CompactChatInput>
-              <Styles.InputRow>
-                <Styles.Textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask me about music..."
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  disabled={isSendingMessage}
-                  rows={1}
-                  autoFocus
-                />
-                <Styles.SendButton onClick={handleSend} disabled={isSendingMessage}>
-                  {isSendingMessage ? 'Sending...' : 'Send'}
-                </Styles.SendButton>
-              </Styles.InputRow>
-              <Styles.HelperText>Press Enter to send, Shift+Enter for a new line</Styles.HelperText>
-            </Styles.CompactChatInput>
+            <ChatInterface
+              messages={messages}
+              input={input}
+              isLoading={isSendingMessage}
+              onInputChange={setInput}
+              onSend={handleSend}
+              onSongSelect={handleSongSelect}
+              hideMessages={true}
+            />
           </Styles.CompactChatContainer>
         ) : (
           <Styles.ChatContainer>
@@ -486,6 +482,7 @@ const AgentPage: React.FC = () => {
               isLoading={isSendingMessage}
               onInputChange={setInput}
               onSend={handleSend}
+              onSongSelect={handleSongSelect}
               showScrollbars={showScrollbars}
             />
           </Styles.ChatContainer>

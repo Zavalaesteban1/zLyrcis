@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled, { keyframes, createGlobalStyle } from 'styled-components';
-import { getUserVideos, extractSpotifyTrackId, getSpotifyAlbumArtwork, VideoJob } from '../services/api';
+import { getUserVideos, extractSpotifyTrackId, getSpotifyAlbumArtwork, VideoJob, SongSuggestion } from '../services/api';
 import { useUser } from '../contexts/UserContext';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
@@ -13,6 +13,8 @@ import { AiOutlineClockCircle } from 'react-icons/ai';
 import { RiRobot2Line } from 'react-icons/ri';
 // Import ProfileDropdown component
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
+// Import SearchBar component
+import { SearchBar } from '../components/SearchBar/SearchBar';
 
 // Global style for consistent styling across pages
 const GlobalStyle = createGlobalStyle`
@@ -824,9 +826,20 @@ const HomePage: React.FC = () => {
       <MobileOverlay visible={sidebarOpen} onClick={() => setSidebarOpen(false)} />
       
       <MainContent>
-        <PageHeader>
-          <PageTitle>Dashboard</PageTitle>
-          <UserActions>
+        <PageHeader style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', flexWrap: 'nowrap' }}>
+          <PageTitle style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '40px', height: '40px', backgroundColor: 'rgba(29, 185, 84, 0.1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {MdMusicNote({ size: 24, color: '#1DB954' })}
+            </div>
+            zLyrics
+          </PageTitle>
+          <UserActions style={{ flex: 1, justifyContent: 'flex-end', gap: '8px' }}>
+            <div style={{ width: '100%', maxWidth: '500px', display: 'flex', justifyContent: 'flex-end' }}>
+              <SearchBar 
+                onSelectSong={(song: SongSuggestion) => navigate('/agent', { state: { autoStartSong: song } })} 
+                placeholder="Search for a song to request..." 
+              />
+            </div>
             <ProfileDropdown userData={userData} />
           </UserActions>
         </PageHeader>

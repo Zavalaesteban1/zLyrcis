@@ -703,6 +703,58 @@ def search_spotify(title, artist):
         print(f"Error searching Spotify: {str(e)}")
         return None
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_songs(request):
+    """Search Spotify for songs based on a query string"""
+    query = request.GET.get('query', '')
+    if not query:
+        return Response({'error': 'No query provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Get Spotify credentials from environment variables
+        client_id = os.environ.get("SPOTIFY_CLIENT_ID")
+        client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
+
+        if not client_id or not client_secret:
+            return Response({'error': 'Spotify API credentials missing'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+            client_id=client_id,
+            client_secret=client_secret
+        ))
+
+        # Search Spotify
+        results = sp.search(q=query, type='track', limit=10)
+        
+        songs = []
+        if results['tracks']['items']:
+            for track in results['tracks']['items']:
+                # Format runtime from ms to mm:ss
+                duration_ms = track.get('duration_ms', 0)
+                minutes = int((duration_ms / (1000 * 60)) % 60)
+                seconds = int((duration_ms / 1000) % 60)
+                runtime = f"{minutes}:{seconds:02d}"
+                
+                # Get album cover
+                album_cover = None
+                if track.get('album') and track['album'].get('images') and len(track['album']['images']) > 0:
+                    album_cover = track['album']['images'][0]['url']
+                
+                songs.append({
+                    'id': track['id'],
+                    'title': track['name'],
+                    'artist': track['artists'][0]['name'] if track.get('artists') else 'Unknown Artist',
+                    'album_cover': album_cover,
+                    'runtime': runtime,
+                    'spotify_url': track['external_urls']['spotify'] if track.get('external_urls') else None
+                })
+        
+        return Response(songs)
+    except Exception as e:
+        logging.error(f"Error in search_songs: {str(e)}")
+        return Response({'error': f"Error searching Spotify: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 def get_or_create_conversation(conversation_id, user):
     """Get or create a conversation in the database"""
     try:

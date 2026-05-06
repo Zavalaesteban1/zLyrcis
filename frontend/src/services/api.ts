@@ -675,4 +675,34 @@ export const agent_chat = async (message: string, conversation_id?: string): Pro
   return response.json();
 };
 
+// Interface for song search results
+export interface SongSuggestion {
+  id: string;
+  title: string;
+  artist: string;
+  album_cover: string | null;
+  runtime: string;
+  spotify_url: string | null;
+}
+
+// Function to search for songs
+export const searchSongs = async (query: string): Promise<SongSuggestion[]> => {
+  if (!query) return [];
+  
+  const response = await fetch(`${API_URL}/search_songs/?query=${encodeURIComponent(query)}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Token ${getAuthToken()}`
+    }
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to search songs');
+  }
+
+  return response.json();
+};
+
 export default api; 

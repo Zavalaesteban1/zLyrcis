@@ -12,7 +12,8 @@ from .views import (
     agent_chat,
     get_conversation_history,
     get_all_conversations,
-    delete_conversation
+    delete_conversation,
+    search_songs
 )
 from django.conf import settings
 from django.conf.urls.static import static
@@ -34,6 +35,7 @@ urlpatterns = [
     path('get_conversation_history/', get_conversation_history, name='get_conversation_history'),
     path('get_all_conversations/', get_all_conversations, name='get_all_conversations'),
     path('delete_conversation/<str:conversation_id>/', delete_conversation, name='delete_conversation'),
+    path('search_songs/', search_songs, name='search_songs'),
 ]
 
 if settings.DEBUG:

@@ -1,0 +1,330 @@
+.search-bar-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  font-family: 'Inter', sans-serif;
+  z-index: 100;
+}
+
+.search-input-container {
+  display: flex;
+  align-items: center;
+  background-color: #ffffff;
+  border-radius: 24px;
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  transition: all 0.2s ease;
+}
+
+.search-input-container:focus-within {
+  border-color: #1DB954;
+  box-shadow: 0 0 0 1px #1DB954;
+  background-color: #ffffff;
+}
+
+.search-input-container.open {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  border-bottom-color: transparent;
+}
+
+.search-icon {
+  color: #666;
+  margin-right: 12px;
+}
+
+.search-input-container:focus-within .search-icon {
+  color: #333;
+}
+
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #333;
+  font-size: 16px;
+  outline: none;
+  padding: 4px 0;
+}
+
+.search-input::placeholder {
+  color: #888;
+}
+
+.search-clear-btn {
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.search-clear-btn:hover {
+  color: #333;
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.search-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background-color: #282828;
+  border-radius: 8px;
+  border: 1px solid #333;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  max-height: 400px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar for dropdown */
+.search-dropdown::-webkit-scrollbar {
+  width: 8px;
+}
+
+.search-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.search-dropdown::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+.search-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+.search-loading,
+.search-no-results {
+  padding: 20px;
+  text-align: center;
+  color: #b3b3b3;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: #1DB954;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.search-results-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  gap: 16px;
+}
+
+.search-result-item:hover {
+  background-color: #333;
+}
+
+.search-result-cover {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background-color: #121212;
+}
+
+.search-result-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.search-result-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #b3b3b3;
+}
+
+.search-result-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.search-result-title {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-result-meta {
+  display: flex;
+  align-items: center;
+  color: #b3b3b3;
+  font-size: 14px;
+  gap: 6px;
+}
+
+.search-result-runtime {
+  font-variant-numeric: tabular-nums;
+}
+
+.search-result-dot {
+  font-size: 10px;
+}
+
+.search-result-artist {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Mobile Toggle Button */
+.search-mobile-toggle-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: #333;
+  cursor: pointer;
+  padding: 8px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.search-mobile-toggle-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.search-mobile-back-btn {
+  background: transparent;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .search-mobile-toggle-btn {
+    display: flex;
+  }
+
+  .search-bar-wrapper.desktop-only {
+    display: none;
+  }
+
+  .search-bar-wrapper.mobile-modal-open {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background-color: #f5f5f5;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    max-width: 100%;
+  }
+
+  .search-bar-wrapper.mobile-modal-open .search-input-container {
+    border-radius: 8px;
+    border-color: #ddd;
+    background-color: #ffffff;
+    padding: 12px;
+    margin-bottom: 16px;
+    display: flex;
+    flex: 0 0 auto;
+    box-shadow: none;
+  }
+
+  .search-bar-wrapper.mobile-modal-open .search-input-container.open {
+    border-radius: 8px;
+  }
+
+  .search-bar-wrapper.mobile-modal-open .search-input {
+    color: #333;
+    font-size: 18px; /* Slightly larger for mobile tap targets */
+  }
+
+  .search-bar-wrapper.mobile-modal-open .search-icon {
+    display: none; /* Hide standard search icon since we have back button or just clean input */
+  }
+
+  .search-bar-wrapper.mobile-modal-open .search-dropdown {
+    position: static;
+    flex: 1;
+    overflow-y: auto;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    max-height: none;
+  }
+
+  .search-bar-wrapper.mobile-modal-open .search-result-item {
+    padding: 12px 8px;
+    border-radius: 8px;
+  }
+
+  .search-bar-wrapper.mobile-modal-open .search-result-item:active {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+
+  .search-bar-wrapper.mobile-modal-open .search-result-title {
+    font-size: 16px;
+    color: #333;
+  }
+
+  .search-bar-wrapper.mobile-modal-open .search-result-meta {
+    color: #666;
+  }
+
+  .search-bar-wrapper.mobile-modal-open .search-loading,
+  .search-bar-wrapper.mobile-modal-open .search-no-results {
+    color: #666;
+  }
+
+  .search-bar-wrapper.mobile-modal-open .spinner {
+    border-color: rgba(0, 0, 0, 0.1);
+    border-top-color: #1DB954;
+  }
+}
+

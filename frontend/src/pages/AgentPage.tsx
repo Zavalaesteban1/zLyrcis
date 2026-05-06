@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
@@ -19,7 +19,7 @@ import { ConversationSidebar } from '../components/agent/ConversationSidebar';
 import { ChatInterface } from '../components/agent/ChatInterface';
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 import { VideoSettingsModal } from '../components/agent/VideoSettingsModal';
-import { startVideoGeneration, useExistingVariant } from '../services/api';
+import { startVideoGeneration, useExistingVariant, submitSpotifyLink, SongSuggestion } from '../services/api';
 
 // Import all styled components from AgentPageStyles
 import * as Styles from '../styles/AgentPageStyles';
@@ -38,7 +38,9 @@ const formatDate = () => {
 const AgentPage: React.FC = () => {
   // Navigation
   const navigate = useNavigate();
+  const location = useLocation();
   const [currentDate] = useState(formatDate());
+  const autoStartProcessed = React.useRef(false);
 
   // Custom hooks for conversation management
   const {
@@ -231,6 +233,45 @@ const AgentPage: React.FC = () => {
       }
     }
   }, [input, isSendingMessage, activeConversationId, isCompactMode, createNewConversation, sendMessage]);
+
+  const handleSongSelect = useCallback(async (song: SongSuggestion) => {
+    if (!song.spotify_url) {
+      setMessages(prev => [...prev, { text: `Sorry, this song is not available on Spotify.`, isUser: false }]);
+      return;
+    }
+    
+    // Create or use existing conversation
+    let convId = activeConversationId;
+    if (!convId) {
+      convId = createNewConversation();
+    }
+    if (isCompactMode) {
+      setIsCompactMode(false);
+    }
+
+    setMessages(prev => [...prev, { text: `Manual Search: ${song.title} by ${song.artist}`, isUser: true }]);
+    setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true, processingLabel: `🎵 Generating video for ${song.title}...` }]);
+    
+    try {
+      const job = await submitSpotifyLink(song.spotify_url);
+      startPolling(job.id);
+    } catch (err) {
+      setMessages(prev => prev.filter(msg => !msg.isProcessing));
+      setMessages(prev => [...prev, { text: `Sorry, there was an error submitting the song request.`, isUser: false }]);
+    }
+  }, [activeConversationId, createNewConversation, isCompactMode, setMessages, startPolling]);
+
+  // Handle auto-starting a song from navigation state
+  useEffect(() => {
+    const autoStartSong = location.state?.autoStartSong;
+    if (autoStartSong && !autoStartProcessed.current) {
+      autoStartProcessed.current = true;
+      handleSongSelect(autoStartSong);
+      
+      // Clear the state so it doesn't trigger again on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, handleSongSelect]);
 
   // Toggle scrollbar visibility
   const toggleScrollbars = useCallback(() => {

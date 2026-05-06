@@ -212,23 +212,60 @@ const LoginPage: React.FC = () => {
                 <div className="lyric-sync-container">
                   <div className="lyric-line">
                     <span className="timestamp">00:12</span>
-                    <span className="lyric-text">One carat drip down my fang</span>
+                    <div className="lyric-text">
+                      <span className="word sync-word-1">One</span>
+                      <span className="word sync-word-2">carat</span>
+                      <span className="word sync-word-3">drip</span>
+                      <span className="word sync-word-4">down</span>
+                      <span className="word sync-word-5">my</span>
+                      <span className="word sync-word-6">fang</span>
+                    </div>
                   </div>
-                  <div className="lyric-line active">
+                  <div className="lyric-line">
                     <span className="timestamp">00:15</span>
-                    <span className="lyric-text highlighted">Drugs runnin' deep through my vein</span>
+                    <div className="lyric-text">
+                      <span className="word sync-word-7">Drugs</span>
+                      <span className="word sync-word-8">runnin'</span>
+                      <span className="word sync-word-9">deep</span>
+                      <span className="word sync-word-10">through</span>
+                      <span className="word sync-word-11">my</span>
+                      <span className="word sync-word-12">vein</span>
+                    </div>
                   </div>
                   <div className="lyric-line">
                     <span className="timestamp">00:18</span>
-                    <span className="lyric-text">I'm takin' drugs, healin' the pain</span>
+                    <div className="lyric-text">
+                      <span className="word sync-word-13">I'm</span>
+                      <span className="word sync-word-14">takin'</span>
+                      <span className="word sync-word-15">drugs,</span>
+                      <span className="word sync-word-16">healin'</span>
+                      <span className="word sync-word-17">the</span>
+                      <span className="word sync-word-18">pain</span>
+                    </div>
                   </div>
                   <div className="lyric-line">
                     <span className="timestamp">00:21</span>
-                    <span className="lyric-text">Let the paint drip on my main</span>
+                    <div className="lyric-text">
+                      <span className="word sync-word-19">Let</span>
+                      <span className="word sync-word-20">the</span>
+                      <span className="word sync-word-21">paint</span>
+                      <span className="word sync-word-22">drip</span>
+                      <span className="word sync-word-23">on</span>
+                      <span className="word sync-word-24">my</span>
+                      <span className="word sync-word-25">main</span>
+                    </div>
                   </div>
                   <div className="lyric-line">
                     <span className="timestamp">00:24</span>
-                    <span className="lyric-text">Let the paint drip, me and Wave</span>
+                    <div className="lyric-text">
+                      <span className="word sync-word-26">Let</span>
+                      <span className="word sync-word-27">the</span>
+                      <span className="word sync-word-28">paint</span>
+                      <span className="word sync-word-29">drip,</span>
+                      <span className="word sync-word-30">me</span>
+                      <span className="word sync-word-31">and</span>
+                      <span className="word sync-word-32">Wave</span>
+                    </div>
                   </div>
                 </div>
               </div>

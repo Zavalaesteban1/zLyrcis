@@ -39,6 +39,7 @@ backend/
 │   ├── synchronization.py       # Lyric-audio synchronization (all strategies)
 │   ├── video.py                 # Video rendering (FFmpeg)
 │   ├── spotify.py               # Spotify API integration
+│   ├── telegram_audio.py        # Telegram bot audio downloads
 │   ├── config.py                # Configuration constants
 │   ├── exceptions.py            # Custom exceptions
 │   └── utils.py                 # Helper utilities
@@ -49,7 +50,8 @@ backend/
 │   ├── test_lyrics.py
 │   ├── test_synchronization.py
 │   ├── test_video.py
-│   └── test_spotify.py
+│   ├── test_spotify.py
+│   └── test_telegram_audio.py
 │
 ├── scripts/                     # Debug & utility scripts
 │   ├── __init__.py
@@ -94,11 +96,15 @@ User Request → API View → Celery Task → Core Modules → Database Update
                                 ↓
                         Video Generation Pipeline:
                         1. Spotify API (track metadata)
-                        2. Genius API (lyrics)
-                        3. Audio processing (librosa)
-                        4. Synchronization (Deepgram + audio analysis)
-                        5. Video rendering (FFmpeg)
-                        6. File storage
+                        2. Genius/Musixmatch API (lyrics)
+                        3. Audio retrieval:
+                           a. Cloudinary cache (primary)
+                           b. Telegram Deezer bot (auto-download)
+                           c. Local files (fallback)
+                        4. Audio processing (librosa)
+                        5. Synchronization (Deepgram + audio analysis)
+                        6. Video rendering (FFmpeg)
+                        7. File storage (Cloudinary/local)
 ```
 
 ## Core Modules
@@ -139,6 +145,15 @@ User Request → API View → Celery Task → Core Modules → Database Update
 - URL parsing
 - Album artwork fetching
 - Uses: spotipy
+
+### core/telegram_audio.py
+- Telegram bot integration for audio downloads
+- Telethon client management
+- Session-based authentication
+- Communication with Deezer bot
+- Automatic audio file retrieval
+- Timeout and error handling
+- Uses: telethon, asyncio
 
 ### core/config.py
 - Configuration constants
@@ -253,12 +268,400 @@ GENIUS_ACCESS_TOKEN=your_token
 ANTHROPIC_API_KEY=your_key
 DEEPGRAM_API_KEY=your_key  # Optional
 
+# Telegram (for automatic audio downloads)
+TELEGRAM_API_ID=your_api_id
+TELEGRAM_API_HASH=your_api_hash
+TELEGRAM_PHONE=+1234567890
+TELEGRAM_DEEZER_BOT=@deezload2bot
+TELEGRAM_SESSION_FILE=telegram_session
+TELEGRAM_DOWNLOAD_TIMEOUT=180
+
 # OAuth
 GOOGLE_CLIENT_ID=your_client_id
 
 # Celery
 CELERY_BROKER_URL=redis://localhost:6379/0
 CELERY_RESULT_BACKEND=redis://localhost:6379/0
+```
+
+## Telegram Audio Download Setup
+
+The system uses Telegram to automatically download high-quality MP3 files from Deezer via a Telegram bot. This eliminates the need for manual audio file management.
+
+### Architecture Flow
+
+```
+1. User requests song → Spotify API (metadata)
+2. Check Cloudinary cache (fast cache hit)
+3. If NOT cached → Send Spotify link to Telegram Deezer bot
+4. Bot downloads from Deezer → Returns MP3 file
+5. Upload to Cloudinary (for future requests)
+6. Generate lyric video
+```
+
+### Initial Setup
+
+#### 1. Get Telegram API Credentials
+
+1. Go to https://my.telegram.org/apps
+2. Log in with your phone number
+3. Click "API Development Tools"
+4. Create a new application:
+   - App title: "Lyric Video Generator" (or any name)
+   - Short name: "lyric-gen" (or any short name)
+   - Platform: Other
+5. Copy your `api_id` and `api_hash`
+
+#### 2. Configure Environment Variables
+
+Add to your `.env` file:
+
+```bash
+TELEGRAM_API_ID=12345678
+TELEGRAM_API_HASH=abcdef1234567890abcdef1234567890
+TELEGRAM_PHONE=+1234567890  # Your phone number with country code
+TELEGRAM_DEEZER_BOT=@deezload2bot  # Bot username (default)
+TELEGRAM_SESSION_FILE=telegram_session
+TELEGRAM_DOWNLOAD_TIMEOUT=180  # seconds
+```
+
+**Note:** Keep your phone number in international format with + and country code.
+
+#### 3. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+# This includes: telethon>=1.34.0, cryptg>=0.4.0
+```
+
+#### 4. Run Setup Command
+
+```bash
+python manage.py setup_telegram
+```
+
+This will:
+- Connect to Telegram
+- Send a verification code to your phone
+- Prompt you to enter the code
+- Test connection to the Deezer bot
+- Save session for future use
+
+**First-time authentication flow:**
+```bash
+$ python manage.py setup_telegram
+
+=== Telegram Audio Download Setup ===
+
+API ID: 12345678
+Phone: +1234567890
+Bot: @deezload2bot
+
+Connecting to Telegram...
+Not authenticated yet. Starting authentication...
+
+A code has been sent to +1234567890
+Enter the code: 12345
+
+✓ Authentication successful!
+
+Testing Telegram setup...
+✓ Configuration loaded
+  Bot: @deezload2bot
+  Timeout: 180s
+
+✓ Connected and authenticated
+✓ Bot found: Deezload Music Bot
+
+✓ Setup complete! Telegram audio download is ready.
+Session saved to: /path/to/backend/telegram_session.session
+
+IMPORTANT: Keep the .session file secure (it contains your credentials)
+```
+
+#### 5. Test with a Song (Optional)
+
+```bash
+python manage.py setup_telegram --test-url "https://open.spotify.com/track/3n3Ppam7vgaVa1iaRUc9Lp"
+```
+
+This will test downloading an actual song via the bot.
+
+### How It Works
+
+#### Audio Retrieval Priority
+
+The `get_audio()` function follows this order:
+
+1. **Cloudinary Cache** (Primary - Fastest)
+   - Searches `audio-library/` folder
+   - Matches by artist and title
+   - Returns immediately if found
+
+2. **Telegram Download** (When not cached)
+   - Sends Spotify URL to Deezer bot
+   - Bot downloads from Deezer
+   - Receives MP3 file
+   - Uploads to Cloudinary for caching
+   - Returns file for video generation
+
+3. **Local Files** (Last Resort)
+   - Checks `audio_files/` directory
+   - Manual fallback for emergency
+
+#### Cloudinary Caching
+
+After successful Telegram download:
+```python
+# Automatically uploads to Cloudinary
+upload_audio_to_library(audio_path, title, artist)
+# Filename: "Artist - Title.mp3" in audio-library/
+```
+
+Benefits:
+- Future requests for the same song are instant
+- Reduces Telegram bot usage
+- No manual file management needed
+- Grows automatically over time
+
+### Session Management
+
+#### Session Files
+
+The `.session` file stores your Telegram authentication:
+- **Location:** `backend/telegram_session.session`
+- **Security:** Contains credentials - treat like a password
+- **Git:** Already in `.gitignore`
+- **Persistence:** Lasts until you change your Telegram password or revoke
+
+#### Production Deployment
+
+For production environments:
+
+**Option 1: Mount as Secret File**
+```bash
+# Railway.app, Render, etc.
+# Upload telegram_session.session as a secret file
+```
+
+**Option 2: Environment Variable**
+```bash
+# Convert to base64
+base64 telegram_session.session > session_b64.txt
+
+# Add to .env
+TELEGRAM_SESSION_BASE64=<base64_content>
+
+# Decode in settings.py
+import base64
+session_data = base64.b64decode(os.getenv('TELEGRAM_SESSION_BASE64'))
+with open('telegram_session.session', 'wb') as f:
+    f.write(session_data)
+```
+
+**Option 3: Re-authenticate in Production**
+```bash
+# Run setup command on production server
+python manage.py setup_telegram
+# Enter code sent to your phone
+```
+
+### Troubleshooting
+
+#### Session Expired Error
+
+```
+TelegramAuthenticationError: Telegram session expired or invalid
+```
+
+**Solution:**
+```bash
+# Delete old session
+rm backend/telegram_session.session
+
+# Re-authenticate
+python manage.py setup_telegram
+```
+
+#### Bot Not Found Error
+
+```
+TelegramBotNotFoundError: Bot @deezload2bot not found
+```
+
+**Possible causes:**
+1. Bot username changed
+2. Bot is offline/banned
+3. Typo in bot username
+
+**Solution:**
+```bash
+# Find working Deezer bot
+# Search Telegram for: "deezer bot" or "deezload"
+
+# Update .env with new bot username
+TELEGRAM_DEEZER_BOT=@newbotname
+```
+
+#### Timeout Error
+
+```
+TelegramTimeoutError: Bot did not respond within 180 seconds
+```
+
+**Possible causes:**
+1. Bot is slow/overloaded
+2. Song not available on Deezer
+3. Network issues
+
+**Solution:**
+```bash
+# Increase timeout in .env
+TELEGRAM_DOWNLOAD_TIMEOUT=300  # 5 minutes
+
+# Or in code:
+download_audio_from_telegram(url, title, artist, timeout=300)
+```
+
+#### Rate Limit Error
+
+```
+FloodWaitError: Too many requests
+```
+
+**Solution:**
+- Telegram rate limits: ~30 requests/second
+- Wait time will be shown in error message
+- System automatically falls back to local files
+- For high volume: consider queue throttling in Celery
+
+#### Import Error
+
+```
+ImportError: No module named 'telethon'
+```
+
+**Solution:**
+```bash
+pip install telethon cryptg
+# Or
+pip install -r requirements.txt
+```
+
+#### Two-Factor Authentication
+
+If you have 2FA enabled on Telegram:
+
+```bash
+$ python manage.py setup_telegram
+
+Enter the code: 12345
+✓ Code accepted
+
+Two-step verification is enabled.
+Enter your password: ********
+
+✓ Authentication successful!
+```
+
+### Configuration Reference
+
+#### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `TELEGRAM_API_ID` | Yes | - | Telegram API ID from my.telegram.org |
+| `TELEGRAM_API_HASH` | Yes | - | Telegram API hash |
+| `TELEGRAM_PHONE` | Yes | - | Your phone number (+1234567890) |
+| `TELEGRAM_DEEZER_BOT` | No | `@deezload2bot` | Bot username |
+| `TELEGRAM_SESSION_FILE` | No | `telegram_session` | Session filename |
+| `TELEGRAM_DOWNLOAD_TIMEOUT` | No | `180` | Download timeout (seconds) |
+
+#### Telethon Exceptions
+
+Custom exceptions in `core/telegram_audio.py`:
+
+- `TelegramConfigurationError` - Missing API credentials
+- `TelegramAuthenticationError` - Auth failed/expired
+- `TelegramTimeoutError` - Bot didn't respond
+- `TelegramBotNotFoundError` - Invalid bot username
+- `TelegramFileNotReceivedError` - Bot responded but no audio
+
+### Security Considerations
+
+#### Session File Protection
+
+**DO:**
+- ✓ Add `*.session` to `.gitignore` (already done)
+- ✓ Treat session files like passwords
+- ✓ Use environment variables or secrets management in production
+- ✓ Regenerate if compromised
+
+**DON'T:**
+- ✗ Commit `.session` files to git
+- ✗ Share session files
+- ✗ Store in public locations
+- ✗ Use personal account for production (consider dedicated account)
+
+#### Rate Limiting
+
+For high-volume production:
+
+```python
+# Add rate limiting in Celery
+from celery import Task
+
+class RateLimitedTask(Task):
+    rate_limit = '10/m'  # 10 tasks per minute
+
+@shared_task(base=RateLimitedTask)
+def generate_lyric_video(job_id):
+    # ...
+```
+
+### Monitoring
+
+#### Success Metrics
+
+Log messages to track:
+```
+✓ Using Cloudinary cache         # Cache hit - best case
+✓ Downloaded via Telegram         # New download - working
+⚠️  Telegram timeout               # Bot slow/unavailable
+⚠️  Falling back to local files    # Last resort used
+```
+
+#### Recommended Monitoring
+
+1. **Cache Hit Rate**
+   - Track Cloudinary vs Telegram downloads
+   - Goal: >80% cache hit rate over time
+
+2. **Telegram Success Rate**
+   - Track successful vs failed downloads
+   - Alert if < 70% success rate
+
+3. **Average Download Time**
+   - Track Telegram download duration
+   - Typical: 10-60 seconds
+   - Alert if > 120 seconds consistently
+
+### Alternative Bots
+
+If `@deezload2bot` is unavailable, search Telegram for alternatives:
+
+- `@DeezloadBot`
+- `@DeezerMusicBot`
+- `@SpotifyMusicDownloaderBot`
+
+Update `.env`:
+```bash
+TELEGRAM_DEEZER_BOT=@alternative_bot_name
+```
+
+Test with:
+```bash
+python manage.py setup_telegram --test-url "https://open.spotify.com/track/..."
 ```
 
 ## Running the Backend

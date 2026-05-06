@@ -607,6 +607,27 @@ const EmptyStateText = styled.p`
   margin: 0 0 20px;
 `;
 
+const SearchContainer = styled.div`
+  display: flex;
+
+  @media (min-width: 769px) {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 500px;
+    z-index: 10;
+  }
+  
+  @media (max-width: 768px) {
+    width: auto;
+  }
+
+  .search-inner {
+    width: 100%;
+  }
+`;
+
 // Extended VideoJob interface with learning properties
 interface SongWithLearningData extends VideoJob {
   learned: boolean;
@@ -826,20 +847,23 @@ const HomePage: React.FC = () => {
       <MobileOverlay visible={sidebarOpen} onClick={() => setSidebarOpen(false)} />
       
       <MainContent>
-        <PageHeader style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', flexWrap: 'nowrap' }}>
+        <PageHeader style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap', position: 'relative' }}>
           <PageTitle style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ width: '40px', height: '40px', backgroundColor: 'rgba(29, 185, 84, 0.1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {MdMusicNote({ size: 24, color: '#1DB954' })}
             </div>
-            zLyrics
+            <span style={{ fontSize: '24px', fontWeight: 'bold' }}>zLyrics</span>
           </PageTitle>
-          <UserActions style={{ flex: 1, justifyContent: 'flex-end', gap: '8px' }}>
-            <div style={{ width: '100%', maxWidth: '500px', display: 'flex', justifyContent: 'flex-end' }}>
-              <SearchBar 
-                onSelectSong={(song: SongSuggestion) => navigate('/agent', { state: { autoStartSong: song } })} 
-                placeholder="Search for a song to request..." 
-              />
-            </div>
+          
+          <UserActions style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <SearchContainer>
+              <div className="search-inner">
+                <SearchBar 
+                  onSelectSong={(song: SongSuggestion) => navigate('/agent', { state: { autoStartSong: song } })} 
+                  placeholder="Search for a song to request..." 
+                />
+              </div>
+            </SearchContainer>
             <ProfileDropdown userData={userData} />
           </UserActions>
         </PageHeader>

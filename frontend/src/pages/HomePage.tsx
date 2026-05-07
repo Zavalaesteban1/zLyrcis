@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import styled, { keyframes, createGlobalStyle } from 'styled-components';
-import { getUserVideos, extractSpotifyTrackId, getSpotifyAlbumArtwork, VideoJob, SongSuggestion } from '../services/api';
+import { getUserVideos, extractSpotifyTrackId, getSpotifyAlbumArtwork, VideoJob } from '../services/api';
 import { useUser } from '../contexts/UserContext';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
@@ -13,8 +13,6 @@ import { AiOutlineClockCircle } from 'react-icons/ai';
 import { RiRobot2Line } from 'react-icons/ri';
 // Import ProfileDropdown component
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
-// Import SearchBar component
-import { SearchBar } from '../components/SearchBar/SearchBar';
 
 // Global style for consistent styling across pages
 const GlobalStyle = createGlobalStyle`
@@ -607,27 +605,6 @@ const EmptyStateText = styled.p`
   margin: 0 0 20px;
 `;
 
-const SearchContainer = styled.div`
-  display: flex;
-
-  @media (min-width: 769px) {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 100%;
-    max-width: 500px;
-    z-index: 10;
-  }
-  
-  @media (max-width: 768px) {
-    width: auto;
-  }
-
-  .search-inner {
-    width: 100%;
-  }
-`;
-
 // Extended VideoJob interface with learning properties
 interface SongWithLearningData extends VideoJob {
   learned: boolean;
@@ -666,7 +643,6 @@ const HomePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [albumCovers, setAlbumCovers] = useState<{[key: string]: string | null}>({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const navigate = useNavigate();
 
   // Fetch songs when component mounts
   useEffect(() => {
@@ -847,23 +823,10 @@ const HomePage: React.FC = () => {
       <MobileOverlay visible={sidebarOpen} onClick={() => setSidebarOpen(false)} />
       
       <MainContent>
-        <PageHeader style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap', position: 'relative' }}>
-          <PageTitle style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '40px', height: '40px', backgroundColor: 'rgba(29, 185, 84, 0.1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {MdMusicNote({ size: 24, color: '#1DB954' })}
-            </div>
-            <span style={{ fontSize: '24px', fontWeight: 'bold' }}>zLyrics</span>
-          </PageTitle>
-          
-          <UserActions style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <SearchContainer>
-              <div className="search-inner">
-                <SearchBar 
-                  onSelectSong={(song: SongSuggestion) => navigate('/agent', { state: { autoStartSong: song } })} 
-                  placeholder="Search for a song to request..." 
-                />
-              </div>
-            </SearchContainer>
+        <PageHeader>
+          <PageTitle>Dashboard</PageTitle>
+
+          <UserActions>
             <ProfileDropdown userData={userData} />
           </UserActions>
         </PageHeader>

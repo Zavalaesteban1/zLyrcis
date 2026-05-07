@@ -19,7 +19,14 @@ import { ConversationSidebar } from '../components/agent/ConversationSidebar';
 import { ChatInterface } from '../components/agent/ChatInterface';
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 import { VideoSettingsModal } from '../components/agent/VideoSettingsModal';
-import { startVideoGeneration, useExistingVariant, submitSpotifyLink, SongSuggestion } from '../services/api';
+import {
+  startVideoGeneration,
+  useExistingVariant,
+  SongSuggestion,
+  buildLyricVideoAgentMessage,
+  formatSongPickPreview
+} from '../services/api';
+import { primeSongCoverCache } from '../services/songCoverCache';
 
 // Import all styled components from AgentPageStyles
 import * as Styles from '../styles/AgentPageStyles';
@@ -235,7 +242,8 @@ const AgentPage: React.FC = () => {
   }, [input, isSendingMessage, activeConversationId, isCompactMode, createNewConversation, sendMessage]);
 
   const handleSongSelect = useCallback(async (song: SongSuggestion, forceNewConversation: boolean = false) => {
-    // Determine whether to use existing or create new conversation
+    primeSongCoverCache(song.title, song.artist, song.album_cover);
+
     let convId = activeConversationId;
     if (forceNewConversation || !convId) {
       convId = createNewConversation();
@@ -245,10 +253,20 @@ const AgentPage: React.FC = () => {
       setIsCompactMode(false);
     }
 
-    const userMessage = `Create a lyric video for ${song.title} by ${song.artist}`;
+    const agentString = buildLyricVideoAgentMessage(song);
+
+    const userBubble: Message = {
+      text: formatSongPickPreview(song),
+      isUser: true,
+      songPick: {
+        title: song.title,
+        artist: song.artist,
+        albumCover: song.album_cover
+      }
+    };
 
     const newMessages: Message[] = [
-      { text: userMessage, isUser: true },
+      userBubble,
       { text: '...', isUser: false, isProcessing: false }
     ];
 
@@ -258,8 +276,7 @@ const AgentPage: React.FC = () => {
       setMessages(prev => [...prev, ...newMessages]);
     }
 
-    // Send message using the hook
-    const response = await sendMessage(userMessage, convId);
+    const response = await sendMessage(agentString, convId);
 
     // Remove only the typing indicator (not processing indicators)
     setMessages(prev => prev.filter(msg => !(msg.text === '...' && !msg.isProcessing)));

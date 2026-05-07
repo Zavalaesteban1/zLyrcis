@@ -894,14 +894,15 @@ export const InputRow = styled.div`
 `;
 
 export const HelperText = styled.div`
-  font-size: 12px;
-  color: #888;
-  margin-top: 4px;
+  font-size: 12px !important;
+  color: #888 !important;
+  margin-top: 6px !important;
   padding-left: 0px;
   align-self: flex-start;
+  line-height: 1.35 !important;
   
   @media (max-width: 768px) {
-    display: none;
+    font-size: 11px !important;
   }
 `;
 
@@ -1262,4 +1263,362 @@ export const InputRowWrapper = styled.div`
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
+`;
+
+/* —— Song search modal & reusable search UI —— */
+export const SongSearchModalRoot = styled.div`
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 200 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px !important;
+`;
+
+export const SongSearchModalBackdrop = styled.button`
+  position: absolute !important;
+  inset: 0 !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: rgba(0, 0, 0, 0.45) !important;
+  cursor: pointer !important;
+`;
+
+export const SongSearchModalPanel = styled.div`
+  position: relative !important;
+  z-index: 1 !important;
+  width: 100% !important;
+  max-width: 520px !important;
+  max-height: min(88vh, 720px) !important;
+  background: #fff !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+
+  @media (max-width: 768px) {
+    max-width: 100% !important;
+    max-height: 92vh !important;
+    border-radius: 14px !important;
+  }
+`;
+
+export const SongSearchModalHeader = styled.div`
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 16px 18px !important;
+  border-bottom: 1px solid #eee !important;
+  flex-shrink: 0 !important;
+`;
+
+export const SongSearchModalTitle = styled.h2`
+  margin: 0 !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #222 !important;
+`;
+
+export const SongSearchModalClose = styled.button`
+  border: none !important;
+  background: transparent !important;
+  padding: 8px !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+  color: #666 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  &:hover {
+    background: #f0f0f0 !important;
+    color: #111 !important;
+  }
+`;
+
+export const SongSearchModalBody = styled.div`
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 12px 16px 16px !important;
+`;
+
+export const SearchBarRoot = styled.div<{ $modal?: boolean }>`
+  display: flex !important;
+  flex-direction: column !important;
+  flex: ${p => (p.$modal ? '1 1 auto' : '0 0 auto')} !important;
+  min-height: ${p => (p.$modal ? '0' : 'auto')} !important;
+  position: relative !important;
+`;
+
+export const SearchBarInputRow = styled.div`
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-shrink: 0 !important;
+`;
+
+export const SearchBarField = styled.input`
+  flex: 1 !important;
+  min-width: 0 !important;
+  padding: 12px 14px !important;
+  border: 1px solid #ddd !important;
+  border-radius: 12px !important;
+  font-size: 16px !important;
+  font-family: inherit !important;
+
+  &:focus {
+    outline: none !important;
+    border-color: #1db954 !important;
+    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.15) !important;
+  }
+
+  &::placeholder {
+    color: #999 !important;
+  }
+`;
+
+export const SearchBarResultsPanel = styled.div<{ $open: boolean; $modal?: boolean }>`
+  margin-top: 10px !important;
+  border: 1px solid #e8e8e8 !important;
+  border-radius: 12px !important;
+  background: #fafafa !important;
+  overflow: hidden !important;
+  display: ${p => (p.$open ? 'flex' : 'none')} !important;
+  flex-direction: column !important;
+  flex: ${p => (p.$open && p.$modal ? '1 1 auto' : p.$open ? '0 0 auto' : 'none')} !important;
+  min-height: ${p => (p.$open && p.$modal ? '120px' : '0')} !important;
+  max-height: ${p => (p.$open && p.$modal ? 'none' : p.$open ? 'min(48vh, 360px)' : '0')} !important;
+`;
+
+export const SearchBarResultsScroll = styled.div<{ $modal?: boolean }>`
+  overflow-y: auto !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: ${p => (p.$modal ? 'none' : 'min(48vh, 360px)')} !important;
+
+  &::-webkit-scrollbar {
+    width: 6px !important;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.12) !important;
+    border-radius: 6px !important;
+  }
+`;
+
+export const SearchBarStateRow = styled.div`
+  padding: 20px 16px !important;
+  text-align: center !important;
+  color: #666 !important;
+  font-size: 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 10px !important;
+`;
+
+export const SearchSpinner = styled.div`
+  width: 22px !important;
+  height: 22px !important;
+  border: 2px solid #e0e0e0 !important;
+  border-top-color: #1db954 !important;
+  border-radius: 50% !important;
+  animation: searchSpin 0.7s linear infinite !important;
+
+  @keyframes searchSpin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
+export const SearchResultRow = styled.button`
+  display: flex !important;
+  width: 100% !important;
+  align-items: center !important;
+  padding: 10px 12px !important;
+  border: none !important;
+  border-bottom: 1px solid #eee !important;
+  background: #fff !important;
+  cursor: pointer !important;
+  text-align: left !important;
+  gap: 12px !important;
+
+  &:last-child {
+    border-bottom: none !important;
+  }
+
+  &:hover {
+    background: rgba(29, 185, 84, 0.06) !important;
+  }
+`;
+
+export const SearchResultThumb = styled.img`
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 6px !important;
+  object-fit: cover !important;
+  flex-shrink: 0 !important;
+`;
+
+export const SearchResultThumbPlaceholder = styled.div`
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 6px !important;
+  background: #e8e8e8 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #888 !important;
+  flex-shrink: 0 !important;
+`;
+
+export const SearchResultText = styled.div`
+  flex: 1 !important;
+  min-width: 0 !important;
+`;
+
+export const SearchResultTitle = styled.div`
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #222 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+`;
+
+export const SearchResultMeta = styled.div`
+  font-size: 12px !important;
+  color: #666 !important;
+  margin-top: 2px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+`;
+
+/* User song pick bubble (chat) */
+export const UserSongPickBubble = styled.div<{ $isNew?: boolean }>`
+  align-self: flex-end !important;
+  max-width: 88% !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: stretch !important;
+  gap: 12px !important;
+  padding: 12px 14px !important;
+  border-radius: 16px !important;
+  background: linear-gradient(135deg, #159847 0%, #1db954 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 14px rgba(25, 160, 73, 0.35) !important;
+  animation: ${p => (p.$isNew ? 'messageFadeIn 0.3s ease-out' : 'none')} !important;
+
+  @media (max-width: 768px) {
+    max-width: 92% !important;
+    padding: 10px 12px !important;
+  }
+`;
+
+export const UserSongPickCover = styled.img`
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 8px !important;
+  object-fit: cover !important;
+  flex-shrink: 0 !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+`;
+
+export const UserSongPickCoverPlaceholder = styled.div`
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 8px !important;
+  flex-shrink: 0 !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 24px !important;
+`;
+
+export const UserSongPickText = styled.div`
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 4px !important;
+`;
+
+export const UserSongPickTitle = styled.div`
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+  color: #fff !important;
+`;
+
+export const UserSongPickArtist = styled.div`
+  font-size: 13px !important;
+  opacity: 0.95 !important;
+  line-height: 1.3 !important;
+`;
+
+/* Page-variant mobile FAB + sheet */
+export const SearchMobileFab = styled.button`
+  position: fixed !important;
+  right: 20px !important;
+  bottom: 100px !important;
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 50% !important;
+  border: none !important;
+  background: #1db954 !important;
+  color: #fff !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2) !important;
+  z-index: 90 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+
+  @media (min-width: 769px) {
+    display: none !important;
+  }
+`;
+
+export const SearchMobileSheet = styled.div`
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 195 !important;
+  background: #fff !important;
+  display: flex !important;
+  flex-direction: column !important;
+`;
+
+export const SearchMobileSheetBar = styled.div`
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 12px 12px !important;
+  border-bottom: 1px solid #eee !important;
+  flex-shrink: 0 !important;
+`;
+
+export const SearchMobileSheetBack = styled.button`
+  border: none !important;
+  background: transparent !important;
+  padding: 8px !important;
+  cursor: pointer !important;
+  color: #333 !important;
+  display: flex !important;
+  align-items: center !important;
+`;
+
+export const SearchMobileSheetBody = styled.div`
+  flex: 1 !important;
+  min-height: 0 !important;
+  padding: 12px 16px 24px !important;
+  display: flex !important;
+  flex-direction: column !important;
 `; 

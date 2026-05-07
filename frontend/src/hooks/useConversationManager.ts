@@ -1,11 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchConversationHistory, ConversationMessage } from '../services/api';
+import { fetchConversationHistory } from '../services/api';
+import { hydrateSongPickFromUserContent, fillCachedCover, previewFromHydratedPick } from '../services/songPickFromTranscript';
+
+export interface SongPickPayload {
+  title: string;
+  artist: string;
+  albumCover: string | null;
+}
 
 export interface Message {
   text: string;
   isUser: boolean;
   isProcessing?: boolean;
   processingLabel?: string;  // Custom label for processing indicator
+  /** Rich UI for user song selection; agent text uses `buildLyricVideoAgentMessage`. */
+  songPick?: SongPickPayload;
 }
 
 export interface Conversation {
@@ -24,6 +33,23 @@ const WELCOME_MESSAGE: Message = {
   text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?",
   isUser: false
 };
+
+function enrichSongPickMessages(msgs: Message[]): Message[] {
+  return msgs.map((msg) => {
+    if (!msg.isUser) return msg;
+    if (msg.songPick) {
+      const filled = fillCachedCover(msg.songPick);
+      return filled.albumCover !== msg.songPick.albumCover ? { ...msg, songPick: filled } : msg;
+    }
+    const hydrated = hydrateSongPickFromUserContent(msg.text);
+    if (!hydrated) return msg;
+    return {
+      ...msg,
+      text: previewFromHydratedPick(hydrated),
+      songPick: hydrated
+    };
+  });
+}
 
 export const useConversationManager = (options?: { disableAutoLoad?: boolean }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -87,9 +113,9 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
           msg => !msg.isUser && msg.text.includes("I'm your lyric video assistant")
         );
 
-        const finalMessages = hasWelcome
-          ? convertedMessages
-          : [WELCOME_MESSAGE, ...convertedMessages];
+        const finalMessages = enrichSongPickMessages(
+          hasWelcome ? convertedMessages : [WELCOME_MESSAGE, ...convertedMessages]
+        );
 
         setMessages(finalMessages);
         setActiveConversationId(id);
@@ -114,7 +140,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as Message[];
-        setMessages(parsed);
+        setMessages(enrichSongPickMessages(parsed));
         setActiveConversationId(id);
         localStorage.setItem(getConversationIdKey(), id);
       } catch (error) {

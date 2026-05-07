@@ -685,6 +685,34 @@ export interface SongSuggestion {
   spotify_url: string | null;
 }
 
+/** Preview line for transcript / sidebar (not sent to agent). */
+export const formatSongPickPreview = (song: Pick<SongSuggestion, 'title' | 'artist'>): string =>
+  `${song.title} — ${song.artist}`;
+
+/**
+ * Fixed intent string for agent / backend routing (lyric video from song pick).
+ * Title is double-quoted; interior double quotes are replaced for safety.
+ */
+export const buildLyricVideoAgentMessage = (song: Pick<SongSuggestion, 'title' | 'artist'>): string => {
+  const safe = song.title.replace(/"/g, "'");
+  return `Lyric video: "${safe}" by ${song.artist}`;
+};
+
+/**
+ * Extract title/artist from a user message persisted as `buildLyricVideoAgentMessage` (or close variants).
+ * Used when reloading chat history so the song card + cover cache can be restored.
+ */
+export function parseLyricVideoPickFromTranscript(text: string): { title: string; artist: string } | null {
+  const t = text.trim();
+  let m = t.match(/^Lyric video:\s*"([^"]+)"\s+by\s+(.+)$/i);
+  if (m) return { title: m[1].trim(), artist: m[2].trim() };
+  m = t.match(/^Lyric video:\s*'([^']+)'\s+by\s+(.+)$/i);
+  if (m) return { title: m[1].trim(), artist: m[2].trim() };
+  m = t.match(/^Create a lyric video for\s+(.+?)\s+by\s+(.+)$/i);
+  if (m) return { title: m[1].trim(), artist: m[2].trim() };
+  return null;
+}
+
 // Function to search for songs
 export const searchSongs = async (query: string): Promise<SongSuggestion[]> => {
   if (!query) return [];

@@ -37,6 +37,9 @@ export interface VideoJob {
   error_message: string | null;
   is_favorite: boolean;
   is_favorite_only: boolean;
+  is_learned: boolean;
+  last_practiced: string | null;
+  difficulty_rating: number | null;
 }
 
 export interface VideoStatusResponse {
@@ -346,6 +349,26 @@ export const deleteVideo = async (videoId: string): Promise<void> => {
     await api.delete(`/videos/${videoId}/`);
   } catch (error) {
     console.error('Error deleting video:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update learning status for a video
+ */
+export const updateVideoLearningStatus = async (
+  videoId: string,
+  isLearned: boolean,
+  difficultyRating?: number
+): Promise<VideoJob> => {
+  try {
+    const response = await api.patch(`/videos/${videoId}/update_learning_status/`, {
+      is_learned: isLearned,
+      difficulty_rating: difficultyRating
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating learning status:', error);
     throw error;
   }
 };

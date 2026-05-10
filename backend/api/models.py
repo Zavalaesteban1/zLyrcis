@@ -31,6 +31,9 @@ class VideoJob(models.Model):
     error_message = models.TextField(blank=True)
     is_favorite_only = models.BooleanField(default=False)  # True if user just wants to save song, not generate video
     is_favorite = models.BooleanField(default=False)  # True if user marked this as a favorite song
+    is_learned = models.BooleanField(default=False)  # True if user marked this song as learned
+    last_practiced = models.DateTimeField(null=True, blank=True)  # When the user last practiced this song
+    difficulty_rating = models.IntegerField(null=True, blank=True)  # User's difficulty rating (1-5)
     bg_color = models.CharField(max_length=20, default='gradient', blank=True)
     text_color = models.CharField(max_length=20, default='&H00FFFFFF', blank=True)
     karaoke_color = models.CharField(max_length=20, default='&H000000FF', blank=True)

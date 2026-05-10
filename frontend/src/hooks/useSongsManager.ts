@@ -42,13 +42,26 @@ export const useSongsManager = (userId: number | null): UseSongsManagerReturn =>
       
       const videosData = await getUserVideos();
       
-      // Map VideoJob data to Song interface with learning data from localStorage
+      // Map VideoJob data to Song interface with learning data from database (with localStorage fallback)
       const formattedSongs = videosData.map(video => {
-        // Check local storage for learning data (user-specific)
-        const learningDataKey = userId 
-          ? `user_${userId}_song_learning_${video.id}`
-          : `song_learning_${video.id}`;
-        const learningData = JSON.parse(localStorage.getItem(learningDataKey) || 'null');
+        // Prefer database values, fallback to localStorage for backwards compatibility
+        let learned = video.is_learned || false;
+        let lastPracticed = video.last_practiced || null;
+        let difficultyRating = video.difficulty_rating || null;
+        
+        // If database values are not set, check localStorage (for migration)
+        if (!video.is_learned && !video.last_practiced) {
+          const learningDataKey = userId 
+            ? `user_${userId}_song_learning_${video.id}`
+            : `song_learning_${video.id}`;
+          const learningData = JSON.parse(localStorage.getItem(learningDataKey) || 'null');
+          
+          if (learningData) {
+            learned = learningData.learned || false;
+            lastPracticed = learningData.lastPracticed || null;
+            difficultyRating = learningData.difficultyRating || null;
+          }
+        }
         
         return {
           id: video.id,
@@ -58,9 +71,9 @@ export const useSongsManager = (userId: number | null): UseSongsManagerReturn =>
           created_at: video.created_at,
           spotify_url: video.spotify_url,
           albumCoverUrl: null,
-          learned: learningData?.learned || false,
-          lastPracticed: learningData?.lastPracticed || null,
-          difficultyRating: learningData?.difficultyRating || null,
+          learned,
+          lastPracticed,
+          difficultyRating,
           is_favorite: video.is_favorite || false,
           is_favorite_only: video.is_favorite_only || false
         };

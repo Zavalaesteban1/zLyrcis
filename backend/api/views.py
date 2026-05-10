@@ -95,6 +95,31 @@ class VideoJobViewSet(viewsets.ModelViewSet):
         job = self.get_object()
         serializer = self.get_serializer(job, context={'request': request})
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['patch'])
+    def update_learning_status(self, request, pk=None):
+        """Update the learned status and learning metadata for a video"""
+        job = self.get_object()
+        
+        # Get data from request
+        is_learned = request.data.get('is_learned')
+        difficulty_rating = request.data.get('difficulty_rating')
+        
+        # Update fields if provided
+        if is_learned is not None:
+            job.is_learned = is_learned
+            if is_learned:
+                # Set last_practiced to now when marking as learned
+                from django.utils import timezone
+                job.last_practiced = timezone.now()
+        
+        if difficulty_rating is not None:
+            job.difficulty_rating = difficulty_rating
+        
+        job.save()
+        
+        serializer = self.get_serializer(job)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def start_generation(self, request, pk=None):

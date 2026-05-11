@@ -66,6 +66,10 @@ const ArrowIcon = styled.span<{ $isOpen: boolean }>`
   font-size: 24px;
   transition: transform 0.2s ease;
   transform: rotate(${props => props.$isOpen ? '180deg' : '0deg'});
+
+  @media (max-width: 768px) {
+    display: none;
+  }
 `;
 
 const DropdownMenu = styled.div<{ $isOpen: boolean }>`

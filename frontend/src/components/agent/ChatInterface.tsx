@@ -78,14 +78,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 <Styles.AssistantTypingIndicator key={index} isProcessing={message.isProcessing}>
                   {message.isProcessing && (
                     <Styles.ProcessingLabel>
-                      {message.processingLabel || '🎵 Generating your video...'}
+                      {message.processingLabel || '🎵 Generating video...'}
                     </Styles.ProcessingLabel>
                   )}
-                  <Styles.DotContainer>
-                    <Styles.Dot isProcessing={message.isProcessing} />
-                    <Styles.Dot isProcessing={message.isProcessing} />
-                    <Styles.Dot isProcessing={message.isProcessing} />
-                  </Styles.DotContainer>
+                  {message.isProcessing ? (
+                    <Styles.BarContainer>
+                      <Styles.AnimatedBar delay={0} />
+                      <Styles.AnimatedBar delay={0.1} />
+                      <Styles.AnimatedBar delay={0.2} />
+                      <Styles.AnimatedBar delay={0.3} />
+                      <Styles.AnimatedBar delay={0.4} />
+                      <Styles.AnimatedBar delay={0.5} />
+                      <Styles.AnimatedBar delay={0.4} />
+                      <Styles.AnimatedBar delay={0.3} />
+                      <Styles.AnimatedBar delay={0.2} />
+                      <Styles.AnimatedBar delay={0.1} />
+                    </Styles.BarContainer>
+                  ) : (
+                    <Styles.DotContainer>
+                      <Styles.Dot isProcessing={message.isProcessing} />
+                      <Styles.Dot isProcessing={message.isProcessing} />
+                      <Styles.Dot isProcessing={message.isProcessing} />
+                    </Styles.DotContainer>
+                  )}
                 </Styles.AssistantTypingIndicator>
               );
             }

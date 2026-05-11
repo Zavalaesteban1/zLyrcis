@@ -828,17 +828,15 @@ export const GlobalStyle = createGlobalStyle`
 
 export const AssistantTypingIndicator = styled.div<{ isProcessing?: boolean }>`
   display: inline-block;
-  padding: 12px 16px;
+  padding: ${props => props.isProcessing ? '20px 24px' : '12px 16px'};
   border-radius: 18px;
-  background-color: #f1f1f1;
+  background-color: ${props => props.isProcessing ? '#e8f7ee' : '#f1f1f1'};
   align-self: flex-start;
   font-size: 16px;
   color: #666;
-  border: 1px solid #e0e0e0;
+  border: 1px solid ${props => props.isProcessing ? '#c8e6d7' : '#e0e0e0'};
   ${props => props.isProcessing && `
     margin-top: 10px;
-    background-color: #e8f7ee;
-    border-color: #c8e6d7;
   `}
 `;
 
@@ -863,6 +861,33 @@ export const Dot = styled.div<{ isProcessing?: boolean }>`
   
   &:nth-child(3) {
     animation-delay: 0.4s;
+  }
+`;
+
+export const BarContainer = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 8px;
+`;
+
+export const AnimatedBar = styled.div<{ delay: number }>`
+  width: 2px;
+  background: linear-gradient(180deg, #1DB954 0%, #169c46 100%);
+  border-radius: 1px;
+  animation: barWave 1s ease-in-out infinite;
+  animation-delay: ${props => props.delay}s;
+  box-shadow: 0 0 4px rgba(29, 185, 84, 0.25);
+  
+  @keyframes barWave {
+    0%, 100% {
+      height: 4px;
+    }
+    50% {
+      height: 16px;
+    }
   }
 `;
 

@@ -840,7 +840,7 @@ const HomePage: React.FC = () => {
                 : 'Create beautiful lyric videos from your favorite Spotify tracks with just a few clicks.'}
               {getLearningProgress() > 0 && ` Your learning progress is at ${getLearningProgress()}%.`}
             </WelcomeText>
-            <ActionButton to="/create">Create New Video</ActionButton>
+            <ActionButton to="/agent">Create New Video</ActionButton>
           </WelcomeCard>
           
           <DashboardGrid>
@@ -866,7 +866,7 @@ const HomePage: React.FC = () => {
                     {MdMusicNote({ size: 48 })}
                   </EmptyStateIcon>
                   <EmptyStateText>No recent activity yet</EmptyStateText>
-                  <ActionButton to="/create" style={{ backgroundColor: '#1DB954', color: 'white' }}>
+                  <ActionButton to="/agent" style={{ backgroundColor: '#1DB954', color: 'white' }}>
                     Create Your First Video
                   </ActionButton>
                 </EmptyState>

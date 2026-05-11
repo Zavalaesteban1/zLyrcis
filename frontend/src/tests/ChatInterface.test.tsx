@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ChatInterface from '../components/agent/ChatInterface'; // Assuming path
+import { ChatInterface } from '../components/agent/ChatInterface'; // Assuming path
 
 // Mock any context or routing needed
 jest.mock('react-router-dom', () => ({

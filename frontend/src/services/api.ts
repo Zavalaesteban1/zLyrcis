@@ -597,6 +597,7 @@ export interface AgentChatResponse {
     status: string;
     title: string;
     artist: string;
+    album_cover?: string | null;
   };
   conversation_id: string;
 }

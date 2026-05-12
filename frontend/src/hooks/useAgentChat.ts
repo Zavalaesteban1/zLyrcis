@@ -40,9 +40,13 @@ export const useAgentChat = (options: UseAgentChatOptions = {}) => {
         }, 1500); // 1.5 second delay
       } else if (response.is_song_request && response.song_request_data) {
         // Handle normal song request
-        const { job_id, title, artist } = response.song_request_data;
+        const { job_id, title, artist, status: jobStatus } = response.song_request_data;
         const isFavoriteOnly = response.is_favorite_only || false;
-        onSongRequest?.(job_id, title, artist, isFavoriteOnly);
+        
+        // Only trigger onSongRequest if we're actually generating (not awaiting customization)
+        if (jobStatus !== 'awaiting_customization') {
+          onSongRequest?.(job_id, title, artist, isFavoriteOnly);
+        }
       }
 
       return response;

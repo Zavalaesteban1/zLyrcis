@@ -551,14 +551,16 @@ def agent_song_request(request):
                       status=status.HTTP_400_BAD_REQUEST)
 
     # Search Spotify for the song
-    spotify_url = search_spotify(song_info['title'], song_info['artist'])
+    spotify_result = search_spotify(song_info['title'], song_info['artist'])
 
-    if not spotify_url:
+    if not spotify_result:
         return Response({
             'error': f"Could not find '{song_info['title']}' by {song_info['artist']} on Spotify",
             'title': song_info['title'],
             'artist': song_info['artist']
         }, status=status.HTTP_404_NOT_FOUND)
+
+    spotify_url = spotify_result['url']
 
     # Create a video job using the existing pipeline
     serializer = VideoJobSerializer(data={'spotify_url': spotify_url})
@@ -666,7 +668,7 @@ def process_song_request(song_description):
         return {"error": f"Error calling Claude API: {str(e)}"}
 
 def search_spotify(title, artist):
-    """Search Spotify for a song and return the URL"""
+    """Search Spotify for a song and return the URL and album cover"""
     try:
         print(f"\n{'='*60}")
         print(f"SEARCHING SPOTIFY")
@@ -696,13 +698,15 @@ def search_spotify(title, artist):
             for i, track in enumerate(results['tracks']['items'], 1):
                 print(f"  {i}. '{track['name']}' by {track['artists'][0]['name']}")
             
-            # Return the first result
+            # Return the first result with album cover
             chosen_track = results['tracks']['items'][0]
             spotify_url = chosen_track['external_urls']['spotify']
+            album_cover = chosen_track['album']['images'][0]['url'] if chosen_track['album']['images'] else None
             print(f"\n✓ Chose: '{chosen_track['name']}' by {chosen_track['artists'][0]['name']}")
             print(f"  URL: {spotify_url}")
+            print(f"  Album cover: {album_cover}")
             print(f"{'='*60}\n")
-            return spotify_url
+            return {'url': spotify_url, 'album_cover': album_cover}
         else:
             # Try a broader search if the specific one failed
             query = f"{title} {artist}"
@@ -716,10 +720,12 @@ def search_spotify(title, artist):
                 
                 chosen_track = results['tracks']['items'][0]
                 spotify_url = chosen_track['external_urls']['spotify']
+                album_cover = chosen_track['album']['images'][0]['url'] if chosen_track['album']['images'] else None
                 print(f"\n✓ Chose: '{chosen_track['name']}' by {chosen_track['artists'][0]['name']}")
                 print(f"  URL: {spotify_url}")
+                print(f"  Album cover: {album_cover}")
                 print(f"{'='*60}\n")
-                return spotify_url
+                return {'url': spotify_url, 'album_cover': album_cover}
 
         print("✗ No results found on Spotify")
         print(f"{'='*60}\n")
@@ -927,6 +933,7 @@ def agent_chat(request):
                             'job_id': job.id if job else None,
                             'title': job.song_title if job else '',
                             'artist': job.artist if job else '',
+                            'album_cover': None,  # Album cover not available in this flow
                             'status': job.status if job else 'pending'
                         },
                         'conversation_id': conversation_id
@@ -943,6 +950,7 @@ def agent_chat(request):
                             'job_id': job.id if job else None,
                             'title': '',
                             'artist': '',
+                            'album_cover': None,
                             'status': 'pending'
                         },
                         'conversation_id': conversation_id
@@ -988,9 +996,9 @@ def agent_chat(request):
             return get_claude_response(message, conversation, db_conversation)
 
         # Try to find the song on Spotify
-        spotify_url = search_spotify(song_info['title'], song_info['artist'])
+        spotify_result = search_spotify(song_info['title'], song_info['artist'])
 
-        if not spotify_url:
+        if not spotify_result:
             # Generate a conversational response with Claude instead of hardcoded message
             api_key = os.environ.get("ANTHROPIC_API_KEY")
             if not api_key:
@@ -1048,6 +1056,10 @@ def agent_chat(request):
                 'song_found': False,
                 'conversation_id': conversation_id
             })
+
+        # Extract URL and album cover from result
+        spotify_url = spotify_result['url']
+        album_cover = spotify_result['album_cover']
 
         # Determine if this is a video generation or just adding to favorites
         is_favorite_only = (user_intent == 'add_to_favorites')
@@ -1199,15 +1211,24 @@ def agent_chat(request):
 
             # If not favorite-only, just return the message asking about customization
             # Don't open modal yet - wait for user to say "yes"
+            # Include song data so frontend can display album cover
             if not is_favorite_only:
                 return Response({
                     'message': success_response,
-                    'is_song_request': False,
+                    'is_song_request': True,
+                    'song_found': True,
                     'show_customization_modal': False,
+                    'song_request_data': {
+                        'job_id': job.id,
+                        'title': song_info['title'],
+                        'artist': song_info['artist'],
+                        'album_cover': album_cover,
+                        'status': 'awaiting_customization'
+                    },
                     'conversation_id': conversation_id
                 })
             else:
-                # For favorite-only, return normal song request response
+                # For favorite-only, return normal song request response with album cover
                 return Response({
                     'message': success_response,
                     'is_song_request': True,
@@ -1217,6 +1238,7 @@ def agent_chat(request):
                         'job_id': job.id,
                         'title': song_info['title'],
                         'artist': song_info['artist'],
+                        'album_cover': album_cover,
                         'status': 'completed'
                     },
                     'conversation_id': conversation_id

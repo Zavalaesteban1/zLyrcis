@@ -225,6 +225,37 @@ const AgentPage: React.FC = () => {
     setMessages(prev => prev.filter(msg => !(msg.text === '...' && !msg.isProcessing)));
 
     if (response) {
+      // If the response contains song data with album cover, update the user message
+      if (response.song_request_data?.title && response.song_request_data?.artist) {
+        const { title, artist, album_cover } = response.song_request_data;
+        
+        // Prime the cache with the album cover
+        if (album_cover) {
+          primeSongCoverCache(title, artist, album_cover);
+        }
+
+        // Update the last user message to include songPick
+        setMessages(prev => {
+          const newMessages = [...prev];
+          // Find the last user message (should be the one we just sent)
+          for (let i = newMessages.length - 1; i >= 0; i--) {
+            if (newMessages[i].isUser && newMessages[i].text === userMessage) {
+              newMessages[i] = {
+                ...newMessages[i],
+                text: formatSongPickPreview({ title, artist }),
+                songPick: {
+                  title,
+                  artist,
+                  albumCover: album_cover || null
+                }
+              };
+              break;
+            }
+          }
+          return newMessages;
+        });
+      }
+
       // For favorite-only songs, delay showing the response to sync with the "adding" indicator
       if (response.is_favorite_only && response.message) {
         // Wait 2 seconds to show "Adding to collection..." then show success message

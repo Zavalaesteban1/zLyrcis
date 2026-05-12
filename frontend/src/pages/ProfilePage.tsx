@@ -16,6 +16,7 @@ import { useProfileStats } from '../hooks/useProfileStats';
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 import { ProfileEditForm } from '../components/profile/ProfileEditForm';
 import { ProfileStatsCards } from '../components/profile/ProfileStatsCards';
+import { AppLogo } from '../components/common/AppLogo';
 
 // Global style for consistent styling across pages
 const GlobalStyle = createGlobalStyle`
@@ -382,7 +383,7 @@ const ProfilePage: React.FC = () => {
         <GlobalStyle />
         <AppLayout>
           <Sidebar isOpen={sidebarOpen}>
-            <Logo>{MdMusicNote({ size: 36 })}</Logo>
+            <Logo><AppLogo /></Logo>
             <NavMenu>
               <NavItem to="/" data-tooltip="Home">
                 <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
@@ -423,7 +424,7 @@ const ProfilePage: React.FC = () => {
         <GlobalStyle />
         <AppLayout>
         <Sidebar isOpen={sidebarOpen}>
-          <Logo>{MdMusicNote({ size: 36 })}</Logo>
+          <Logo><AppLogo /></Logo>
           <NavMenu>
             <NavItem to="/" data-tooltip="Home">
               <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
@@ -467,7 +468,7 @@ const ProfilePage: React.FC = () => {
       <GlobalStyle />
       <AppLayout>
       <Sidebar isOpen={sidebarOpen}>
-        <Logo>{MdMusicNote({ size: 36 })}</Logo>
+        <Logo><AppLogo /></Logo>
         <NavMenu>
           <NavItem to="/" data-tooltip="Home">
             <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>

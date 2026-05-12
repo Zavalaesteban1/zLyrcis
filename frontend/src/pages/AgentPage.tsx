@@ -4,10 +4,10 @@ import { useUser } from '../contexts/UserContext';
 // Import icons
 import { CgProfile } from 'react-icons/cg';
 import { IoHomeOutline } from 'react-icons/io5';
-import { MdMusicNote, MdAdd, MdClose, MdMenu, MdHistory } from 'react-icons/md';
+import { MdMusicNote, MdAdd, MdClose, MdMenu } from 'react-icons/md';
 import { FiPlusCircle } from 'react-icons/fi';
 import { RiRobot2Line } from 'react-icons/ri';
-import { BsArrowsExpand, BsArrowsCollapse } from 'react-icons/bs';
+import { BsArrowsExpand, BsArrowsCollapse, BsChatDots } from 'react-icons/bs';
 
 // Import hooks
 import { useConversationManager, Message } from '../hooks/useConversationManager';
@@ -19,6 +19,7 @@ import { ConversationSidebar } from '../components/agent/ConversationSidebar';
 import { ChatInterface } from '../components/agent/ChatInterface';
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 import { VideoSettingsModal } from '../components/agent/VideoSettingsModal';
+import { AppLogo } from '../components/common/AppLogo';
 import {
   startVideoGeneration,
   useExistingVariant,
@@ -388,7 +389,7 @@ const AgentPage: React.FC = () => {
       {/* Main navigation sidebar - always visible on desktop, toggleable on mobile */}
       <Styles.Sidebar isOpen={sidebarOpen}>
         <Styles.Logo>
-          {MdMusicNote({ size: 36 })}
+          <AppLogo />
         </Styles.Logo>
         <Styles.NavMenu>
           <Styles.NavItem to="/" data-tooltip="Home">
@@ -443,7 +444,7 @@ const AgentPage: React.FC = () => {
       >
         {chatSidebarOpen ?
           MdClose({ size: 20 }) :
-          MdHistory({ size: 20 })
+          BsChatDots({ size: 18 })
         }
       </Styles.ChatSidebarToggle>
 
@@ -493,7 +494,7 @@ const AgentPage: React.FC = () => {
                   title="Conversation History"
                   style={windowWidth <= 768 ? { padding: '8px' } : {}}
                 >
-                  {MdHistory({ size: windowWidth <= 768 ? 20 : 18 })}
+                  {BsChatDots({ size: windowWidth <= 768 ? 18 : 16 })}
                 </Styles.IconButton>
 
                 {/* Button to toggle scrollbars - hide on mobile */}

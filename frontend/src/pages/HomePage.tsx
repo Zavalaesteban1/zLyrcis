@@ -13,6 +13,7 @@ import { AiOutlineClockCircle } from 'react-icons/ai';
 import { RiRobot2Line } from 'react-icons/ri';
 // Import ProfileDropdown component
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
+import { AppLogo } from '../components/common/AppLogo';
 
 // Global style for consistent styling across pages
 const GlobalStyle = createGlobalStyle`
@@ -757,7 +758,7 @@ const HomePage: React.FC = () => {
         <GlobalStyle />
         <AppLayout>
           <Sidebar isOpen={sidebarOpen}>
-            <Logo>{MdMusicNote({ size: 36 })}</Logo>
+            <Logo><AppLogo /></Logo>
             <NavMenu>
               <NavItem to="/" active data-tooltip="Home">
                 <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
@@ -796,7 +797,7 @@ const HomePage: React.FC = () => {
       <GlobalStyle />
       <AppLayout>
       <Sidebar isOpen={sidebarOpen}>
-        <Logo>{MdMusicNote({ size: 36 })}</Logo>
+        <Logo><AppLogo /></Logo>
           <NavMenu>
             <NavItem to="/" active data-tooltip="Home">
               <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>

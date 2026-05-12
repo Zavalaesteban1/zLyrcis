@@ -48,6 +48,11 @@ const ProfileTrigger = styled.button<{ $isOpen: boolean }>`
   &:active {
     transform: scale(0.98);
   }
+
+  @media (max-width: 768px) {
+    gap: 0;
+    padding: 4px;
+  }
 `;
 
 const ProfileImage = styled.img`
@@ -56,6 +61,7 @@ const ProfileImage = styled.img`
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid #1DB954;
+  transition: all 0.2s ease;
 `;
 
 const ArrowIcon = styled.span<{ $isOpen: boolean }>`
@@ -87,6 +93,12 @@ const DropdownMenu = styled.div<{ $isOpen: boolean }>`
   transform: ${props => props.$isOpen ? 'translateY(0)' : 'translateY(-10px)'};
   transition: all 0.2s ease;
   animation: ${props => props.$isOpen ? fadeIn : 'none'} 0.2s ease;
+
+  @media (max-width: 768px) {
+    min-width: 280px;
+    max-width: calc(100vw - 32px);
+    right: -8px;
+  }
 `;
 
 const MenuSection = styled.div`
@@ -256,6 +268,10 @@ export const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userData }) =>
         <ProfileImage
           src={userData.profile_picture || "https://via.placeholder.com/40x40?text=User"}
           alt={userData.name}
+          style={{ 
+            opacity: isOpen ? 0.8 : 1,
+            transform: isOpen ? 'scale(0.95)' : 'scale(1)'
+          }}
         />
         <ArrowIcon $isOpen={isOpen}>
           {MdKeyboardArrowDown({ size: 24 })}

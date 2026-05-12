@@ -21,6 +21,7 @@ import { VideoPlayerModal } from '../components/songs/VideoPlayerModal';
 import { DeleteConfirmationModal } from '../components/songs/DeleteConfirmationModal';
 import { HorizontalSongGallery } from '../components/songs/HorizontalSongGallery';
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
+import { AppLogo } from '../components/common/AppLogo';
 
 // Add global style to hide all scrollbars
 const GlobalStyle = createGlobalStyle`
@@ -567,7 +568,7 @@ const SongsPage: React.FC = () => {
       <AppLayout>
         <GlobalStyle />
         <Sidebar isOpen={sidebarOpen}>
-          <Logo>{MdMusicNote({ size: 36 })}</Logo>
+          <Logo><AppLogo /></Logo>
           <NavMenu>
             <NavItem to="/" data-tooltip="Home">
               <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
@@ -606,7 +607,7 @@ const SongsPage: React.FC = () => {
       <AppLayout>
         <GlobalStyle />
         <Sidebar isOpen={sidebarOpen}>
-          <Logo>{MdMusicNote({ size: 36 })}</Logo>
+          <Logo><AppLogo /></Logo>
           <NavMenu>
             <NavItem to="/" data-tooltip="Home">
               <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>
@@ -646,7 +647,7 @@ const SongsPage: React.FC = () => {
     <AppLayout>
       <GlobalStyle />
       <Sidebar isOpen={sidebarOpen}>
-        <Logo>{MdMusicNote({ size: 36 })}</Logo>
+        <Logo><AppLogo /></Logo>
         <NavMenu>
           <NavItem to="/" data-tooltip="Home">
             <NavIcon>{IoHomeOutline({ size: 28 })}</NavIcon>

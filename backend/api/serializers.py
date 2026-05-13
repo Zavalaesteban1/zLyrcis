@@ -127,6 +127,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     
     def get_profile_picture(self, obj):
         """Return absolute URL for profile picture (works with both Cloudinary and local storage)"""
+        # Default avatar URL on Cloudinary
+        default_avatar_url = 'https://res.cloudinary.com/dhvp6c43m/image/upload/v1778647368/profile_pictures/default_avatar.png'
+        
         if obj.profile_picture:
             # Cloudinary storage automatically provides full URLs
             # For local storage, we need to build the absolute URI
@@ -140,7 +143,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 if request:
                     return request.build_absolute_uri(url)
                 return url
-        return None
+        
+        # Return default avatar if no profile picture is set
+        return default_avatar_url
 
 class ProfilePictureSerializer(serializers.ModelSerializer):
     profile_picture = serializers.ImageField(required=True)

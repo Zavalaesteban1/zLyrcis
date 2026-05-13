@@ -427,12 +427,9 @@ def google_login(request):
         # Get or create token
         token, _ = Token.objects.get_or_create(user=user)
 
-        # Get user profile
-        try:
-            profile = UserProfile.objects.get(user=user)
-            profile_data = UserProfileSerializer(profile, context={'request': request}).data
-        except UserProfile.DoesNotExist:
-            profile_data = None
+        # Get or create user profile (in case the signal didn't run for some reason)
+        profile, created = UserProfile.objects.get_or_create(user=user)
+        profile_data = UserProfileSerializer(profile, context={'request': request}).data
 
         return Response({
             'token': token.key,
@@ -523,11 +520,9 @@ def user_logout(request):
 def get_user_info(request):
     """Get information about the currently logged in user"""
     user = request.user
-    try:
-        profile = UserProfile.objects.get(user=user)
-        profile_data = UserProfileSerializer(profile, context={'request': request}).data
-    except UserProfile.DoesNotExist:
-        profile_data = None
+    # Get or create profile in case it doesn't exist
+    profile, created = UserProfile.objects.get_or_create(user=user)
+    profile_data = UserProfileSerializer(profile, context={'request': request}).data
 
     return Response({
         'user_id': user.pk,

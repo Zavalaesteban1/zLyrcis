@@ -591,6 +591,55 @@ def process_song_request(song_description):
         print(f"User said: '{song_description}'")
         print(f"{'='*60}\n")
         
+        # FAST PATH: Try regex extraction FIRST (instant like search!)
+        import re
+        
+        # Pattern 1: "create/make/generate [a] lyric video for TITLE by ARTIST"
+        pattern1 = re.search(r'(?:create|make|generate)(?:\s+a)?\s+lyric\s+video\s+for\s+(.+?)\s+by\s+(.+?)(?:\s*[.!?])?$', song_description, re.IGNORECASE)
+        if pattern1:
+            result = {
+                'title': pattern1.group(1).strip().strip('"').strip("'"),
+                'artist': pattern1.group(2).strip().strip('"').strip("'")
+            }
+            print(f"✓ INSTANT EXTRACTION (regex - no API calls!):")
+            print(f"  Title: '{result['title']}'")
+            print(f"  Artist: '{result['artist']}'")
+            print(f"{'='*60}\n")
+            return result
+        
+        # Pattern 2: "Lyric video: TITLE by ARTIST"
+        pattern2 = re.search(r'lyric\s+video:\s*["\']?([^"\']+)["\']?\s+by\s+(.+?)(?:\s*[.!?])?$', song_description, re.IGNORECASE)
+        if pattern2:
+            result = {
+                'title': pattern2.group(1).strip(),
+                'artist': pattern2.group(2).strip()
+            }
+            print(f"✓ INSTANT EXTRACTION (regex - no API calls!):")
+            print(f"  Title: '{result['title']}'")
+            print(f"  Artist: '{result['artist']}'")
+            print(f"{'='*60}\n")
+            return result
+        
+        # Pattern 3: Simple "TITLE by ARTIST" (when context suggests song)
+        pattern3 = re.search(r'(.+?)\s+by\s+(.+?)(?:\s*[.!?])?$', song_description, re.IGNORECASE)
+        if pattern3:
+            title = pattern3.group(1).strip().strip('"').strip("'")
+            artist = pattern3.group(2).strip().strip('"').strip("'")
+            # Remove common prefixes
+            for prefix in ['create', 'make', 'generate', 'a lyric video for', 'lyric video for', 'video for', 'song']:
+                if title.lower().startswith(prefix):
+                    title = title[len(prefix):].strip()
+            
+            result = {'title': title, 'artist': artist}
+            print(f"✓ INSTANT EXTRACTION (regex - no API calls!):")
+            print(f"  Title: '{result['title']}'")
+            print(f"  Artist: '{result['artist']}'")
+            print(f"{'='*60}\n")
+            return result
+        
+        print(f"⚠ No clear pattern found, falling back to Claude API (slower)...")
+        
+        # SLOW PATH: Only use Claude if regex fails
         # Get API key from environment variable
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
@@ -975,9 +1024,17 @@ def agent_chat(request):
     if is_question and not any(word in message.lower() for word in ['create', 'generate', 'make', 'add', 'save']):
         possible_song_request = False
 
+    # FAST PATH: Check for obvious song request patterns first (NO API CALL!)
+    import re
+    obvious_song_pattern = re.search(r'(?:create|make|generate|lyric\s+video).*?by\s+', message, re.IGNORECASE)
+    
     # If it sounds like a song request, check with Claude to confirm
     intent_result = {'is_song_request': False}
-    if possible_song_request:
+    if obvious_song_pattern:
+        # Skip Claude - it's obviously a song request!
+        print("✓ OBVIOUS song request detected (skipping Claude intent check)")
+        intent_result = {'is_song_request': True, 'intent': 'generate_video'}
+    elif possible_song_request:
         intent_result = check_song_request_intent(message)
 
     # If confirmed as a song request, process it specially

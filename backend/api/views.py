@@ -136,14 +136,20 @@ class VideoJobViewSet(viewsets.ModelViewSet):
             job.text_color = text_color
         if karaoke_color:
             job.karaoke_color = karaoke_color
-            
-        existing_job = VideoJob.objects.filter(
-            spotify_url=job.spotify_url,
-            bg_color=job.bg_color,
-            text_color=job.text_color,
-            karaoke_color=job.karaoke_color,
-            status='completed'
-        ).exclude(video_file='').first()
+        
+        # Check if THIS USER already has a video with these exact settings
+        try:
+            existing_job = VideoJob.objects.filter(
+                user=request.user,
+                spotify_url=job.spotify_url,
+                bg_color=job.bg_color,
+                text_color=job.text_color,
+                karaoke_color=job.karaoke_color,
+                status='completed'
+            ).exclude(video_file='').first()
+        except:
+            # Fallback if user field doesn't exist
+            existing_job = None
         
         if existing_job and existing_job.video_file:
             job.video_file = existing_job.video_file
@@ -918,11 +924,17 @@ def agent_chat(request):
             if any(word in user_response for word in ['yes', 'yeah', 'sure', 'customize', 'edit', 'change', 'ok', 'okay', 'yep']):
                 resp_text = "Great! Opening customization settings now."
                 
-                # Check for existing variants
+                # Check for existing variants (ONLY for this user)
                 existing_variants = []
                 if job:
                     seen_configs = set()
-                    for v in VideoJob.objects.filter(spotify_url=job.spotify_url, status='completed', is_favorite_only=False):
+                    try:
+                        user_filter = VideoJob.objects.filter(user=request.user, spotify_url=job.spotify_url, status='completed', is_favorite_only=False)
+                    except:
+                        # Fallback if user field doesn't exist
+                        user_filter = VideoJob.objects.filter(spotify_url=job.spotify_url, status='completed', is_favorite_only=False)
+                    
+                    for v in user_filter:
                         if (v.bg_color, v.text_color, v.karaoke_color) not in seen_configs and v.video_file:
                             seen_configs.add((v.bg_color, v.text_color, v.karaoke_color))
                             existing_variants.append({
@@ -953,19 +965,25 @@ def agent_chat(request):
                     # Pass through to normal conversation handling
                     pass  # Will fall through to get_claude_response below
                 elif job:
-                    existing_job = VideoJob.objects.filter(
-                        spotify_url=job.spotify_url,
-                        bg_color=job.bg_color,
-                        text_color=job.text_color,
-                        karaoke_color=job.karaoke_color,
-                        status='completed'
-                    ).exclude(video_file='').first()
+                    # Check if THIS USER already has a video with these exact settings
+                    try:
+                        existing_job = VideoJob.objects.filter(
+                            user=request.user,
+                            spotify_url=job.spotify_url,
+                            bg_color=job.bg_color,
+                            text_color=job.text_color,
+                            karaoke_color=job.karaoke_color,
+                            status='completed'
+                        ).exclude(video_file='').first()
+                    except:
+                        # Fallback if user field doesn't exist
+                        existing_job = None
                     
                     if existing_job and existing_job.video_file:
                         job.video_file = existing_job.video_file
                         job.status = 'completed'
                         job.save()
-                        resp_text = "Alright, pulling your video from our global repository! It is already available in the 'My Songs' section."
+                        resp_text = "Alright, pulling your video from our repository! It is already available in the 'My Songs' section."
                     else:
                         job.status = 'pending'
                         job.save()
@@ -1174,11 +1192,17 @@ def agent_chat(request):
                 # generate_lyric_video.delay(job.id)  # Wait for customization
 
             # Generate appropriate response based on intent
-            existing_variants_count = VideoJob.objects.filter(
-                spotify_url=spotify_url, 
-                status='completed', 
-                is_favorite_only=False
-            ).exclude(video_file='').count()
+            # Count existing variants for THIS USER ONLY (not other users!)
+            try:
+                existing_variants_count = VideoJob.objects.filter(
+                    user=request.user,
+                    spotify_url=spotify_url, 
+                    status='completed', 
+                    is_favorite_only=False
+                ).exclude(video_file='').count()
+            except:
+                # Fallback if user field doesn't exist
+                existing_variants_count = 0
             
             api_key = os.environ.get("ANTHROPIC_API_KEY")
             if not api_key:

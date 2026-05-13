@@ -191,7 +191,7 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 CORS_ALLOWED_ORIGINS = [
-    'https://zlyric.netlify.app',
+    'https://zlyricsai.netlify.app',
     'http://localhost:3000',
 ]
 

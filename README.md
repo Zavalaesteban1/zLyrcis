@@ -1,18 +1,11 @@
 # Lyric Video Generator
 
-Generate synchronized lyric videos from Spotify tracks with AI-powered timing and beautiful animations.
+Generate synchronized lyric videos from Spotify tracks with AI-powered
 
-## Features
-
-- **AI-Powered Synchronization** - Advanced lyric-to-audio alignment using Deepgram + audio analysis
-- **AI Chat Agent** - Conversational interface to request songs naturally
-- **Video Library** - Manage your collection with album artwork
-- **User Profiles** - Authentication with Google OAuth or username/password
-- **Download & Share** - Export videos for any platform
 
 ## Tech Stack
 
-**Backend:** Django, Celery, Redis, FFmpeg, librosa  
+**Backend:** Django, Celery, Redis, FFmpeg, librosa 
 **Frontend:** React, TypeScript, Styled Components  
 **Database:** MySQL (easily switchable to PostgreSQL)  
 **APIs:** Spotify, Genius, Deepgram, Anthropic Claude

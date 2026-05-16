@@ -47,7 +47,7 @@ except ImportError:
     DEEPGRAM_AVAILABLE = False
     print("Deepgram SDK not installed. Install with: pip install deepgram-sdk")
 
-# Import Cloudinary
+# Import Cloudinary (DEPRECATED - keeping for backward compatibility)
 try:
     import cloudinary
     import cloudinary.api
@@ -61,6 +61,134 @@ try:
 except ImportError:
     CLOUDINARY_AVAILABLE = False
     print("Cloudinary not installed. Media files will use local storage only.")
+
+# Import Cloudflare R2 (S3-compatible storage)
+try:
+    import boto3
+    from botocore.exceptions import ClientError
+    
+    r2_client = boto3.client(
+        's3',
+        endpoint_url=os.getenv('R2_ENDPOINT'),
+        aws_access_key_id=os.getenv('R2_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.getenv('R2_SECRET_ACCESS_KEY'),
+        region_name='auto'
+    )
+    R2_AVAILABLE = True
+    print("R2 storage configured successfully")
+except Exception as e:
+    R2_AVAILABLE = False
+    print(f"R2 not available: {e}")
+
+
+# ============================================
+# R2 STORAGE HELPER FUNCTIONS
+# ============================================
+
+def upload_video_to_r2(video_path, job_id):
+    """Upload video to R2 storage"""
+    if not R2_AVAILABLE:
+        raise ValueError("R2 storage not configured")
+    
+    bucket = os.getenv('R2_VIDEO_BUCKET', 'lyric-videos')
+    filename = f"video_{job_id}.mp4"
+    
+    try:
+        with open(video_path, 'rb') as f:
+            r2_client.put_object(
+                Bucket=bucket,
+                Key=filename,
+                Body=f,
+                ContentType='video/mp4'
+            )
+        
+        # Construct public URL
+        public_url = f"{os.getenv('R2_VIDEO_PUBLIC_URL')}/{filename}"
+        return public_url
+        
+    except Exception as e:
+        raise ValueError(f"Failed to upload video to R2: {e}")
+
+
+def upload_audio_to_r2(audio_path, title, artist):
+    """Upload audio file to R2 audio-library bucket"""
+    if not R2_AVAILABLE:
+        print("R2 not available, skipping upload")
+        return None
+    
+    try:
+        # Sanitize filename: "Artist - Title.mp3"
+        def sanitize_filename(s):
+            return re.sub(r'[^\w\s-]', '', s).strip()
+        
+        safe_artist = sanitize_filename(artist)
+        safe_title = sanitize_filename(title)
+        filename = f"{safe_artist} - {safe_title}.mp3"
+        
+        bucket = os.getenv('R2_AUDIO_BUCKET', 'audio-library')
+        
+        print(f"Uploading audio to R2: {filename}")
+        
+        with open(audio_path, 'rb') as f:
+            r2_client.put_object(
+                Bucket=bucket,
+                Key=filename,
+                Body=f,
+                ContentType='audio/mpeg'
+            )
+        
+        # Construct public URL
+        public_url = f"{os.getenv('R2_AUDIO_PUBLIC_URL')}/{filename}"
+        print(f"✓ Uploaded to R2: {public_url}")
+        return public_url
+        
+    except Exception as e:
+        print(f"⚠️  Failed to upload to R2: {e}")
+        return None
+
+
+def list_audio_from_r2():
+    """List all audio files in R2 audio-library bucket"""
+    if not R2_AVAILABLE:
+        return []
+    
+    try:
+        bucket = os.getenv('R2_AUDIO_BUCKET', 'audio-library')
+        response = r2_client.list_objects_v2(Bucket=bucket)
+        
+        files = []
+        for obj in response.get('Contents', []):
+            files.append({
+                'Key': obj['Key'],
+                'Size': obj['Size'],
+                'LastModified': obj['LastModified']
+            })
+        
+        return files
+        
+    except Exception as e:
+        print(f"Error listing R2 audio files: {e}")
+        return []
+
+
+def download_audio_from_r2(filename, output_path):
+    """Download audio file from R2"""
+    if not R2_AVAILABLE:
+        return False
+    
+    try:
+        bucket = os.getenv('R2_AUDIO_BUCKET', 'audio-library')
+        
+        r2_client.download_file(
+            Bucket=bucket,
+            Key=filename,
+            Filename=output_path
+        )
+        return True
+        
+    except Exception as e:
+        print(f"Error downloading from R2: {e}")
+        return False
 
 
 @shared_task
@@ -187,36 +315,24 @@ def generate_lyric_video(job_id):
             
             # 6. Save the video
             if os.path.exists(video_path):
-                # Check if we're in production (Cloudinary available and DATABASE_URL set)
-                if CLOUDINARY_AVAILABLE and os.environ.get('DATABASE_URL'):
-                    # PRODUCTION: Upload to Cloudinary
-                    print(f"Uploading video to Cloudinary...")
+                # Check if we're in production (R2 available and DATABASE_URL set)
+                if R2_AVAILABLE and os.environ.get('DATABASE_URL'):
+                    # PRODUCTION: Upload to R2
+                    print(f"Uploading video to R2...")
                     try:
-                        import cloudinary.uploader
+                        video_url = upload_video_to_r2(video_path, job_id)
                         
-                        result = cloudinary.uploader.upload(
-                            video_path,
-                            resource_type="video",
-                            folder="lyric-videos",
-                            public_id=f"video_{job_id}",
-                            overwrite=True,
-                            eager=[{"streaming_profile": "full_hd", "format": "m3u8"}],
-                            eager_async=True
-                        )
-                        
-                        # Save Cloudinary URL to database
-                        job.video_file = result['secure_url']
+                        # Save R2 URL to database
+                        job.video_file = video_url
                         job.status = 'completed'
                         job.save()
                         
-                        print(f"✓ Video uploaded to Cloudinary: {result['secure_url']}")
-                        print(f"  Public ID: {result['public_id']}")
-                        print(f"  Format: {result['format']}")
+                        print(f"✓ Video uploaded to R2: {video_url}")
                         
                     except Exception as e:
-                        print(f"✗ Cloudinary upload failed: {e}")
+                        print(f"✗ R2 upload failed: {e}")
                         traceback.print_exc()
-                        raise ValueError(f"Failed to upload video to Cloudinary: {e}")
+                        raise ValueError(f"Failed to upload video to R2: {e}")
                         
                 else:
                     # DEVELOPMENT: Save locally
@@ -653,7 +769,7 @@ def download_audio(track_id, output_path):
 
 def upload_audio_to_library(audio_path, title, artist):
     """
-    Upload audio file to Cloudinary audio-library folder for future caching
+    Upload audio file to R2 audio-library bucket for future caching
     
     Args:
         audio_path: Path to local MP3 file
@@ -661,47 +777,16 @@ def upload_audio_to_library(audio_path, title, artist):
         artist: Artist name
     
     Returns:
-        str: Cloudinary URL if successful, None otherwise
+        str: R2 URL if successful, None otherwise
     """
-    if not CLOUDINARY_AVAILABLE:
-        print("Cloudinary not available, skipping upload")
-        return None
-    
-    try:
-        # Sanitize filename: "Artist - Title.mp3"
-        def sanitize_filename(s):
-            # Remove special characters but keep spaces and dashes
-            return re.sub(r'[^\w\s-]', '', s).strip()
-        
-        safe_artist = sanitize_filename(artist)
-        safe_title = sanitize_filename(title)
-        filename = f"{safe_artist} - {safe_title}"
-        
-        print(f"Uploading audio to Cloudinary: {filename}")
-        
-        # Upload to Cloudinary
-        result = cloudinary.uploader.upload(
-            audio_path,
-            resource_type='video',
-            folder='audio-library',
-            public_id=filename,
-            overwrite=False,
-            invalidate=True
-        )
-        
-        url = result.get('secure_url')
-        print(f"✓ Uploaded to Cloudinary: {url}")
-        return url
-        
-    except Exception as e:
-        print(f"⚠️  Failed to upload to Cloudinary: {e}")
-        return None
+    # Use R2 (new storage)
+    return upload_audio_to_r2(audio_path, title, artist)
 
 
 def get_audio(song_title, artist, output_path, spotify_url=None):
     """
     Find matching audio file from:
-    1. Cloudinary audio-library (primary cache)
+    1. R2 audio-library (primary cache)
     2. Telegram Deezer bot download (if Spotify URL provided and not in cache)
     3. Local audio_files directory (last resort fallback)
     
@@ -730,25 +815,19 @@ def get_audio(song_title, artist, output_path, spotify_url=None):
     print(f"Searching for audio: '{song_title}' by '{artist}'")
     print(f"Normalized: title='{normalized_title}', artist='{normalized_artist}'")
     
-    # TRY CLOUDINARY FIRST (Production)
-    if CLOUDINARY_AVAILABLE:
+    # TRY R2 FIRST (Production)
+    if R2_AVAILABLE:
         try:
-            print("Checking Cloudinary audio-library...")
+            print("Checking R2 audio-library...")
             
-            # List all resources in audio-library folder
-            result = cloudinary.api.resources(
-                resource_type='video',
-                type='upload',
-                prefix='audio-library/',
-                max_results=500
-            )
+            # List all files in R2 audio bucket
+            audio_files = list_audio_from_r2()
             
             best_match = None
             best_score = 0
             
-            for resource in result.get('resources', []):
-                public_id = resource['public_id']
-                filename = public_id.replace('audio-library/', '')
+            for file_obj in audio_files:
+                filename = file_obj['Key']
                 normalized_filename = normalize_string(filename)
                 
                 # Try multiple matching strategies
@@ -801,33 +880,30 @@ def get_audio(song_title, artist, output_path, spotify_url=None):
                             score = 0.6 + (matches / len(title_words) * 0.2)
                 
                 if score > 0.5:
-                    print(f"  Cloudinary candidate: '{filename}' - score: {score:.2f}")
+                    print(f"  R2 candidate: '{filename}' - score: {score:.2f}")
                 
                 # Require strong match (0.80+) to avoid false positives with similar artist names
                 if score > best_score and score > 0.80:
                     best_score = score
-                    best_match = resource
+                    best_match = file_obj
             
-            # If found on Cloudinary, download it
+            # If found in R2, download it
             if best_match:
-                print(f"✓ Found on Cloudinary: {best_match['public_id']} (score: {best_score:.2f})")
+                print(f"✓ Found in R2: {best_match['Key']} (score: {best_score:.2f})")
                 
-                # Download the file
-                audio_url = best_match['secure_url']
-                response = requests.get(audio_url)
+                # Download the file from R2
+                success = download_audio_from_r2(best_match['Key'], output_path)
                 
-                if response.status_code == 200:
-                    with open(output_path, 'wb') as f:
-                        f.write(response.content)
-                    print(f"✓ Downloaded audio from Cloudinary to {output_path}")
+                if success:
+                    print(f"✓ Downloaded audio from R2 to {output_path}")
                     return True
                 else:
-                    print(f"✗ Failed to download from Cloudinary: {response.status_code}")
+                    print(f"✗ Failed to download from R2")
             else:
-                print("✗ No matching audio found on Cloudinary")
+                print("✗ No matching audio found in R2")
                 
         except Exception as e:
-            print(f"⚠️  Cloudinary error: {e}")
+            print(f"⚠️  R2 error: {e}")
             print("Falling back to next method...")
     
     # TRY TELEGRAM DOWNLOAD (if Spotify URL provided and Cloudinary didn't have it)
@@ -845,8 +921,8 @@ def get_audio(song_title, artist, output_path, spotify_url=None):
                 import shutil
                 shutil.copy2(telegram_file, output_path)
                 
-                # Upload to Cloudinary for future caching
-                print("Uploading to Cloudinary for future requests...")
+                # Upload to R2 for future caching
+                print("Uploading to R2 for future requests...")
                 upload_audio_to_library(str(telegram_file), song_title, artist)
                 
                 # Clean up telegram temp file
@@ -957,7 +1033,7 @@ def get_audio(song_title, artist, output_path, spotify_url=None):
         shutil.copy2(best_match, output_path)
         return True
     
-    print("✗ No suitable audio file found (Cloudinary or local).")
+    print("✗ No suitable audio file found (R2 or local).")
     return False
 
 

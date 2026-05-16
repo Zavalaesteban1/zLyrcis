@@ -16,7 +16,7 @@ class VideoJobSerializer(serializers.ModelSerializer):
         if not obj.video_file:
             return None
         
-        # If it's a string (URLField with Cloudinary URL), check if it's a full URL
+        # If it's a string (URLField with R2/external URL), check if it's a full URL
         if isinstance(obj.video_file, str):
             if obj.video_file.startswith('http://') or obj.video_file.startswith('https://'):
                 return obj.video_file
@@ -35,7 +35,7 @@ class VideoJobSerializer(serializers.ModelSerializer):
         try:
             if hasattr(obj.video_file, 'url'):
                 url = obj.video_file.url
-                # If it's already a full URL (Cloudinary), return as is
+                # If it's already a full URL (R2/external), return as is
                 if url.startswith('http://') or url.startswith('https://'):
                     return url
                 # Otherwise build absolute URI (local storage)
@@ -60,11 +60,11 @@ class VideoStatusSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'status', 'song_title', 'artist', 'video_url', 'error']
     
     def get_video_url(self, obj):
-        """Get video URL - handles both URLField (Cloudinary URLs) and FileField"""
+        """Get video URL - handles both URLField (R2/external URLs) and FileField"""
         if obj.video_file and obj.status == 'completed':
-            # If video_file is a string (URLField with Cloudinary URL), return directly
+            # If video_file is a string (URLField with R2 URL), return directly
             if isinstance(obj.video_file, str):
-                # Already a full URL (Cloudinary)
+                # Already a full URL (R2/external)
                 if obj.video_file.startswith('http://') or obj.video_file.startswith('https://'):
                     return obj.video_file
                 else:
@@ -126,16 +126,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return None
     
     def get_profile_picture(self, obj):
-        """Return absolute URL for profile picture (works with both Cloudinary and local storage)"""
-        # Default avatar URL on Cloudinary
-        default_avatar_url = 'https://res.cloudinary.com/dhvp6c43m/image/upload/v1778647368/profile_pictures/default_avatar.png'
+        """Return absolute URL for profile picture (works with both R2 and local storage)"""
+        # Default avatar URL on R2 (migrated from Cloudinary)
+        default_avatar_url = 'https://pub-4c2c081f6fe24336b695aade4bc22b0a.r2.dev/default_avatar.png'
         
         if obj.profile_picture:
-            # Cloudinary storage automatically provides full URLs
+            # R2 storage automatically provides full URLs
             # For local storage, we need to build the absolute URI
             if hasattr(obj.profile_picture, 'url'):
                 url = obj.profile_picture.url
-                # If it's already a full URL (Cloudinary), return as is
+                # If it's already a full URL (R2/external), return as is
                 if url.startswith('http://') or url.startswith('https://'):
                     return url
                 # Otherwise, build absolute URI (local storage)

@@ -195,7 +195,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
 ]
 
-# Cloudinary configuration
+# Cloudinary configuration (DEPRECATED - kept for backward compatibility with profile pictures)
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
@@ -216,11 +216,12 @@ if CLOUDINARY_STORAGE['CLOUD_NAME']:
     )
     print(f"Cloudinary configured: {CLOUDINARY_STORAGE['CLOUD_NAME']}")
 
-# Media files - Use Cloudinary in production, local storage in development
+# Media files - Note: Videos/Audio now use R2 directly (see tasks.py)
+# This is only for profile pictures and backward compatibility
 if os.environ.get('DATABASE_URL'):
-    # Production: Use Cloudinary for media storage
+    # Production: Use Cloudinary for media storage (profile pictures only)
     DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-    MEDIA_URL = '/media/'  # Cloudinary will handle the actual URL
+    MEDIA_URL = '/media/'
     print("Using Cloudinary for media storage (production)")
 else:
     # Development: Use local storage

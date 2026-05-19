@@ -75,12 +75,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           {messages.map((message, index) => {
             if (message.text === '...') {
               return (
-                <Styles.AssistantTypingIndicator key={index} isProcessing={message.isProcessing}>
-                  {message.isProcessing && (
-                    <Styles.ProcessingLabel>
-                      {message.processingLabel || '🎵 Generating video...'}
-                    </Styles.ProcessingLabel>
-                  )}
+                <Styles.AssistantTypingIndicator
+                  key={index}
+                  isProcessing={message.isProcessing}
+                  role="status"
+                  aria-label={message.isProcessing ? 'Generating video' : 'Assistant is typing'}
+                >
                   {message.isProcessing ? (
                     <Styles.BarContainer>
                       <Styles.AnimatedBar delay={0} />

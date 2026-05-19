@@ -4,7 +4,7 @@ import { login, googleLogin, LoginCredentials } from '../services/api';
 import { MdMusicNote, MdVideoLibrary, MdLyrics, MdClose } from 'react-icons/md';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
-import { RiRobot2Line } from 'react-icons/ri';
+import { IconAgentOrbit } from '../components/icons/IconAgentOrbit';
 import '../styles/LoginPage.css';
 
 const LoginPage: React.FC = () => {
@@ -147,7 +147,7 @@ const LoginPage: React.FC = () => {
               Less Noise. <span className="hero-title-italic">More Signal.</span>
             </h2>
             <p className="section-subtitle">
-              Our visual engine handles the heavy lifting, giving you more time to focus on the creative direction.
+              Our visual engine handles the heavy lifting, giving you more time to focus on the learning direction.
             </p>
           </div>
         </div>
@@ -167,7 +167,9 @@ const LoginPage: React.FC = () => {
                 </div>
                 <div className="ai-generating">
                   <div className="generating-text">
-                    <span className="generating-icon">{RiRobot2Line({ size: 20, color: '#1DB954' })}</span>
+                    <span className="generating-icon" style={{ color: '#1DB954' }}>
+                      <IconAgentOrbit size={20} />
+                    </span>
                     <span>AI Generating</span>
                     <div className="dot-animation">
                       <span className="dot">.</span>
@@ -190,7 +192,9 @@ const LoginPage: React.FC = () => {
             <div className="feature-content">
               <div className="feature-info">
                 <div className="feature-icon-container">
-                  {RiRobot2Line({ size: 16, color: '#1DB954' })}
+                  <span style={{ color: '#1DB954', display: 'inline-flex' }}>
+                    <IconAgentOrbit size={16} />
+                  </span>
                 </div>
                 <h3 className="feature-title">AI Chat Agent</h3>
               </div>
@@ -337,7 +341,7 @@ const LoginPage: React.FC = () => {
       
       {/* Footer */}
       <footer className="footer">
-        <p>© 2026 zLyrics // All rights reserved // Made for creators</p>
+        <p>© 2026 zLyrics // All rights reserved // Made for music lovers</p>
       </footer>
       
       {/* Login Modal */}

@@ -2,11 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 // Import icons
-import { CgProfile } from 'react-icons/cg';
-import { IoHomeOutline } from 'react-icons/io5';
-import { MdMusicNote, MdAdd, MdClose, MdMenu } from 'react-icons/md';
+import { MdAdd, MdClose, MdMenu } from 'react-icons/md';
 import { FiPlusCircle } from 'react-icons/fi';
-import { RiRobot2Line } from 'react-icons/ri';
+import { IconAgentOrbit } from '../components/icons/IconAgentOrbit';
 import { BsArrowsExpand, BsArrowsCollapse, BsChatDots } from 'react-icons/bs';
 
 // Import hooks
@@ -19,7 +17,7 @@ import { ConversationSidebar } from '../components/agent/ConversationSidebar';
 import { ChatInterface } from '../components/agent/ChatInterface';
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 import { VideoSettingsModal } from '../components/agent/VideoSettingsModal';
-import { AppLogo } from '../components/common/AppLogo';
+import { AppSidebar } from '../components/layout/AppSidebar';
 import {
   startVideoGeneration,
   useExistingVariant,
@@ -117,18 +115,15 @@ const AgentPage: React.FC = () => {
           text: '...',
           isUser: false,
           isProcessing: true,
-          processingLabel: '🎵 Adding to your collection...'
         }]);
 
         // Store that we're waiting for a favorite completion
         // (handled in handleSend after response)
       } else {
-        // For video generation, show "Generating video" indicator
         setMessages(prev => [...prev, {
           text: '...',
           isUser: false,
           isProcessing: true,
-          processingLabel: '🎵 Generating your video...'
         }]);
 
         // Start polling for video generation
@@ -386,40 +381,12 @@ const AgentPage: React.FC = () => {
     <Styles.AppLayout>
       <Styles.GlobalStyle />
 
-      {/* Main navigation sidebar - always visible on desktop, toggleable on mobile */}
-      <Styles.Sidebar isOpen={sidebarOpen}>
-        <Styles.Logo>
-          <AppLogo />
-        </Styles.Logo>
-        <Styles.NavMenu>
-          <Styles.NavItem to="/" data-tooltip="Home">
-            <Styles.NavIcon>{IoHomeOutline({ size: 28 })}</Styles.NavIcon>
-            <Styles.NavText>Home</Styles.NavText>
-          </Styles.NavItem>
-          <Styles.NavItem to="/profile" data-tooltip="Profile">
-            <Styles.NavIcon>{CgProfile({ size: 28 })}</Styles.NavIcon>
-            <Styles.NavText>Profile</Styles.NavText>
-          </Styles.NavItem>
-          <Styles.NavItem to="/songs" data-tooltip="My Songs">
-            <Styles.NavIcon>{MdMusicNote({ size: 28 })}</Styles.NavIcon>
-            <Styles.NavText>My Songs</Styles.NavText>
-          </Styles.NavItem>
-          <Styles.NavItem to="/agent" active data-tooltip="AI Agent">
-            <Styles.NavIcon>{RiRobot2Line({ size: 28 })}</Styles.NavIcon>
-            <Styles.NavText>Agent</Styles.NavText>
-          </Styles.NavItem>
-        </Styles.NavMenu>
-      </Styles.Sidebar>
-
-      {/* Toggle for sidebar on mobile */}
-      <Styles.SidebarToggle onClick={() => setSidebarOpen(!sidebarOpen)}>
-        {sidebarOpen ? MdClose({ size: 20 }) : MdMenu({ size: 20 })}
-      </Styles.SidebarToggle>
-
-      {/* Overlay for mobile when sidebars are open */}
-      <Styles.MobileOverlay
-        visible={windowWidth <= 768 && (sidebarOpen || chatSidebarOpen)}
-        onClick={() => {
+      <AppSidebar
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        onClose={() => setSidebarOpen(false)}
+        overlayVisible={windowWidth <= 768 && (sidebarOpen || chatSidebarOpen)}
+        onOverlayClick={() => {
           if (chatSidebarOpen) setChatSidebarOpen(false);
           else if (sidebarOpen) setSidebarOpen(false);
         }}
@@ -454,7 +421,7 @@ const AgentPage: React.FC = () => {
           <Styles.CompactChatContainer>
             <Styles.CompactChatHeader>
               <Styles.CompactChatIcon>
-                {RiRobot2Line({ size: 24 })}
+                <IconAgentOrbit size={24} />
               </Styles.CompactChatIcon>
               <Styles.CompactChatTitle>Lyric Video Assistant</Styles.CompactChatTitle>
             </Styles.CompactChatHeader>
@@ -481,7 +448,7 @@ const AgentPage: React.FC = () => {
                 </Styles.IconButton>
               )}
               <Styles.ChatHeaderIcon>
-                {RiRobot2Line({ size: 18 })}
+                <IconAgentOrbit size={18} />
               </Styles.ChatHeaderIcon>
               <div style={{ display: 'flex', flexDirection: 'column', flex: '0 0 auto', marginRight: 'auto' }}>
                 <Styles.ChatHeaderTitle>AI Music Agent</Styles.ChatHeaderTitle>
@@ -546,7 +513,7 @@ const AgentPage: React.FC = () => {
         onUseExisting={async (variantId) => {
           setModalOpen(false);
           try {
-            setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true, processingLabel: 'Reusing existing video configuration...' }]);
+            setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true }]);
             await useExistingVariant(variantId);
             setMessages(prev => prev.filter(msg => !msg.isProcessing));
             setMessages(prev => [...prev, { text: "Your video has been instantly added to My Songs!", isUser: false }]);
@@ -558,7 +525,7 @@ const AgentPage: React.FC = () => {
           setModalOpen(false);
           try {
             if (pendingJobId) {
-              setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true, processingLabel: 'Generating video...' }]);
+              setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true }]);
               await startVideoGeneration(pendingJobId, colors);
               // Start polling to detect when video is complete
               startPolling(pendingJobId);

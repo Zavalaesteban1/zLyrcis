@@ -1,169 +1,12 @@
 import styled, { createGlobalStyle } from 'styled-components';
-import { Link } from 'react-router-dom';
+import { APP_SIDEBAR_WIDTH, APP_SIDEBAR_WIDTH_MOBILE } from '../constants/layout';
 
-// Styled components from AgentPage.tsx
-export const AppLayout = styled.div`
-  display: flex;
-  width: 100%;
-  min-height: 100vh;
-  background-color: #f5f5f5;
-  color: #333;
-`;
-
-export const Sidebar = styled.div<{ isOpen: boolean }>`
-  width: 100px;
-  background-color: #1DB954;
-  color: white;
-  padding: 24px 0;
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  height: 100vh;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-  z-index: 100;
-  transition: all 0.3s ease;
-  align-items: center;
-  
-  @media (max-width: 768px) {
-    width: 280px;
-    transform: translateX(${props => props.isOpen ? '0' : '-100%'});
-    align-items: stretch;
-  }
-`;
-
-export const SidebarToggle = styled.button`
-  position: fixed;
-  bottom:90px;
-  right: 20px;
-  z-index: 200;
-  background-color: #1DB954;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-  display: none;
-  
-  &:hover {
-    transform: scale(1.05);
-    background-color: #19a049;
-  }
-  
-  @media (max-width: 768px) {
-    display: flex;
-  }
-`;
-
-export const Logo = styled.div`
-  font-size: 36px;
-  font-weight: 700;
-  padding: 0 0 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  
-  @media (max-width: 768px) {
-    padding: 0 20px 20px;
-    justify-content: flex-start;
-  }
-`;
-
-export const NavMenu = styled.nav`
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  width: 100%;
-  align-items: center;
-  gap: 24px;
-  
-  @media (max-width: 768px) {
-    align-items: stretch;
-    gap: 0;
-  }
-`;
-
-export const NavItem = styled(Link)<{ active?: boolean }>`
-  padding: 16px;
-  color: white;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: ${props => props.active ? '600' : '400'};
-  background-color: ${props => props.active ? 'rgba(0, 0, 0, 0.2)' : 'transparent'};
-  border-radius: 16px;
-  transition: all 0.2s ease;
-  position: relative;
-  width: 60px;
-  height: 60px;
-  
-  &:hover {
-    background-color: rgba(255, 255, 255, 0.2);
-    color: white;
-  }
-  
-  &:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    left: 85px;
-    background-color: rgba(0, 0, 0, 0.9);
-    color: white;
-    padding: 10px 14px;
-    border-radius: 8px;
-    white-space: nowrap;
-    font-size: 14px;
-    font-weight: 500;
-    z-index: 1000;
-    pointer-events: none;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
-  
-  @media (max-width: 768px) {
-    width: 100%;
-    padding: 12px 20px;
-    justify-content: flex-start;
-    border-radius: 0;
-    border-left: ${props => props.active ? '4px solid white' : '4px solid transparent'};
-    
-    &:hover::after {
-      display: none;
-    }
-  }
-`;
-
-export const NavIcon = styled.span`
-  font-size: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  
-  @media (max-width: 768px) {
-    margin-right: 10px;
-    font-size: 18px;
-  }
-`;
-
-export const NavText = styled.span`
-  display: none;
-  
-  @media (max-width: 768px) {
-    display: inline;
-  }
-`;
+export { AppLayout } from './AppLayoutStyles';
 
 export const MainContent = styled.main<{ sidebarOpen: boolean }>`
   flex: 1;
-  margin-left: 100px; /* Always align with sidebar on desktop */
-  width: calc(100% - 100px);
+  margin-left: ${APP_SIDEBAR_WIDTH}px;
+  width: calc(100% - ${APP_SIDEBAR_WIDTH}px);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -173,8 +16,8 @@ export const MainContent = styled.main<{ sidebarOpen: boolean }>`
   position: relative; /* Ensure position is relative for all modes */
   
   @media (max-width: 768px) {
-    margin-left: ${props => props.sidebarOpen ? '280px' : '0'};
-    width: ${props => props.sidebarOpen ? 'calc(100% - 280px)' : '100%'};
+    margin-left: ${props => (props.sidebarOpen ? `${APP_SIDEBAR_WIDTH_MOBILE}px` : '0')};
+    width: ${props => (props.sidebarOpen ? `calc(100% - ${APP_SIDEBAR_WIDTH_MOBILE}px)` : '100%')};
     transition: margin-left 0.3s ease, width 0.3s ease;
   }
 `;
@@ -188,7 +31,7 @@ export const ChatSidebar = styled.div<{ isOpen: boolean }>`
   flex-direction: column;
   transition: transform 0.3s ease, left 0.3s ease;
   position: fixed;
-  left: 100px; /* Always position next to the main sidebar */
+  left: ${APP_SIDEBAR_WIDTH}px;
   z-index: 90;
   transform: translateX(${props => props.isOpen ? '0' : '-100%'});
   overflow-y: auto;
@@ -828,7 +671,7 @@ export const GlobalStyle = createGlobalStyle`
 
 export const AssistantTypingIndicator = styled.div<{ isProcessing?: boolean }>`
   display: inline-block;
-  padding: ${props => props.isProcessing ? '20px 24px' : '12px 16px'};
+  padding: ${props => props.isProcessing ? '14px 20px' : '12px 16px'};
   border-radius: 18px;
   background-color: ${props => props.isProcessing ? '#e8f7ee' : '#f1f1f1'};
   align-self: flex-start;
@@ -1026,13 +869,6 @@ export const SendButton = styled.button`
     font-size: 15px;
     border-radius: 20px;
   }
-`;
-
-export const ProcessingLabel = styled.div`
-  font-size: 13px;
-  color: #238750;
-  margin-bottom: 4px;
-  font-weight: 500;
 `;
 
 export const UserActions = styled.div`

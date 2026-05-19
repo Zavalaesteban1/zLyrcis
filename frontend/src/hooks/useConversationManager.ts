@@ -12,7 +12,8 @@ export interface Message {
   text: string;
   isUser: boolean;
   isProcessing?: boolean;
-  processingLabel?: string;  // Custom label for processing indicator
+  /** @deprecated Visual indicator is animation-only; kept for persisted conversations. */
+  processingLabel?: string;
   /** Rich UI for user song selection; agent text uses `buildLyricVideoAgentMessage`. */
   songPick?: SongPickPayload;
 }

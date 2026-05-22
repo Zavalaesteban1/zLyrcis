@@ -115,8 +115,17 @@ const clearPreviousUserData = () => {
       localStorage.removeItem(key);
     }
 
-    if (key.includes('agent_conversation') || key === 'agent_show_scrollbars') {
-      localStorage.removeItem(key);
+    // Clear agent data from other users only (keep current user's cache until server sync)
+    if (key.startsWith('agent_') && currentUserId) {
+      const isCurrentUserKey =
+        key === `agent_conversation_id_${currentUserId}` ||
+        key === `agent_conversations_list_${currentUserId}` ||
+        key === `agent_pending_jobs_${currentUserId}` ||
+        key.startsWith(`agent_conversation_messages_${currentUserId}_`);
+
+      if (!isCurrentUserKey) {
+        localStorage.removeItem(key);
+      }
     }
   });
 
@@ -271,27 +280,9 @@ export const signup = async (credentials: SignupCredentials): Promise<AuthRespon
 
 export const logout = async (): Promise<void> => {
   await api.post('/auth/logout/');
-  // Get the current user ID before removing it from localStorage
-  const userId = localStorage.getItem('user_id');
-
-  // Remove token and user_id from localStorage
+  // Remove auth token only — conversation data stays in the DB and reloads on next login
   localStorage.removeItem('auth_token');
   localStorage.removeItem('user_id');
-
-  // Remove any user-specific data from localStorage
-  if (userId) {
-    const keys = Object.keys(localStorage);
-    keys.forEach(key => {
-      if (
-        key.includes(`user_${userId}_`) ||
-        key.includes('agent_conversation') ||
-        key.includes('learning_data') ||
-        key.includes('video_owner_')
-      ) {
-        localStorage.removeItem(key);
-      }
-    });
-  }
 };
 
 export const getCurrentUser = async (): Promise<AuthResponse> => {
@@ -658,6 +649,79 @@ export interface ConversationHistoryResponse {
   messages: ConversationMessage[];
   conversation_id: string;
 }
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  lastMessage: string;
+  date: string;
+}
+
+export interface AllConversationsResponse {
+  conversations: ConversationSummary[];
+}
+
+export const fetchAllConversations = async (): Promise<AllConversationsResponse> => {
+  const response = await fetch(`${API_URL}/get_all_conversations/`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Token ${getAuthToken()}`
+    }
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to fetch conversations' }));
+    throw new Error(errorData.error || 'Failed to fetch conversations');
+  }
+
+  return response.json();
+};
+
+export const deleteConversationFromServer = async (conversationId: string): Promise<void> => {
+  const encodedId = encodeURIComponent(conversationId);
+  const response = await fetch(`${API_URL}/delete_conversation/${encodedId}/`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Token ${getAuthToken()}`
+    }
+  });
+
+  // Already deleted or never existed on server — treat as success
+  if (response.status === 404) {
+    return;
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to delete conversation' }));
+    throw new Error(errorData.error || 'Failed to delete conversation');
+  }
+};
+
+export const appendConversationMessage = async (
+  conversationId: string,
+  role: 'user' | 'assistant',
+  content: string
+): Promise<void> => {
+  const response = await fetch(`${API_URL}/append_conversation_message/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Token ${getAuthToken()}`
+    },
+    body: JSON.stringify({
+      conversation_id: conversationId,
+      role,
+      content
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to append message' }));
+    throw new Error(errorData.error || 'Failed to append message');
+  }
+};
 
 // Function to fetch conversation history
 export const fetchConversationHistory = async (conversation_id: string): Promise<ConversationHistoryResponse> => {

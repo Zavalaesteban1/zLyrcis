@@ -838,6 +838,10 @@ def search_songs(request):
 
 def get_or_create_conversation(conversation_id, user):
     """Get or create a conversation in the database"""
+    # Client-side temp IDs must never be persisted — assign a stable server ID
+    if conversation_id and str(conversation_id).startswith('temp-'):
+        conversation_id = f"conversation_{user.id}_{int(time.time())}"
+
     try:
         conversation = Conversation.objects.get(id=conversation_id)
         if conversation.user != user:
@@ -1573,3 +1577,28 @@ def delete_conversation(request, conversation_id):
         return Response({'success': True})
     except Conversation.DoesNotExist:
         return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def append_conversation_message(request):
+    """Append a message to an existing conversation (e.g. video completion notice)."""
+    conversation_id = request.data.get('conversation_id')
+    role = request.data.get('role')
+    content = request.data.get('content')
+
+    if not conversation_id or not role or not content:
+        return Response(
+            {'error': 'conversation_id, role, and content are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if role not in ('user', 'assistant'):
+        return Response({'error': 'role must be user or assistant'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        conversation = Conversation.objects.get(id=conversation_id, user=request.user)
+    except Conversation.DoesNotExist:
+        return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    save_conversation_message(conversation, role, content)
+    return Response({'success': True, 'conversation_id': conversation_id})

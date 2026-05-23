@@ -23,8 +23,7 @@ import {
   useExistingVariant,
   SongSuggestion,
   buildLyricVideoAgentMessage,
-  formatSongPickPreview,
-  appendConversationMessage
+  formatSongPickPreview
 } from '../services/api';
 import { primeSongCoverCache } from '../services/songCoverCache';
 
@@ -60,30 +59,10 @@ const AgentPage: React.FC = () => {
     createNewConversation,
     updateConversation,
     updateConversationMessages,
-    bumpConversationToTop,
     deleteConversation,
     replaceConversationId,
-    setActiveConversationId,
-    appendMessageToConversation
+    setActiveConversationId
   } = useConversationManager({ disableAutoLoad: !!location.state?.autoStartSong });
-
-  const activeConversationIdRef = React.useRef(activeConversationId);
-  const updateConversationMessagesRef = React.useRef(updateConversationMessages);
-  const appendMessageToConversationRef = React.useRef(appendMessageToConversation);
-  const bumpConversationToTopRef = React.useRef(bumpConversationToTop);
-
-  React.useEffect(() => {
-    activeConversationIdRef.current = activeConversationId;
-  }, [activeConversationId]);
-
-  React.useEffect(() => {
-    updateConversationMessagesRef.current = updateConversationMessages;
-    appendMessageToConversationRef.current = appendMessageToConversation;
-    bumpConversationToTopRef.current = bumpConversationToTop;
-  }, [updateConversationMessages, appendMessageToConversation, bumpConversationToTop]);
-
-  const VIDEO_READY_MESSAGE =
-    "Great news! Your lyric video is now ready. You can view it in the My Songs section.";
 
   // UI state
   const [input, setInput] = useState('');
@@ -108,61 +87,38 @@ const AgentPage: React.FC = () => {
 
   // Video job polling hook
   const { startPolling } = useVideoJobPolling({
-    activeConversationId,
-    onCompleted: (_jobId, conversationId) => {
-      if (!conversationId || conversationId.startsWith('temp-')) return;
-
-      if (conversationId === activeConversationIdRef.current) {
-        setMessages((prev) => {
-          const updated = [
-            ...prev.filter((msg) => !msg.isProcessing),
-            { text: VIDEO_READY_MESSAGE, isUser: false }
-          ];
-          updateConversationMessagesRef.current(conversationId, updated);
-          return updated;
-        });
-
-        appendConversationMessage(conversationId, 'assistant', VIDEO_READY_MESSAGE).catch((error) => {
-          console.error('Failed to persist video completion message:', error);
-        });
-      } else {
-        appendMessageToConversationRef.current(conversationId, VIDEO_READY_MESSAGE);
-      }
+    onCompleted: (jobId) => {
+      setMessages(prev => prev.filter(msg => !msg.isProcessing));
+      setMessages(prev => [...prev, {
+        text: "Great news! Your lyric video is now ready. You can view it in the My Songs section.",
+        isUser: false
+      }]);
+      updateConversationMessages(activeConversationId, messages);
     },
-    onFailed: (_jobId, conversationId, error) => {
-      if (!conversationId || conversationId.startsWith('temp-')) return;
-
-      const errorMessage = `I'm sorry, but there was an issue generating your lyric video. The error was: ${error}`;
-      if (conversationId === activeConversationIdRef.current) {
-        setMessages((prev) => {
-          const updated = [
-            ...prev.filter((msg) => !msg.isProcessing),
-            { text: errorMessage, isUser: false }
-          ];
-          updateConversationMessagesRef.current(conversationId, updated);
-          return updated;
-        });
-
-        appendConversationMessage(conversationId, 'assistant', errorMessage).catch((err) => {
-          console.error('Failed to persist video error message:', err);
-        });
-      } else {
-        appendMessageToConversationRef.current(conversationId, errorMessage);
-      }
+    onFailed: (jobId, error) => {
+      setMessages(prev => prev.filter(msg => !msg.isProcessing));
+      setMessages(prev => [...prev, {
+        text: `I'm sorry, but there was an issue generating your lyric video. The error was: ${error}`,
+        isUser: false
+      }]);
+      updateConversationMessages(activeConversationId, messages);
     }
   });
 
   // Agent chat hook
   const { sendMessage, isLoading: isSendingMessage } = useAgentChat({
-    onSongRequest: (jobId, _title, _artist, conversationId, isFavoriteOnly) => {
-      if (!conversationId) return;
-
+    onSongRequest: (jobId, title, artist, isFavoriteOnly) => {
+      // Add processing indicator with appropriate message
       if (isFavoriteOnly) {
+        // For favorites, show "Adding to collection" indicator
         setMessages(prev => [...prev, {
           text: '...',
           isUser: false,
           isProcessing: true,
         }]);
+
+        // Store that we're waiting for a favorite completion
+        // (handled in handleSend after response)
       } else {
         setMessages(prev => [...prev, {
           text: '...',
@@ -170,24 +126,21 @@ const AgentPage: React.FC = () => {
           isProcessing: true,
         }]);
 
-        startPolling(jobId, conversationId);
+        // Start polling for video generation
+        startPolling(jobId);
       }
     },
-    onCustomizationRequest: (jobId, _conversationId, variants) => {
+    onCustomizationRequest: (jobId, variants) => {
       setPendingJobId(jobId);
       if (variants) setExistingVariants(variants);
       else setExistingVariants([]);
       setModalOpen(true);
     },
     onConversationIdReceived: (newConvId) => {
-      const currentId = activeConversationIdRef.current;
-
-      if (currentId.startsWith('temp-') && newConvId !== currentId) {
-        replaceConversationId(currentId, newConvId);
-        activeConversationIdRef.current = newConvId;
-      } else if (newConvId !== currentId) {
+      if (activeConversationId.startsWith('temp-') && newConvId !== activeConversationId) {
+        replaceConversationId(activeConversationId, newConvId);
+      } else if (newConvId !== activeConversationId) {
         setActiveConversationId(newConvId);
-        activeConversationIdRef.current = newConvId;
       }
     }
   });
@@ -263,7 +216,6 @@ const AgentPage: React.FC = () => {
 
     // Send message using the hook
     const response = await sendMessage(userMessage, convId);
-    const resolvedConvId = response?.conversation_id || activeConversationIdRef.current || convId;
 
     // Remove only the typing indicator (not processing indicators)
     setMessages(prev => prev.filter(msg => !(msg.text === '...' && !msg.isProcessing)));
@@ -306,20 +258,12 @@ const AgentPage: React.FC = () => {
         setTimeout(() => {
           // Remove the processing indicator
           setMessages(prev => prev.filter(msg => !msg.isProcessing));
-          // Add the AI's success message — use ref to get the resolved (non-temp) ID
-          setMessages(prev => {
-            const updated = [...prev, { text: response.message, isUser: false }];
-            bumpConversationToTopRef.current(resolvedConvId, updated);
-            return updated;
-          });
+          // Add the AI's success message
+          setMessages(prev => [...prev, { text: response.message, isUser: false }]);
         }, 2000);
       } else if (response.message) {
         // For regular messages and video generation, add response immediately
-        setMessages(prev => {
-          const updated = [...prev, { text: response.message, isUser: false }];
-          bumpConversationToTopRef.current(resolvedConvId, updated);
-          return updated;
-        });
+        setMessages(prev => [...prev, { text: response.message, isUser: false }]);
       }
     }
   }, [input, isSendingMessage, activeConversationId, isCompactMode, createNewConversation, sendMessage]);
@@ -360,7 +304,6 @@ const AgentPage: React.FC = () => {
     }
 
     const response = await sendMessage(agentString, convId);
-    const resolvedConvId = response?.conversation_id || activeConversationIdRef.current || convId;
 
     // Remove only the typing indicator (not processing indicators)
     setMessages(prev => prev.filter(msg => !(msg.text === '...' && !msg.isProcessing)));
@@ -370,18 +313,10 @@ const AgentPage: React.FC = () => {
       if (response.is_favorite_only && response.message) {
         setTimeout(() => {
           setMessages(prev => prev.filter(msg => !msg.isProcessing));
-          setMessages(prev => {
-            const updated = [...prev, { text: response.message, isUser: false }];
-            bumpConversationToTopRef.current(resolvedConvId, updated);
-            return updated;
-          });
+          setMessages(prev => [...prev, { text: response.message, isUser: false }]);
         }, 2000);
       } else if (response.message) {
-        setMessages(prev => {
-          const updated = [...prev, { text: response.message, isUser: false }];
-          bumpConversationToTopRef.current(resolvedConvId, updated);
-          return updated;
-        });
+        setMessages(prev => [...prev, { text: response.message, isUser: false }]);
       }
     }
   }, [activeConversationId, createNewConversation, isCompactMode, setMessages, sendMessage]);
@@ -433,12 +368,8 @@ const AgentPage: React.FC = () => {
   }, [isLoadingConversation, activeConversationId, windowWidth, loadConversation]);
 
   // Handle deleting a conversation
-  const handleDeleteConversation = useCallback(async (id: string) => {
-    try {
-      await deleteConversation(id);
-    } catch {
-      window.alert('Could not delete this conversation. Please try again.');
-    }
+  const handleDeleteConversation = useCallback((id: string) => {
+    deleteConversation(id);
   }, [deleteConversation]);
 
   // Handle renaming a conversation
@@ -594,12 +525,10 @@ const AgentPage: React.FC = () => {
           setModalOpen(false);
           try {
             if (pendingJobId) {
-              const conversationId = activeConversationIdRef.current;
               setMessages(prev => [...prev, { text: '...', isUser: false, isProcessing: true }]);
               await startVideoGeneration(pendingJobId, colors);
-              if (conversationId) {
-                startPolling(pendingJobId, conversationId);
-              }
+              // Start polling to detect when video is complete
+              startPolling(pendingJobId);
             }
           } catch (e) {
             console.error("Failed to generate with custom settings", e);

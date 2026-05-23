@@ -87,10 +87,7 @@ export const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
             No previous conversations
           </div>
         ) : (
-          conversations
-            .slice()
-            .sort((a, b) => (b.lastActiveAt ?? 0) - (a.lastActiveAt ?? 0))
-            .map(conv => {
+          conversations.map(conv => {
             const isActive = conv.id === activeConversationId;
             
             return (

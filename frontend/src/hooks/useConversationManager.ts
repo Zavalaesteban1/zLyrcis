@@ -7,6 +7,8 @@ import {
   getVideoStatus
 } from '../services/api';
 import { hydrateSongPickFromUserContent, fillCachedCover, previewFromHydratedPick } from '../services/songPickFromTranscript';
+import { parseLyricVideoPickFromTranscript, formatSongPickPreview } from '../services/api';
+import { primeSongCoverCache } from '../services/songCoverCache';
 
 export interface SongPickPayload {
   title: string;
@@ -187,13 +189,36 @@ async function applyPendingJobState(conversationId: string, msgs: Message[]): Pr
 }
 
 function backendMessagesToLocal(
-  messages: { role: string; content: string }[]
+  messages: { role: string; content: string; album_cover?: string | null }[]
 ): Message[] {
-  return messages.map((msg) => ({
-    text: msg.content,
-    isUser: msg.role === 'user',
-    isProcessing: false
-  }));
+  return messages.map((msg) => {
+    const base: Message = {
+      text: msg.content,
+      isUser: msg.role === 'user',
+      isProcessing: false,
+    };
+
+    if (msg.role !== 'user' || !msg.album_cover) {
+      return base;
+    }
+
+    const parsed = parseLyricVideoPickFromTranscript(msg.content);
+    if (!parsed) {
+      return base;
+    }
+
+    primeSongCoverCache(parsed.title, parsed.artist, msg.album_cover);
+
+    return {
+      ...base,
+      text: formatSongPickPreview(parsed),
+      songPick: {
+        title: parsed.title,
+        artist: parsed.artist,
+        albumCover: msg.album_cover,
+      },
+    };
+  });
 }
 
 function writeConversationsList(convs: Conversation[]) {

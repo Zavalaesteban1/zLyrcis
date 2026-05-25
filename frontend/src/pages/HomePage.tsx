@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import styled, { keyframes, createGlobalStyle } from 'styled-components';
-import { getUserVideos, extractSpotifyTrackId, getSpotifyAlbumArtwork, VideoJob } from '../services/api';
+import { getUserVideos, VideoJob } from '../services/api';
 import { useUser } from '../contexts/UserContext';
 import { CgProfile } from 'react-icons/cg';
 import { MdAdd, MdCheckCircle, MdMusicNote } from 'react-icons/md';
@@ -481,27 +481,8 @@ const HomePage: React.FC = () => {
         
         setSongs(sortedSongs);
         
-        // Fetch album covers for the most recent songs
-        const recentSongs = sortedSongs.slice(0, 4);
-        const coverPromises = recentSongs.map(async (song) => {
-          try {
-            if (song.spotify_url) {
-              const trackId = extractSpotifyTrackId(song.spotify_url);
-              if (trackId) {
-                const coverUrl = await getSpotifyAlbumArtwork(trackId);
-                return { id: song.id, coverUrl };
-              }
-            }
-            return { id: song.id, coverUrl: null };
-          } catch (error) {
-            console.error('Error fetching album cover:', error);
-            return { id: song.id, coverUrl: null };
-          }
-        });
-        
-        const covers = await Promise.all(coverPromises);
-        const coverMap = covers.reduce((acc, { id, coverUrl }) => {
-          acc[id] = coverUrl;
+        const coverMap = sortedSongs.slice(0, 4).reduce((acc, song) => {
+          acc[song.id] = song.album_cover ?? null;
           return acc;
         }, {} as {[key: string]: string | null});
         

@@ -22,6 +22,7 @@ class VideoJob(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey('auth.User', related_name='videos', on_delete=models.CASCADE, null=True)
     spotify_url = models.URLField(max_length=255)
+    album_cover = models.URLField(max_length=500, blank=True, null=True)
     song_title = models.CharField(max_length=255, blank=True)
     artist = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending')
@@ -73,6 +74,7 @@ class ConversationMessage(models.Model):
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     content = models.TextField()
+    album_cover = models.URLField(max_length=500, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

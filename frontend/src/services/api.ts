@@ -30,6 +30,7 @@ export interface VideoJob {
   spotify_url: string;
   song_title: string;
   artist: string;
+  album_cover: string | null;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   created_at: string;
   updated_at: string;
@@ -642,6 +643,7 @@ export const startVideoGeneration = async (
 export interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
+  album_cover?: string | null;
 }
 
 // Interface for conversation history response

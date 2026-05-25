@@ -26,6 +26,7 @@ import requests
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from django.core.cache import cache
+from .spotify_covers import backfill_missing_album_covers, parse_lyric_video_message, fetch_album_cover_url
 
 # Create your views here.
 
@@ -64,6 +65,13 @@ class VideoJobViewSet(viewsets.ModelViewSet):
         if self.action == 'status':
             return VideoStatusSerializer
         return VideoJobSerializer
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        jobs = list(queryset)
+        backfill_missing_album_covers(jobs, limit=5)
+        serializer = self.get_serializer(jobs, many=True, context={'request': request})
+        return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -183,6 +191,7 @@ class VideoJobViewSet(viewsets.ModelViewSet):
                 spotify_url=source_job.spotify_url,
                 song_title=source_job.song_title,
                 artist=source_job.artist,
+                album_cover=source_job.album_cover,
                 status='completed',
                 video_file=source_job.video_file,
                 bg_color=source_job.bg_color,
@@ -197,6 +206,7 @@ class VideoJobViewSet(viewsets.ModelViewSet):
                 spotify_url=source_job.spotify_url,
                 song_title=source_job.song_title,
                 artist=source_job.artist,
+                album_cover=source_job.album_cover,
                 status='completed',
                 video_file=source_job.video_file,
                 bg_color=source_job.bg_color,
@@ -865,12 +875,13 @@ def get_conversation_messages(conversation):
     messages = ConversationMessage.objects.filter(conversation=conversation)
     return [{'role': msg.role, 'content': msg.content} for msg in messages]
 
-def save_conversation_message(conversation, role, content):
+def save_conversation_message(conversation, role, content, album_cover=None):
     """Save a single message to the database"""
     ConversationMessage.objects.create(
         conversation=conversation,
         role=role,
-        content=content
+        content=content,
+        album_cover=album_cover if role == 'user' else None,
     )
     # Update conversation's updated_at timestamp
     conversation.save()
@@ -1155,7 +1166,8 @@ def agent_chat(request):
                         is_favorite_only=True,
                         is_favorite=True,
                         song_title=song_info['title'],
-                        artist=song_info['artist']
+                        artist=song_info['artist'],
+                        album_cover=album_cover,
                     )
                 else:
                     job = serializer.save(
@@ -1164,7 +1176,8 @@ def agent_chat(request):
                         is_favorite_only=False,
                         is_favorite=False,
                         song_title=song_info['title'],
-                        artist=song_info['artist']
+                        artist=song_info['artist'],
+                        album_cover=album_cover,
                     )
             except:
                 if is_favorite_only:
@@ -1173,7 +1186,8 @@ def agent_chat(request):
                         is_favorite_only=True,
                         is_favorite=True,
                         song_title=song_info['title'],
-                        artist=song_info['artist']
+                        artist=song_info['artist'],
+                        album_cover=album_cover,
                     )
                 else:
                     job = serializer.save(
@@ -1181,7 +1195,8 @@ def agent_chat(request):
                         is_favorite_only=False,
                         is_favorite=False,
                         song_title=song_info['title'],
-                        artist=song_info['artist']
+                        artist=song_info['artist'],
+                        album_cover=album_cover,
                     )
 
             # Only queue video generation if not favorite-only
@@ -1285,7 +1300,7 @@ def agent_chat(request):
                         success_response = f"I found '{song_info['title']}' by {song_info['artist']}! Would you like to customize your video settings before generating it?"
 
             # Save messages to database
-            save_conversation_message(db_conversation, 'user', message)
+            save_conversation_message(db_conversation, 'user', message, album_cover=album_cover)
             save_conversation_message(db_conversation, 'assistant', success_response)
             update_conversation_title(db_conversation, [{'role': 'user', 'content': message}])
 
@@ -1524,14 +1539,39 @@ def get_conversation_history(request):
         conversation = Conversation.objects.get(id=conversation_id, user=request.user)
         messages = ConversationMessage.objects.filter(conversation=conversation).order_by('created_at')
         
-        # Convert to frontend format
-        frontend_messages = [
-            {
+        # Convert to frontend format; backfill missing covers from VideoJob (max 5 per load)
+        backfill_budget = 5
+        frontend_messages = []
+        for msg in messages:
+            album_cover = msg.album_cover
+            if (
+                backfill_budget > 0
+                and msg.role == 'user'
+                and not album_cover
+            ):
+                parsed = parse_lyric_video_message(msg.content)
+                if parsed:
+                    title, artist = parsed
+                    job = VideoJob.objects.filter(
+                        user=request.user,
+                        song_title__iexact=title,
+                        artist__iexact=artist,
+                    ).order_by('-created_at').first()
+                    if job:
+                        if job.album_cover:
+                            album_cover = job.album_cover
+                        elif job.spotify_url:
+                            cover = fetch_album_cover_url(job.spotify_url)
+                            if cover:
+                                job.album_cover = cover
+                                job.save(update_fields=['album_cover'])
+                                album_cover = cover
+                                backfill_budget -= 1
+            frontend_messages.append({
                 'role': msg.role,
-                'content': msg.content
-            }
-            for msg in messages
-        ]
+                'content': msg.content,
+                'album_cover': album_cover,
+            })
         
         return Response({
             'messages': frontend_messages,

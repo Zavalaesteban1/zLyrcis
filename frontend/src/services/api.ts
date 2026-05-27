@@ -30,6 +30,7 @@ export interface VideoJob {
   spotify_url: string;
   song_title: string;
   artist: string;
+  album_cover: string | null;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   created_at: string;
   updated_at: string;
@@ -642,6 +643,7 @@ export const startVideoGeneration = async (
 export interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
+  album_cover?: string | null;
 }
 
 // Interface for conversation history response
@@ -696,6 +698,28 @@ export const deleteConversationFromServer = async (conversationId: string): Prom
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: 'Failed to delete conversation' }));
     throw new Error(errorData.error || 'Failed to delete conversation');
+  }
+};
+
+export const renameConversationOnServer = async (
+  conversationId: string,
+  title: string
+): Promise<void> => {
+  const response = await fetch(`${API_URL}/rename_conversation/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Token ${getAuthToken()}`
+    },
+    body: JSON.stringify({
+      conversation_id: conversationId,
+      title
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to rename conversation' }));
+    throw new Error(errorData.error || 'Failed to rename conversation');
   }
 };
 

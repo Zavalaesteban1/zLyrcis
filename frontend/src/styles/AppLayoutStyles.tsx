@@ -9,11 +9,12 @@ export { APP_SIDEBAR_WIDTH, APP_SIDEBAR_WIDTH_MOBILE };
 export const AppLayout = styled.div`
   display: flex;
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   background-color: #eef1f6;
   color: #333;
   max-width: 100vw;
-  overflow-x: hidden;
+  overflow: hidden;
 `;
 
 // ─── Floating dark rail ───────────────────────────────────────────────────────

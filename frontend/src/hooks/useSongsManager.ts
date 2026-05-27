@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getUserVideos, deleteVideo, extractSpotifyTrackId, getSpotifyAlbumArtwork, VideoJob } from '../services/api';
+import { getUserVideos, deleteVideo, VideoJob } from '../services/api';
 
 export interface Song {
   id: string;
@@ -34,35 +34,31 @@ export const useSongsManager = (userId: number | null): UseSongsManagerReturn =>
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Fetch songs and album covers
   const fetchSongs = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const videosData = await getUserVideos();
-      
-      // Map VideoJob data to Song interface with learning data from database (with localStorage fallback)
-      const formattedSongs = videosData.map(video => {
-        // Prefer database values, fallback to localStorage for backwards compatibility
+
+      const formattedSongs = videosData.map((video: VideoJob) => {
         let learned = video.is_learned || false;
         let lastPracticed = video.last_practiced || null;
         let difficultyRating = video.difficulty_rating || null;
-        
-        // If database values are not set, check localStorage (for migration)
+
         if (!video.is_learned && !video.last_practiced) {
-          const learningDataKey = userId 
+          const learningDataKey = userId
             ? `user_${userId}_song_learning_${video.id}`
             : `song_learning_${video.id}`;
           const learningData = JSON.parse(localStorage.getItem(learningDataKey) || 'null');
-          
+
           if (learningData) {
             learned = learningData.learned || false;
             lastPracticed = learningData.lastPracticed || null;
             difficultyRating = learningData.difficultyRating || null;
           }
         }
-        
+
         return {
           id: video.id,
           song_title: video.song_title,
@@ -70,34 +66,16 @@ export const useSongsManager = (userId: number | null): UseSongsManagerReturn =>
           video_file: video.video_file,
           created_at: video.created_at,
           spotify_url: video.spotify_url,
-          albumCoverUrl: null,
+          albumCoverUrl: video.album_cover ?? null,
           learned,
           lastPracticed,
           difficultyRating,
           is_favorite: video.is_favorite || false,
-          is_favorite_only: video.is_favorite_only || false
+          is_favorite_only: video.is_favorite_only || false,
         };
       });
-      
+
       setSongs(formattedSongs);
-      
-      // Fetch album covers for each song
-      const songsWithCovers = await Promise.all(
-        formattedSongs.map(async (song) => {
-          try {
-            const trackId = extractSpotifyTrackId(song.spotify_url);
-            if (trackId) {
-              const albumCoverUrl = await getSpotifyAlbumArtwork(trackId);
-              return { ...song, albumCoverUrl };
-            }
-          } catch (error) {
-            console.error(`Error fetching album cover for ${song.song_title}:`, error);
-          }
-          return song;
-        })
-      );
-      
-      setSongs(songsWithCovers);
     } catch (err) {
       console.error('Error fetching songs:', err);
       setError('Failed to load songs. Please try again.');
@@ -106,26 +84,22 @@ export const useSongsManager = (userId: number | null): UseSongsManagerReturn =>
     }
   }, [userId]);
 
-  // Delete a song
   const deleteSong = useCallback(async (songId: string) => {
     try {
       await deleteVideo(songId);
-      
-      // Remove from local state
+
       setSongs(prevSongs => prevSongs.filter(song => song.id !== songId));
-      
-      // Remove learning data from localStorage
-      const learningDataKey = userId 
+
+      const learningDataKey = userId
         ? `user_${userId}_song_learning_${songId}`
         : `song_learning_${songId}`;
       localStorage.removeItem(learningDataKey);
-      
+
       setNotification({
         message: 'Song deleted successfully',
         type: 'success'
       });
-      
-      // Clear notification after 3 seconds
+
       setTimeout(() => {
         setNotification(null);
       }, 3000);
@@ -138,7 +112,6 @@ export const useSongsManager = (userId: number | null): UseSongsManagerReturn =>
     }
   }, [userId]);
 
-  // Update a song in local state
   const updateSong = useCallback((songId: string, updates: Partial<Song>) => {
     setSongs(prevSongs =>
       prevSongs.map(song =>
@@ -147,12 +120,10 @@ export const useSongsManager = (userId: number | null): UseSongsManagerReturn =>
     );
   }, []);
 
-  // Clear notification
   const clearNotification = useCallback(() => {
     setNotification(null);
   }, []);
 
-  // Initial fetch
   useEffect(() => {
     fetchSongs();
   }, [fetchSongs]);

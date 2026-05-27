@@ -3,10 +3,13 @@ import {
   fetchConversationHistory,
   fetchAllConversations,
   deleteConversationFromServer,
+  renameConversationOnServer,
   appendConversationMessage,
   getVideoStatus
 } from '../services/api';
 import { hydrateSongPickFromUserContent, fillCachedCover, previewFromHydratedPick } from '../services/songPickFromTranscript';
+import { parseLyricVideoPickFromTranscript, formatSongPickPreview } from '../services/api';
+import { primeSongCoverCache } from '../services/songCoverCache';
 
 export interface SongPickPayload {
   title: string;
@@ -39,13 +42,20 @@ const getConversationsListKey = () => `agent_conversations_list_${getUserId()}`;
 const getConversationMessagesKey = (id: string) => `agent_conversation_messages_${getUserId()}_${id}`;
 const getPendingJobsKey = () => `agent_pending_jobs_${getUserId()}`;
 
-const WELCOME_MESSAGE: Message = {
-  text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?",
-  isUser: false
-};
+const WELCOME_MESSAGE_TEXT =
+  "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?";
 
 const VIDEO_READY_MESSAGE =
   "Great news! Your lyric video is now ready. You can view it in the My Songs section.";
+
+/** Welcome belongs on the empty landing screen only — never in the chat thread. */
+function stripWelcomeMessage(msgs: Message[]): Message[] {
+  return msgs.filter((m) => !(m.text === WELCOME_MESSAGE_TEXT && !m.isUser));
+}
+
+function normalizeStoredMessages(msgs: Message[]): Message[] {
+  return stripWelcomeMessage(enrichSongPickMessages(msgs));
+}
 
 function enrichSongPickMessages(msgs: Message[]): Message[] {
   return msgs.map((msg) => {
@@ -133,10 +143,10 @@ function prependConversation(convs: Conversation[], conv: Conversation): Convers
 }
 
 function mergeMessageHistory(backendMsgs: Message[], localMsgs: Message[]): Message[] {
-  const merged = enrichSongPickMessages(backendMsgs);
+  const merged = normalizeStoredMessages(backendMsgs);
   const backendKeys = new Set(merged.map((m) => `${m.isUser}:${m.text}`));
 
-  for (const msg of localMsgs) {
+  for (const msg of stripWelcomeMessage(localMsgs)) {
     if (msg.isProcessing || msg.text === '...') continue;
     const key = `${msg.isUser}:${msg.text}`;
     if (!backendKeys.has(key)) {
@@ -187,13 +197,36 @@ async function applyPendingJobState(conversationId: string, msgs: Message[]): Pr
 }
 
 function backendMessagesToLocal(
-  messages: { role: string; content: string }[]
+  messages: { role: string; content: string; album_cover?: string | null }[]
 ): Message[] {
-  return messages.map((msg) => ({
-    text: msg.content,
-    isUser: msg.role === 'user',
-    isProcessing: false
-  }));
+  return messages.map((msg) => {
+    const base: Message = {
+      text: msg.content,
+      isUser: msg.role === 'user',
+      isProcessing: false,
+    };
+
+    if (msg.role !== 'user' || !msg.album_cover) {
+      return base;
+    }
+
+    const parsed = parseLyricVideoPickFromTranscript(msg.content);
+    if (!parsed) {
+      return base;
+    }
+
+    primeSongCoverCache(parsed.title, parsed.artist, msg.album_cover);
+
+    return {
+      ...base,
+      text: formatSongPickPreview(parsed),
+      songPick: {
+        title: parsed.title,
+        artist: parsed.artist,
+        albumCover: msg.album_cover,
+      },
+    };
+  });
 }
 
 function writeConversationsList(convs: Conversation[]) {
@@ -230,14 +263,22 @@ function mergeConversationLists(
     }
 
     const server = serverById.get(local.id);
+    const mergedLastActiveAt = server
+      ? Math.max(local.lastActiveAt, server.lastActiveAt)
+      : local.lastActiveAt;
+    const useLocalTitle =
+      !!server &&
+      local.title !== server.title &&
+      local.lastActiveAt >= server.lastActiveAt;
+
     merged.push(
       server
         ? {
             ...local,
-            title: server.title,
+            title: useLocalTitle ? local.title : server.title,
             lastMessage: server.lastMessage,
             date: server.date,
-            lastActiveAt: Math.max(local.lastActiveAt, server.lastActiveAt)
+            lastActiveAt: mergedLastActiveAt
           }
         : local
     );
@@ -256,9 +297,10 @@ function mergeConversationLists(
 export const useConversationManager = (options?: { disableAutoLoad?: boolean }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string>('');
-  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const isInitialized = useRef(false);
+  const loadingConversationIdRef = useRef<string | null>(null);
   const messagesRef = useRef(messages);
   const activeConversationIdRef = useRef(activeConversationId);
 
@@ -270,16 +312,32 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
     activeConversationIdRef.current = activeConversationId;
   }, [activeConversationId]);
 
+  // Show sidebar list from cache immediately — don't wait for server sync
+  useEffect(() => {
+    const saved = localStorage.getItem(getConversationsListKey());
+    if (!saved) return;
+
+    try {
+      const parsed = (JSON.parse(saved) as Conversation[]).map(normalizeConversation);
+      setConversations(parsed);
+    } catch (error) {
+      console.error('Error parsing conversations list:', error);
+    }
+  }, []);
+
   const saveMessages = useCallback((conversationId: string, msgs: Message[]) => {
-    if (!conversationId || msgs.length <= 1) return;
-    localStorage.setItem(getConversationMessagesKey(conversationId), JSON.stringify(msgs));
+    if (!conversationId) return;
+    const cleaned = stripWelcomeMessage(msgs);
+    if (cleaned.length <= 1) return;
+    localStorage.setItem(getConversationMessagesKey(conversationId), JSON.stringify(cleaned));
   }, []);
 
   const saveConversationSnapshot = useCallback(
     (conversationId: string, msgs: Message[]) => {
-      if (!conversationId || msgs.length <= 1) return;
+      const cleaned = stripWelcomeMessage(msgs);
+      if (!conversationId || cleaned.length <= 1) return;
 
-      const lastNonProcessingMsg = [...msgs]
+      const lastNonProcessingMsg = [...cleaned]
         .reverse()
         .find((msg) => !msg.isProcessing && msg.text !== '...');
 
@@ -298,16 +356,17 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
         return next;
       });
 
-      saveMessages(conversationId, msgs);
+      saveMessages(conversationId, cleaned);
     },
     [saveMessages]
   );
 
   const persistMessagesForConversation = useCallback(
     (conversationId: string, msgs: Message[], touchOrder = true) => {
-      if (!conversationId || msgs.length <= 1) return;
+      const cleaned = stripWelcomeMessage(msgs);
+      if (!conversationId || cleaned.length <= 1) return;
 
-      const lastNonProcessingMsg = [...msgs]
+      const lastNonProcessingMsg = [...cleaned]
         .reverse()
         .find((msg) => !msg.isProcessing && msg.text !== '...');
 
@@ -343,7 +402,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
             ? prependConversation(prev, updated)
             : prev.map((conv) => (conv.id === targetId ? updated : conv));
         } else {
-          const titleSource = msgs.find((m) => m.isUser)?.text || 'New conversation';
+          const titleSource = cleaned.find((m) => m.isUser)?.text || 'New conversation';
           const title =
             titleSource.length > 30 ? `${titleSource.substring(0, 30)}...` : titleSource;
 
@@ -367,7 +426,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
           !activeConversationIdRef.current.startsWith('temp-')
           ? activeConversationIdRef.current
           : conversationId,
-        msgs
+        cleaned
       );
     },
     [saveMessages]
@@ -378,13 +437,13 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
       if (!conversationId || conversationId.startsWith('temp-')) return;
 
       const saved = localStorage.getItem(getConversationMessagesKey(conversationId));
-      let baseMessages: Message[] = [WELCOME_MESSAGE];
+      let baseMessages: Message[] = [];
 
       if (saved) {
         try {
-          baseMessages = JSON.parse(saved) as Message[];
+          baseMessages = stripWelcomeMessage(JSON.parse(saved) as Message[]);
         } catch {
-          baseMessages = [WELCOME_MESSAGE];
+          baseMessages = [];
         }
       }
 
@@ -410,81 +469,117 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
     [persistMessagesForConversation]
   );
 
-  const loadFromLocalStorage = useCallback(
-    async (id: string) => {
-      const saved = localStorage.getItem(getConversationMessagesKey(id));
-      let parsed: Message[] = [WELCOME_MESSAGE];
+  const readCachedMessages = useCallback((id: string): Message[] => {
+    const saved = localStorage.getItem(getConversationMessagesKey(id));
+    if (!saved) return [];
 
-      if (saved) {
-        try {
-          parsed = enrichSongPickMessages(JSON.parse(saved) as Message[]);
-        } catch (error) {
-          console.error('Error parsing saved messages:', error);
-        }
+    try {
+      return normalizeStoredMessages(JSON.parse(saved) as Message[]);
+    } catch (error) {
+      console.error('Error parsing saved messages:', error);
+      return [];
+    }
+  }, []);
+
+  const showConversationImmediately = useCallback((id: string, cachedMessages: Message[]) => {
+    const cleaned = stripWelcomeMessage(cachedMessages);
+    setMessages(cleaned);
+    setActiveConversationId(id);
+    activeConversationIdRef.current = id;
+    localStorage.setItem(getConversationIdKey(), id);
+  }, []);
+
+  const refreshPendingJobState = useCallback(
+    async (id: string, baseMessages: Message[]) => {
+      if (id !== activeConversationIdRef.current) return;
+
+      try {
+        const withJobState = await applyPendingJobState(id, baseMessages);
+        if (id !== activeConversationIdRef.current) return;
+
+        setMessages(withJobState);
+        saveMessages(id, withJobState);
+      } catch (error) {
+        console.error('Error refreshing pending job state:', error);
       }
-
-      const withJobState = await applyPendingJobState(id, parsed);
-      setMessages(withJobState);
-      setActiveConversationId(id);
-      activeConversationIdRef.current = id;
-      localStorage.setItem(getConversationIdKey(), id);
-      saveMessages(id, withJobState);
     },
     [saveMessages]
   );
 
+  const refreshConversationFromServer = useCallback(
+    async (id: string) => {
+      const localMessages = readCachedMessages(id);
+      const hasLocalCache = localMessages.length > 1;
+
+      try {
+        const history = await fetchConversationHistory(id);
+        if (id !== activeConversationIdRef.current) return;
+
+        if (history.messages && history.messages.length > 0) {
+          const backendLocal = backendMessagesToLocal(history.messages);
+          const merged = mergeMessageHistory(backendLocal, localMessages);
+          showConversationImmediately(id, merged);
+          saveMessages(id, merged);
+          void refreshPendingJobState(id, merged);
+          return;
+        }
+      } catch (error) {
+        console.error('Error loading conversation from backend:', error);
+      }
+
+      if (!hasLocalCache) {
+        showConversationImmediately(id, []);
+      }
+    },
+    [
+      readCachedMessages,
+      refreshPendingJobState,
+      saveMessages,
+      showConversationImmediately
+    ]
+  );
+
   const loadConversation = useCallback(
     async (id: string) => {
-      if (!id || id === activeConversationIdRef.current || isLoading) return;
+      if (!id || id === activeConversationIdRef.current) return;
+      if (loadingConversationIdRef.current === id) return;
 
       const previousId = activeConversationIdRef.current;
       if (previousId && messagesRef.current.length > 1) {
         saveConversationSnapshot(previousId, messagesRef.current);
       }
 
-      setIsLoading(true);
+      loadingConversationIdRef.current = id;
+      const cachedMessages = readCachedMessages(id);
+      const hasLocalCache = cachedMessages.length > 1;
+
+      // Stale-while-revalidate: show cache instantly, refresh from server in background
+      showConversationImmediately(id, cachedMessages);
+      if (hasLocalCache) {
+        saveMessages(id, cachedMessages);
+      } else {
+        setIsLoading(true);
+      }
+
+      void refreshPendingJobState(id, cachedMessages);
 
       try {
-        const history = await fetchConversationHistory(id);
-        const localSaved = localStorage.getItem(getConversationMessagesKey(id));
-        let localMessages: Message[] = [];
-
-        if (localSaved) {
-          try {
-            localMessages = JSON.parse(localSaved) as Message[];
-          } catch {
-            localMessages = [];
-          }
-        }
-
-        if (history.messages && history.messages.length > 0) {
-          const backendLocal = backendMessagesToLocal(history.messages);
-          const hasWelcome = backendLocal.some(
-            (msg) => !msg.isUser && msg.text.includes("I'm your lyric video assistant")
-          );
-          const baseMessages = hasWelcome
-            ? backendLocal
-            : [WELCOME_MESSAGE, ...backendLocal];
-
-          const merged = mergeMessageHistory(baseMessages, localMessages);
-          const withJobState = await applyPendingJobState(id, merged);
-
-          setMessages(withJobState);
-          setActiveConversationId(id);
-          activeConversationIdRef.current = id;
-          localStorage.setItem(getConversationIdKey(), id);
-          saveMessages(id, withJobState);
-        } else {
-          await loadFromLocalStorage(id);
-        }
-      } catch (error) {
-        console.error('Error loading conversation from backend:', error);
-        await loadFromLocalStorage(id);
+        await refreshConversationFromServer(id);
       } finally {
+        if (loadingConversationIdRef.current === id) {
+          loadingConversationIdRef.current = null;
+        }
         setIsLoading(false);
       }
     },
-    [isLoading, loadFromLocalStorage, saveConversationSnapshot, saveMessages]
+    [
+      readCachedMessages,
+      refreshConversationFromServer,
+      refreshPendingJobState,
+      saveConversationSnapshot,
+      saveMessages,
+      showConversationImmediately
+    ]
   );
 
   const syncConversationsFromServer = useCallback(async () => {
@@ -519,30 +614,42 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
 
   useEffect(() => {
     if (isInitialized.current) return;
+    isInitialized.current = true;
 
-    const initialize = async () => {
-      isInitialized.current = true;
+    // Sync sidebar in background — never block the chat from rendering
+    void syncConversationsFromServer();
 
-      await syncConversationsFromServer();
+    if (options?.disableAutoLoad) return;
 
-      if (options?.disableAutoLoad) return;
+    const savedId = localStorage.getItem(getConversationIdKey());
+    if (!savedId) return;
 
-      const savedId = localStorage.getItem(getConversationIdKey());
-      if (savedId) {
-        await loadConversation(savedId);
-      }
-    };
+    const cachedMessages = readCachedMessages(savedId);
+    showConversationImmediately(savedId, cachedMessages);
 
-    initialize();
-  }, [options?.disableAutoLoad, loadConversation, syncConversationsFromServer]);
+    // Only show a loading state when there is nothing cached to display
+    if (cachedMessages.length <= 1) {
+      setIsLoading(true);
+    }
+
+    void refreshPendingJobState(savedId, cachedMessages);
+    void refreshConversationFromServer(savedId).finally(() => setIsLoading(false));
+  }, [
+    options?.disableAutoLoad,
+    readCachedMessages,
+    refreshConversationFromServer,
+    refreshPendingJobState,
+    showConversationImmediately,
+    syncConversationsFromServer
+  ]);
 
   const createNewConversation = useCallback(() => {
     const tempId = `temp-${Date.now()}`;
     const now = Date.now();
     const newConv: Conversation = {
       id: tempId,
-      title: 'New conversation',
-      lastMessage: WELCOME_MESSAGE.text,
+      title: 'New Chat',
+      lastMessage: '',
       date: new Date(now),
       lastActiveAt: now
     };
@@ -562,7 +669,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
     setActiveConversationId(tempId);
     activeConversationIdRef.current = tempId;
     localStorage.setItem(getConversationIdKey(), tempId);
-    setMessages([WELCOME_MESSAGE]);
+    setMessages([]);
 
     return tempId;
   }, [saveConversationSnapshot]);
@@ -584,6 +691,22 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
       return next;
     });
   }, []);
+
+  const renameConversation = useCallback(
+    async (id: string, newTitle: string) => {
+      const trimmed = newTitle.trim() || 'New conversation';
+      updateConversation(id, { title: trimmed });
+
+      if (id.startsWith('temp-')) return;
+
+      try {
+        await renameConversationOnServer(id, trimmed);
+      } catch (error) {
+        console.error('Failed to rename conversation on server:', error);
+      }
+    },
+    [updateConversation]
+  );
 
   // Saves messages without changing sort order use for auto-saves, loading, completion messages
   const updateConversationMessages = useCallback(
@@ -628,7 +751,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
           setActiveConversationId('');
           activeConversationIdRef.current = '';
           localStorage.removeItem(getConversationIdKey());
-          setMessages([WELCOME_MESSAGE]);
+          setMessages([]);
         }
       }
     },
@@ -650,6 +773,8 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
       localStorage.removeItem(getConversationMessagesKey(tempId));
     }
 
+    let renamedTitle: string | null = null;
+
     setConversations((prev) => {
       const withoutDuplicate = prev.filter(
         (conv) => conv.id !== permanentId || conv.id === tempId
@@ -659,6 +784,15 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
           ? { ...conv, id: permanentId, lastActiveAt: Math.max(conv.lastActiveAt, Date.now()) }
           : conv
       );
+      const renamedConv = next.find((conv) => conv.id === permanentId);
+      if (
+        renamedConv &&
+        renamedConv.title &&
+        renamedConv.title !== 'New Chat' &&
+        renamedConv.title !== 'New conversation'
+      ) {
+        renamedTitle = renamedConv.title;
+      }
       const sorted = sortConversationsByActivity(
         pruneInactiveTempConversations(next, permanentId)
       );
@@ -666,6 +800,12 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
       writeConversationsList(sorted);
       return sorted;
     });
+
+    if (renamedTitle) {
+      void renameConversationOnServer(permanentId, renamedTitle).catch((error) => {
+        console.error('Failed to sync renamed conversation title:', error);
+      });
+    }
 
     if (activeConversationIdRef.current === tempId) {
       setActiveConversationId(permanentId);
@@ -686,6 +826,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
     loadConversation,
     createNewConversation,
     updateConversation,
+    renameConversation,
     updateConversationMessages,
     bumpConversationToTop,
     deleteConversation,

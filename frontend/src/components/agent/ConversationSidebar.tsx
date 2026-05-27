@@ -1,6 +1,8 @@
-import React, { useState, useRef, FormEvent, ChangeEvent, KeyboardEvent, MouseEvent } from 'react';
+import React, { useState, useRef, useEffect, MouseEvent } from 'react';
 import { FiPlusCircle } from 'react-icons/fi';
-import { AiOutlineDelete, AiOutlineEdit, AiOutlineCheck } from 'react-icons/ai';
+import { MdMoreVert } from 'react-icons/md';
+import { IconPanelSidebar } from '../icons/IconPanelSidebar';
+import { AiOutlineDelete, AiOutlineEdit } from 'react-icons/ai';
 import { Conversation } from '../../hooks/useConversationManager';
 import * as Styles from '../../styles/AgentPageStyles';
 
@@ -8,10 +10,11 @@ interface ConversationSidebarProps {
   conversations: Conversation[];
   activeConversationId: string;
   isOpen: boolean;
+  onToggle: () => void;
   onNewChat: () => void;
   onLoadConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
-  onRenameConversation: (id: string, newTitle: string) => void;
+  onRequestRename: (id: string, title: string) => void;
   theme: any;
 }
 
@@ -19,69 +22,70 @@ export const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
   conversations,
   activeConversationId,
   isOpen,
+  onToggle,
   onNewChat,
   onLoadConversation,
   onDeleteConversation,
-  onRenameConversation,
+  onRequestRename,
   theme
 }) => {
-  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
-  const editInputRef = useRef<HTMLInputElement>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const handleStartEditing = (id: string, title: string, e: MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    setEditingConversationId(id);
-    setEditingTitle(title);
-    
-    setTimeout(() => {
-      if (editInputRef.current) {
-        editInputRef.current.focus();
-        editInputRef.current.select();
+  useEffect(() => {
+    if (!openMenuId) return;
+
+    const handleClickOutside = (event: globalThis.MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null);
       }
-    }, 50);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openMenuId]);
+
+  const handleOpenRename = (id: string, title: string, e?: MouseEvent) => {
+    e?.stopPropagation();
+    setOpenMenuId(null);
+    onRequestRename(id, title);
   };
 
-  const handleSaveTitle = (id: string, e?: FormEvent) => {
-    if (e) e.preventDefault();
-    
-    const newTitle = editingTitle.trim() || 'New conversation';
-    onRenameConversation(id, newTitle);
-    
-    setEditingConversationId(null);
-    setEditingTitle('');
-  };
-
-  const handleCancelEdit = () => {
-    setEditingConversationId(null);
-    setEditingTitle('');
-  };
-
-  const handleEditKeyDown = (id: string, e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSaveTitle(id);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      handleCancelEdit();
-    }
-  };
-
-  const handleDeleteClick = (id: string, e: MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
+  const handleDeleteClick = (id: string, e?: MouseEvent) => {
+    e?.stopPropagation();
+    setOpenMenuId(null);
     onDeleteConversation(id);
+  };
+
+  const toggleMenu = (id: string, e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    setOpenMenuId(prev => (prev === id ? null : id));
   };
 
   return (
     <Styles.ChatSidebar isOpen={isOpen} theme={theme}>
-      <Styles.ChatListHeader>
-        <Styles.ChatListTitle>Conversations</Styles.ChatListTitle>
-        <Styles.NewChatButton onClick={onNewChat}>
-          {FiPlusCircle({ size: 16 })} New
-        </Styles.NewChatButton>
+      <Styles.ChatListHeader $collapsed={!isOpen}>
+        <Styles.ChatListTitle $hidden={!isOpen}>Conversations</Styles.ChatListTitle>
+        <Styles.ChatSidebarHeaderActions $collapsed={!isOpen}>
+          {isOpen && (
+            <Styles.NewChatButton onClick={onNewChat}>
+              {FiPlusCircle({ size: 16 })} New
+            </Styles.NewChatButton>
+          )}
+          <Styles.ChatPanelToggle
+            type="button"
+            onClick={onToggle}
+            title={isOpen ? 'Close sidebar' : 'Open sidebar'}
+            aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
+            $active={isOpen}
+            $inSidebar
+          >
+            <IconPanelSidebar width={28} height={20} />
+          </Styles.ChatPanelToggle>
+        </Styles.ChatSidebarHeaderActions>
       </Styles.ChatListHeader>
-      
-      <Styles.ChatList>
+
+      <Styles.ChatList $collapsed={!isOpen}>
         {conversations.length === 0 ? (
           <div style={{ padding: '20px', color: '#777', textAlign: 'center' }}>
             No previous conversations
@@ -91,56 +95,50 @@ export const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
             .slice()
             .sort((a, b) => (b.lastActiveAt ?? 0) - (a.lastActiveAt ?? 0))
             .map(conv => {
-            const isActive = conv.id === activeConversationId;
-            
-            return (
-              <Styles.ChatItem 
-                key={conv.id} 
-                active={isActive}
-                onClick={() => onLoadConversation(conv.id)}
-                style={isActive ? { 
-                  backgroundColor: 'rgba(29, 185, 84, 0.1)',
-                  borderLeft: '3px solid #1DB954'
-                } : {}}
-              >
-                {editingConversationId === conv.id ? (
-                  <Styles.EditForm onSubmit={(e) => handleSaveTitle(conv.id, e)}>
-                    <Styles.ChatTitleInput
-                      ref={editInputRef}
-                      value={editingTitle}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setEditingTitle(e.target.value)}
-                      onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => handleEditKeyDown(conv.id, e)}
-                      onBlur={() => handleSaveTitle(conv.id)}
-                      placeholder="Enter conversation name..."
-                      autoFocus
-                    />
-                    <Styles.SaveButton 
-                      type="submit" 
-                      title="Save title"
-                    >
-                      {AiOutlineCheck({ size: 16 })}
-                    </Styles.SaveButton>
-                  </Styles.EditForm>
-                ) : (
+              const isActive = conv.id === activeConversationId;
+
+              return (
+                <Styles.ChatItem
+                  key={conv.id}
+                  active={isActive}
+                  onClick={() => onLoadConversation(conv.id)}
+                >
                   <Styles.ChatItemTitle>{conv.title}</Styles.ChatItemTitle>
-                )}
-                <Styles.ChatItemActions>
-                  <Styles.ChatItemEdit 
-                    onClick={(e) => handleStartEditing(conv.id, conv.title, e)}
-                    title="Edit conversation"
+                  <Styles.ChatItemMenuWrap
+                    ref={openMenuId === conv.id ? menuRef : undefined}
                   >
-                    {AiOutlineEdit({ size: 18, style: { verticalAlign: 'middle' } })}
-                  </Styles.ChatItemEdit>
-                  <Styles.ChatItemDelete 
-                    onClick={(e) => handleDeleteClick(conv.id, e)}
-                    title="Delete conversation"
-                  >
-                    {AiOutlineDelete({ size: 18, style: { verticalAlign: 'middle' } })}
-                  </Styles.ChatItemDelete>
-                </Styles.ChatItemActions>
-              </Styles.ChatItem>
-            );
-          })
+                    <Styles.ChatItemMenuButton
+                      type="button"
+                      $visible={openMenuId === conv.id}
+                      onClick={(e) => toggleMenu(conv.id, e)}
+                      aria-label="Conversation options"
+                      aria-expanded={openMenuId === conv.id}
+                    >
+                      {MdMoreVert({ size: 18 })}
+                    </Styles.ChatItemMenuButton>
+                    {openMenuId === conv.id && (
+                      <Styles.ChatItemMenu onClick={(e) => e.stopPropagation()}>
+                        <Styles.ChatItemMenuOption
+                          type="button"
+                          onClick={(e) => handleOpenRename(conv.id, conv.title, e)}
+                        >
+                          {AiOutlineEdit({ size: 16 })}
+                          Rename
+                        </Styles.ChatItemMenuOption>
+                        <Styles.ChatItemMenuOption
+                          type="button"
+                          $destructive
+                          onClick={(e) => handleDeleteClick(conv.id, e)}
+                        >
+                          {AiOutlineDelete({ size: 16 })}
+                          Delete
+                        </Styles.ChatItemMenuOption>
+                      </Styles.ChatItemMenu>
+                    )}
+                  </Styles.ChatItemMenuWrap>
+                </Styles.ChatItem>
+              );
+            })
         )}
       </Styles.ChatList>
     </Styles.ChatSidebar>

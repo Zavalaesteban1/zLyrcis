@@ -37,6 +37,10 @@ const MainContent = styled.main`
   margin-left: ${APP_SIDEBAR_WIDTH}px;
   padding: 30px;
   width: calc(100% - ${APP_SIDEBAR_WIDTH}px);
+  height: 100vh;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   transition: all 0.2s ease;
   
   @media (max-width: 1200px) {

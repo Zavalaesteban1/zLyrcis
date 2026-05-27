@@ -48,6 +48,10 @@ const MainContent = styled.main`
   padding: 36px 48px 56px;
   width: calc(100% - ${APP_SIDEBAR_WIDTH}px);
   max-width: 100%;
+  height: 100vh;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   transition: all 0.2s ease;
 
   @media (max-width: 1200px) { padding: 28px 32px 48px; }

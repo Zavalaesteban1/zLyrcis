@@ -3,6 +3,7 @@ import {
   fetchConversationHistory,
   fetchAllConversations,
   deleteConversationFromServer,
+  renameConversationOnServer,
   appendConversationMessage,
   getVideoStatus
 } from '../services/api';
@@ -41,13 +42,20 @@ const getConversationsListKey = () => `agent_conversations_list_${getUserId()}`;
 const getConversationMessagesKey = (id: string) => `agent_conversation_messages_${getUserId()}_${id}`;
 const getPendingJobsKey = () => `agent_pending_jobs_${getUserId()}`;
 
-const WELCOME_MESSAGE: Message = {
-  text: "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?",
-  isUser: false
-};
+const WELCOME_MESSAGE_TEXT =
+  "Hi! I'm your lyric video assistant. I can create lyric videos and answer questions about music. What can I help you with today?";
 
 const VIDEO_READY_MESSAGE =
   "Great news! Your lyric video is now ready. You can view it in the My Songs section.";
+
+/** Welcome belongs on the empty landing screen only — never in the chat thread. */
+function stripWelcomeMessage(msgs: Message[]): Message[] {
+  return msgs.filter((m) => !(m.text === WELCOME_MESSAGE_TEXT && !m.isUser));
+}
+
+function normalizeStoredMessages(msgs: Message[]): Message[] {
+  return stripWelcomeMessage(enrichSongPickMessages(msgs));
+}
 
 function enrichSongPickMessages(msgs: Message[]): Message[] {
   return msgs.map((msg) => {
@@ -135,10 +143,10 @@ function prependConversation(convs: Conversation[], conv: Conversation): Convers
 }
 
 function mergeMessageHistory(backendMsgs: Message[], localMsgs: Message[]): Message[] {
-  const merged = enrichSongPickMessages(backendMsgs);
+  const merged = normalizeStoredMessages(backendMsgs);
   const backendKeys = new Set(merged.map((m) => `${m.isUser}:${m.text}`));
 
-  for (const msg of localMsgs) {
+  for (const msg of stripWelcomeMessage(localMsgs)) {
     if (msg.isProcessing || msg.text === '...') continue;
     const key = `${msg.isUser}:${msg.text}`;
     if (!backendKeys.has(key)) {
@@ -255,14 +263,22 @@ function mergeConversationLists(
     }
 
     const server = serverById.get(local.id);
+    const mergedLastActiveAt = server
+      ? Math.max(local.lastActiveAt, server.lastActiveAt)
+      : local.lastActiveAt;
+    const useLocalTitle =
+      !!server &&
+      local.title !== server.title &&
+      local.lastActiveAt >= server.lastActiveAt;
+
     merged.push(
       server
         ? {
             ...local,
-            title: server.title,
+            title: useLocalTitle ? local.title : server.title,
             lastMessage: server.lastMessage,
             date: server.date,
-            lastActiveAt: Math.max(local.lastActiveAt, server.lastActiveAt)
+            lastActiveAt: mergedLastActiveAt
           }
         : local
     );
@@ -281,7 +297,7 @@ function mergeConversationLists(
 export const useConversationManager = (options?: { disableAutoLoad?: boolean }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string>('');
-  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const isInitialized = useRef(false);
   const loadingConversationIdRef = useRef<string | null>(null);
@@ -310,15 +326,18 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
   }, []);
 
   const saveMessages = useCallback((conversationId: string, msgs: Message[]) => {
-    if (!conversationId || msgs.length <= 1) return;
-    localStorage.setItem(getConversationMessagesKey(conversationId), JSON.stringify(msgs));
+    if (!conversationId) return;
+    const cleaned = stripWelcomeMessage(msgs);
+    if (cleaned.length <= 1) return;
+    localStorage.setItem(getConversationMessagesKey(conversationId), JSON.stringify(cleaned));
   }, []);
 
   const saveConversationSnapshot = useCallback(
     (conversationId: string, msgs: Message[]) => {
-      if (!conversationId || msgs.length <= 1) return;
+      const cleaned = stripWelcomeMessage(msgs);
+      if (!conversationId || cleaned.length <= 1) return;
 
-      const lastNonProcessingMsg = [...msgs]
+      const lastNonProcessingMsg = [...cleaned]
         .reverse()
         .find((msg) => !msg.isProcessing && msg.text !== '...');
 
@@ -337,16 +356,17 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
         return next;
       });
 
-      saveMessages(conversationId, msgs);
+      saveMessages(conversationId, cleaned);
     },
     [saveMessages]
   );
 
   const persistMessagesForConversation = useCallback(
     (conversationId: string, msgs: Message[], touchOrder = true) => {
-      if (!conversationId || msgs.length <= 1) return;
+      const cleaned = stripWelcomeMessage(msgs);
+      if (!conversationId || cleaned.length <= 1) return;
 
-      const lastNonProcessingMsg = [...msgs]
+      const lastNonProcessingMsg = [...cleaned]
         .reverse()
         .find((msg) => !msg.isProcessing && msg.text !== '...');
 
@@ -382,7 +402,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
             ? prependConversation(prev, updated)
             : prev.map((conv) => (conv.id === targetId ? updated : conv));
         } else {
-          const titleSource = msgs.find((m) => m.isUser)?.text || 'New conversation';
+          const titleSource = cleaned.find((m) => m.isUser)?.text || 'New conversation';
           const title =
             titleSource.length > 30 ? `${titleSource.substring(0, 30)}...` : titleSource;
 
@@ -406,7 +426,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
           !activeConversationIdRef.current.startsWith('temp-')
           ? activeConversationIdRef.current
           : conversationId,
-        msgs
+        cleaned
       );
     },
     [saveMessages]
@@ -417,13 +437,13 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
       if (!conversationId || conversationId.startsWith('temp-')) return;
 
       const saved = localStorage.getItem(getConversationMessagesKey(conversationId));
-      let baseMessages: Message[] = [WELCOME_MESSAGE];
+      let baseMessages: Message[] = [];
 
       if (saved) {
         try {
-          baseMessages = JSON.parse(saved) as Message[];
+          baseMessages = stripWelcomeMessage(JSON.parse(saved) as Message[]);
         } catch {
-          baseMessages = [WELCOME_MESSAGE];
+          baseMessages = [];
         }
       }
 
@@ -451,18 +471,19 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
 
   const readCachedMessages = useCallback((id: string): Message[] => {
     const saved = localStorage.getItem(getConversationMessagesKey(id));
-    if (!saved) return [WELCOME_MESSAGE];
+    if (!saved) return [];
 
     try {
-      return enrichSongPickMessages(JSON.parse(saved) as Message[]);
+      return normalizeStoredMessages(JSON.parse(saved) as Message[]);
     } catch (error) {
       console.error('Error parsing saved messages:', error);
-      return [WELCOME_MESSAGE];
+      return [];
     }
   }, []);
 
   const showConversationImmediately = useCallback((id: string, cachedMessages: Message[]) => {
-    setMessages(cachedMessages);
+    const cleaned = stripWelcomeMessage(cachedMessages);
+    setMessages(cleaned);
     setActiveConversationId(id);
     activeConversationIdRef.current = id;
     localStorage.setItem(getConversationIdKey(), id);
@@ -496,14 +517,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
 
         if (history.messages && history.messages.length > 0) {
           const backendLocal = backendMessagesToLocal(history.messages);
-          const hasWelcome = backendLocal.some(
-            (msg) => !msg.isUser && msg.text.includes("I'm your lyric video assistant")
-          );
-          const baseMessages = hasWelcome
-            ? backendLocal
-            : [WELCOME_MESSAGE, ...backendLocal];
-
-          const merged = mergeMessageHistory(baseMessages, localMessages);
+          const merged = mergeMessageHistory(backendLocal, localMessages);
           showConversationImmediately(id, merged);
           saveMessages(id, merged);
           void refreshPendingJobState(id, merged);
@@ -514,7 +528,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
       }
 
       if (!hasLocalCache) {
-        showConversationImmediately(id, [WELCOME_MESSAGE]);
+        showConversationImmediately(id, []);
       }
     },
     [
@@ -634,8 +648,8 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
     const now = Date.now();
     const newConv: Conversation = {
       id: tempId,
-      title: 'New conversation',
-      lastMessage: WELCOME_MESSAGE.text,
+      title: 'New Chat',
+      lastMessage: '',
       date: new Date(now),
       lastActiveAt: now
     };
@@ -655,7 +669,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
     setActiveConversationId(tempId);
     activeConversationIdRef.current = tempId;
     localStorage.setItem(getConversationIdKey(), tempId);
-    setMessages([WELCOME_MESSAGE]);
+    setMessages([]);
 
     return tempId;
   }, [saveConversationSnapshot]);
@@ -677,6 +691,22 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
       return next;
     });
   }, []);
+
+  const renameConversation = useCallback(
+    async (id: string, newTitle: string) => {
+      const trimmed = newTitle.trim() || 'New conversation';
+      updateConversation(id, { title: trimmed });
+
+      if (id.startsWith('temp-')) return;
+
+      try {
+        await renameConversationOnServer(id, trimmed);
+      } catch (error) {
+        console.error('Failed to rename conversation on server:', error);
+      }
+    },
+    [updateConversation]
+  );
 
   // Saves messages without changing sort order use for auto-saves, loading, completion messages
   const updateConversationMessages = useCallback(
@@ -721,7 +751,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
           setActiveConversationId('');
           activeConversationIdRef.current = '';
           localStorage.removeItem(getConversationIdKey());
-          setMessages([WELCOME_MESSAGE]);
+          setMessages([]);
         }
       }
     },
@@ -743,6 +773,8 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
       localStorage.removeItem(getConversationMessagesKey(tempId));
     }
 
+    let renamedTitle: string | null = null;
+
     setConversations((prev) => {
       const withoutDuplicate = prev.filter(
         (conv) => conv.id !== permanentId || conv.id === tempId
@@ -752,6 +784,15 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
           ? { ...conv, id: permanentId, lastActiveAt: Math.max(conv.lastActiveAt, Date.now()) }
           : conv
       );
+      const renamedConv = next.find((conv) => conv.id === permanentId);
+      if (
+        renamedConv &&
+        renamedConv.title &&
+        renamedConv.title !== 'New Chat' &&
+        renamedConv.title !== 'New conversation'
+      ) {
+        renamedTitle = renamedConv.title;
+      }
       const sorted = sortConversationsByActivity(
         pruneInactiveTempConversations(next, permanentId)
       );
@@ -759,6 +800,12 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
       writeConversationsList(sorted);
       return sorted;
     });
+
+    if (renamedTitle) {
+      void renameConversationOnServer(permanentId, renamedTitle).catch((error) => {
+        console.error('Failed to sync renamed conversation title:', error);
+      });
+    }
 
     if (activeConversationIdRef.current === tempId) {
       setActiveConversationId(permanentId);
@@ -779,6 +826,7 @@ export const useConversationManager = (options?: { disableAutoLoad?: boolean }) 
     loadConversation,
     createNewConversation,
     updateConversation,
+    renameConversation,
     updateConversationMessages,
     bumpConversationToTop,
     deleteConversation,

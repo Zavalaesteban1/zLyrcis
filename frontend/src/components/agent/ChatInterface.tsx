@@ -1,9 +1,10 @@
 import React, { useRef, useEffect, useState, ChangeEvent, KeyboardEvent } from 'react';
-import { MdSend, MdSearch, MdMusicNote } from 'react-icons/md';
+import { MdSearch, MdMusicNote, MdArrowUpward } from 'react-icons/md';
 import { Message } from '../../hooks/useConversationManager';
 import { SongSuggestion } from '../../services/api';
 import { resolveUserSongPickForDisplay } from '../../services/songPickFromTranscript';
 import { SongSearchModal } from './SongSearchModal';
+import { IconAgentOrbit } from '../icons/IconAgentOrbit';
 import * as Styles from '../../styles/AgentPageStyles';
 
 interface ChatInterfaceProps {
@@ -41,7 +42,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (!textarea) return;
 
     textarea.style.height = 'auto';
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 140)}px`;
+    const nextHeight = Math.min(textarea.scrollHeight, 200);
+    textarea.style.height = `${nextHeight}px`;
   }, [input]);
 
   useEffect(() => {
@@ -72,6 +74,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     <>
       {!hideMessages && (
         <Styles.ChatMessages className={showScrollbars ? 'show-scrollbar' : ''}>
+          <Styles.ChatThreadColumn>
           {messages.map((message, index) => {
             if (message.text === '...') {
               return (
@@ -95,11 +98,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       <Styles.AnimatedBar delay={0.1} />
                     </Styles.BarContainer>
                   ) : (
-                    <Styles.DotContainer>
-                      <Styles.Dot isProcessing={message.isProcessing} />
-                      <Styles.Dot isProcessing={message.isProcessing} />
-                      <Styles.Dot isProcessing={message.isProcessing} />
-                    </Styles.DotContainer>
+                    <Styles.AgentTypingSpinner>
+                      <IconAgentOrbit size={28} />
+                    </Styles.AgentTypingSpinner>
                   )}
                 </Styles.AssistantTypingIndicator>
               );
@@ -124,13 +125,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               );
             }
 
-            return (
+            return message.isUser ? (
               <Styles.MessageBubble key={index} isUser={message.isUser} isNew={index === newestMessageIdx}>
                 {message.text}
               </Styles.MessageBubble>
+            ) : (
+              <Styles.AssistantMessageBlock key={index}>
+                <Styles.MessageBubble isUser={false} isNew={index === newestMessageIdx}>
+                  {message.text}
+                </Styles.MessageBubble>
+                {index < messages.length - 1 && <Styles.MessageDivider aria-hidden="true" />}
+              </Styles.AssistantMessageBlock>
             );
           })}
           <div ref={messagesEndRef} />
+          </Styles.ChatThreadColumn>
         </Styles.ChatMessages>
       )}
 
@@ -142,39 +151,38 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
       <Styles.ChatInput>
         <Styles.InputRowWrapper>
-          <Styles.InputRow>
-            <Styles.SearchToggleButton
-              type="button"
-              onClick={() => setSearchModalOpen(true)}
-              isActive={false}
-              title="Search for a song"
-            >
-              {MdSearch({ size: 22 })}
-            </Styles.SearchToggleButton>
-
-            <Styles.Textarea
+          <Styles.ClaudeInputCard>
+            <Styles.ClaudeTextarea
               ref={textareaRef}
               value={input}
               onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onInputChange(e.target.value)}
-              placeholder="Ask me about music or describe what you need…"
+              placeholder="Reply..."
               onKeyDown={handleKeyPress}
               disabled={isLoading}
               rows={1}
             />
-            <Styles.SendButton type="button" onClick={handleSendClick} disabled={isLoading}>
-              {isLoading ? (
-                'Sending...'
-              ) : (
-                <>
-                  Send
-                  {MdSend({ size: 18, style: { marginLeft: 6 } })}
-                </>
-              )}
-            </Styles.SendButton>
-          </Styles.InputRow>
-          <Styles.HelperText>
-            Enter sends, Shift+Enter newline, or use search for songs.
-          </Styles.HelperText>
+            <Styles.ClaudeInputToolbar>
+              <Styles.ClaudeToolbarGroup>
+                <Styles.ClaudeIconButton
+                  type="button"
+                  onClick={() => setSearchModalOpen(true)}
+                  title="Search for a song"
+                >
+                  {MdSearch({ size: 20 })}
+                </Styles.ClaudeIconButton>
+              </Styles.ClaudeToolbarGroup>
+              <Styles.ClaudeToolbarGroup>
+                <Styles.ClaudeSendButton
+                  type="button"
+                  onClick={handleSendClick}
+                  disabled={isLoading || !input.trim()}
+                  title="Send message"
+                >
+                  {MdArrowUpward({ size: 20 })}
+                </Styles.ClaudeSendButton>
+              </Styles.ClaudeToolbarGroup>
+            </Styles.ClaudeInputToolbar>
+          </Styles.ClaudeInputCard>
         </Styles.InputRowWrapper>
       </Styles.ChatInput>
     </>

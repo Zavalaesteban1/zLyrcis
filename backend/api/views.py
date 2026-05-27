@@ -1620,6 +1620,36 @@ def delete_conversation(request, conversation_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+def rename_conversation_view(request):
+    """Update a conversation title for the current user."""
+    conversation_id = request.data.get('conversation_id')
+    title = (request.data.get('title') or '').strip()
+
+    if not conversation_id:
+        return Response({'error': 'conversation_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not title:
+        return Response({'error': 'title is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if len(title) > 255:
+        title = title[:255]
+
+    try:
+        conversation = Conversation.objects.get(id=conversation_id, user=request.user)
+    except Conversation.DoesNotExist:
+        return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    conversation.title = title
+    conversation.save(update_fields=['title', 'updated_at'])
+
+    return Response({
+        'success': True,
+        'conversation_id': conversation_id,
+        'title': conversation.title,
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def append_conversation_message(request):
     """Append a message to an existing conversation (e.g. video completion notice)."""
     conversation_id = request.data.get('conversation_id')

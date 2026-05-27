@@ -14,6 +14,7 @@ from .views import (
     get_all_conversations,
     delete_conversation,
     append_conversation_message,
+    rename_conversation_view,
     search_songs
 )
 from django.conf import settings
@@ -36,6 +37,7 @@ urlpatterns = [
     path('get_conversation_history/', get_conversation_history, name='get_conversation_history'),
     path('get_all_conversations/', get_all_conversations, name='get_all_conversations'),
     path('delete_conversation/<str:conversation_id>/', delete_conversation, name='delete_conversation'),
+    path('rename_conversation/', rename_conversation_view, name='rename_conversation'),
     path('append_conversation_message/', append_conversation_message, name='append_conversation_message'),
     path('search_songs/', search_songs, name='search_songs'),
 ]

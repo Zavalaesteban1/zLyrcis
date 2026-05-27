@@ -1,77 +1,111 @@
 import styled, { createGlobalStyle } from 'styled-components';
-import { APP_SIDEBAR_WIDTH, APP_SIDEBAR_WIDTH_MOBILE } from '../constants/layout';
+import { APP_SIDEBAR_WIDTH, APP_SIDEBAR_WIDTH_MOBILE, CHAT_SIDEBAR_WIDTH, CHAT_SIDEBAR_RAIL_WIDTH } from '../constants/layout';
+
+/** Shared page background — matches chat history sidebar */
+const PAGE_BG = '#ffffff';
+
+/** Wide landing composer (empty state) */
+const CLAUDE_LANDING_MAX = 1024;
+const CLAUDE_LANDING_GUTTER = 64;
+
+/** Active chat thread — same wide column as Claude (~65% of main pane) */
+const CHAT_THREAD_MAX = 1024;
+const CHAT_THREAD_GUTTER = 48;
+
+const chatThreadWidth = `
+  width: 100%;
+  max-width: ${CHAT_THREAD_MAX}px;
+`;
+
+const CHAT_LAYOUT_TRANSITION = 'margin-left 0.3s cubic-bezier(0.22, 1, 0.36, 1), width 0.3s cubic-bezier(0.22, 1, 0.36, 1)';
 
 export { AppLayout } from './AppLayoutStyles';
 
-export const MainContent = styled.main<{ sidebarOpen: boolean }>`
+export const MainContent = styled.main<{ sidebarOpen: boolean; chatSidebarOpen?: boolean }>`
   flex: 1;
-  margin-left: ${APP_SIDEBAR_WIDTH}px;
-  width: calc(100% - ${APP_SIDEBAR_WIDTH}px);
-  min-height: 100vh;
+  margin-left: ${props =>
+    APP_SIDEBAR_WIDTH +
+    (props.chatSidebarOpen ? CHAT_SIDEBAR_WIDTH : CHAT_SIDEBAR_RAIL_WIDTH)}px;
+  width: ${props =>
+    `calc(100% - ${APP_SIDEBAR_WIDTH}px - ${props.chatSidebarOpen ? CHAT_SIDEBAR_WIDTH : CHAT_SIDEBAR_RAIL_WIDTH}px)`};
+  height: 100vh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  overflow: hidden;
   padding: 0;
-  background-color: #f5f5f5;
-  position: relative; /* Ensure position is relative for all modes */
+  background: ${PAGE_BG};
+  position: relative;
+  transition: ${CHAT_LAYOUT_TRANSITION};
   
   @media (max-width: 768px) {
     margin-left: ${props => (props.sidebarOpen ? `${APP_SIDEBAR_WIDTH_MOBILE}px` : '0')};
     width: ${props => (props.sidebarOpen ? `calc(100% - ${APP_SIDEBAR_WIDTH_MOBILE}px)` : '100%')};
-    transition: margin-left 0.3s ease, width 0.3s ease;
   }
 `;
 
 export const ChatSidebar = styled.div<{ isOpen: boolean }>`
-  width: 300px;
-  background-color: #fff;
+  width: ${props => (props.isOpen ? CHAT_SIDEBAR_WIDTH : CHAT_SIDEBAR_RAIL_WIDTH)}px;
+  background: ${PAGE_BG};
+  backdrop-filter: blur(10px);
   height: 100vh;
-  border-right: 1px solid #eaeaea;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s ease, left 0.3s ease;
+  transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
   position: fixed;
   left: ${APP_SIDEBAR_WIDTH}px;
   z-index: 90;
-  transform: translateX(${props => props.isOpen ? '0' : '-100%'});
-  overflow-y: auto;
+  overflow: hidden;
   
   @media (max-width: 768px) {
     left: 0;
-    width: 85%;
+    width: ${props => (props.isOpen ? '85%' : '0')};
     max-width: 320px;
-    z-index: 110; /* Higher than main sidebar on mobile */
-    transform: translateX(${props => props.isOpen ? '0' : '-100%'});
-    box-shadow: ${props => props.isOpen ? '4px 0 20px rgba(0, 0, 0, 0.15)' : 'none'};
+    z-index: 110;
+    transform: translateX(${props => (props.isOpen ? '0' : '-100%')});
+    box-shadow: ${props => (props.isOpen ? '4px 0 20px rgba(0, 0, 0, 0.15)' : 'none')};
     border-right: none;
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
   }
 `;
 
-export const ChatListHeader = styled.div`
-  padding: 20px;
-  border-bottom: 1px solid #eaeaea;
+export const ChatListHeader = styled.div<{ $collapsed?: boolean }>`
+  padding: ${props => (props.$collapsed ? '10px 8px' : '10px 16px 10px 20px')};
+  min-height: 52px;
+  box-sizing: border-box;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   display: flex;
-  justify-content: space-between;
+  justify-content: ${props => (props.$collapsed ? 'center' : 'space-between')};
   align-items: center;
-  background-color: #fafafa;
+  gap: 12px;
+  background-color: transparent;
+  flex-shrink: 0;
   
   @media (max-width: 768px) {
-    padding: 16px 18px;
+    padding: 10px 16px;
+    justify-content: space-between;
     background: linear-gradient(135deg, #1DB954, #169c46);
     color: white;
     border-bottom: none;
   }
 `;
 
-export const ChatListTitle = styled.h3`
+export const ChatListTitle = styled.h3<{ $hidden?: boolean }>`
   margin: 0;
   font-size: 16px;
   font-weight: 600;
   color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: ${props => (props.$hidden ? 0 : 1)};
+  width: ${props => (props.$hidden ? 0 : 'auto')};
   
   @media (max-width: 768px) {
     color: white;
     font-size: 17px;
+    opacity: 1;
+    width: auto;
   }
 `;
 
@@ -105,10 +139,13 @@ export const NewChatButton = styled.button`
   }
 `;
 
-export const ChatList = styled.div`
+export const ChatList = styled.div<{ $collapsed?: boolean }>`
   flex: 1;
   overflow-y: auto;
   padding: 10px;
+  opacity: ${props => (props.$collapsed ? 0 : 1)};
+  pointer-events: ${props => (props.$collapsed ? 'none' : 'auto')};
+  transition: opacity 0.2s ease;
   
   /* Hide scrollbar but keep scrolling functionality */
   -ms-overflow-style: none;
@@ -124,25 +161,27 @@ export const ChatList = styled.div`
 `;
 
 export const ChatItem = styled.div<{ active?: boolean }>`
-  padding: 10px 16px;
-  border-radius: 8px;
+  position: relative;
+  padding: 10px 12px;
+  border-radius: 12px;
   cursor: pointer;
-  margin-bottom: 8px;
-  background-color: ${props => props.active ? 'rgba(29, 185, 84, 0.1)' : 'transparent'};
-  border-left: ${props => props.active ? '3px solid #1DB954' : '3px solid transparent'};
-  transition: all 0.2s ease;
+  margin-bottom: 4px;
+  background-color: ${props => (props.active ? 'rgba(29, 185, 84, 0.08)' : 'transparent')};
+  border: 1.5px solid ${props => (props.active ? 'rgba(29, 185, 84, 0.3)' : 'transparent')};
+  transition: background-color 0.15s ease, border-color 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   
   &:hover {
-    background-color: ${props => props.active ? 'rgba(29, 185, 84, 0.15)' : 'rgba(0, 0, 0, 0.05)'};
+    background-color: ${props => (props.active ? 'rgba(29, 185, 84, 0.12)' : 'rgba(0, 0, 0, 0.04)')};
+    border-color: ${props => (props.active ? 'rgba(29, 185, 84, 0.4)' : 'rgba(0, 0, 0, 0.06)')};
   }
   
   @media (max-width: 768px) {
-    padding: 14px 16px;
-    border-radius: 10px;
-    margin-bottom: 10px;
+    padding: 12px 14px;
+    margin-bottom: 6px;
     
     &:active {
       transform: scale(0.98);
@@ -157,191 +196,84 @@ export const ChatItemTitle = styled.div`
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+  min-width: 0;
+  font-size: 14px;
   
   @media (max-width: 768px) {
     font-size: 15px;
   }
 `;
 
-export const ChatItemDelete = styled.button`
-  background: none;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  padding: 4px;
-  opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+export const ChatItemMenuWrap = styled.div`
   position: relative;
-  
-  ${ChatItem}:hover & {
-    opacity: 1;
-  }
-  
-  &:hover {
-    color: #e91429;
-    transform: scale(1.15);
-  }
-  
-  &:hover::after {
-    content: "Delete";
-    position: absolute;
-    top: -25px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: rgba(0, 0, 0, 0.75);
-    color: white;
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    white-space: nowrap;
-    pointer-events: none;
-    font-weight: 500;
-  }
-  
-  &:hover::before {
-    content: "";
-    position: absolute;
-    top: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    border-width: 4px;
-    border-style: solid;
-    border-color: rgba(0, 0, 0, 0.75) transparent transparent transparent;
-    pointer-events: none;
-  }
-  
-  @media (max-width: 768px) {
-    opacity: 1;
-    padding: 8px;
-    color: #999;
-    
-    &:active {
-      color: #e91429;
-      transform: scale(1.1);
-    }
-    
-    &:hover::after,
-    &:hover::before {
-      display: none;
-    }
-  }
+  flex-shrink: 0;
 `;
 
-export const ChatItemEdit = styled.button`
-  background: none;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  padding: 4px;
-  opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  margin-right: 4px;
-  position: relative;
-  
-  ${ChatItem}:hover & {
-    opacity: 1;
-  }
-  
-  &:hover {
-    color: #1DB954;
-    transform: scale(1.15);
-  }
-  
-  &:hover::after {
-    content: "Rename";
-    position: absolute;
-    top: -25px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: rgba(0, 0, 0, 0.75);
-    color: white;
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    white-space: nowrap;
-    pointer-events: none;
-    font-weight: 500;
-  }
-  
-  &:hover::before {
-    content: "";
-    position: absolute;
-    top: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    border-width: 4px;
-    border-style: solid;
-    border-color: rgba(0, 0, 0, 0.75) transparent transparent transparent;
-    pointer-events: none;
-  }
-  
-  @media (max-width: 768px) {
-    opacity: 1;
-    padding: 8px;
-    margin-right: 4px;
-    color: #999;
-    
-    &:active {
-      color: #1DB954;
-      transform: scale(1.1);
-    }
-    
-    &:hover::after,
-    &:hover::before {
-      display: none;
-    }
-  }
-`;
-
-export const ChatItemActions = styled.div`
-  display: flex;
-  align-items: center;
-`;
-
-export const ChatTitleInput = styled.input`
-  font-weight: 500;
-  color: #333;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid #1DB954;
-  padding: 4px 2px;
-  width: 100%;
-  margin-right: 8px;
-  transition: all 0.2s ease;
-  border-radius: 2px;
-  
-  &::placeholder {
-    color: #aaa;
-    font-style: italic;
-    opacity: 0.7;
-  }
-  
-  &:focus {
-    outline: none;
-    background-color: rgba(29, 185, 84, 0.05);
-    box-shadow: 0 2px 0 rgba(29, 185, 84, 0.2);
-  }
-`;
-
-export const SaveButton = styled.button`
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #1DB954;
-  padding: 4px;
+export const ChatItemMenuButton = styled.button<{ $visible?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  opacity: ${props => (props.$visible ? 1 : 0)};
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+
+  ${ChatItem}:hover & {
+    opacity: 1;
+  }
+
   &:hover {
-    transform: scale(1.1);
+    background: rgba(0, 0, 0, 0.06);
+    color: #333;
+  }
+
+  @media (max-width: 768px) {
+    opacity: 1;
   }
 `;
 
-export const EditForm = styled.form`
+export const ChatItemMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 168px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  z-index: 120;
+`;
+
+export const ChatItemMenuOption = styled.button<{ $destructive?: boolean }>`
+  width: 100%;
   display: flex;
-  flex: 1;
   align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: ${props => (props.$destructive ? '#c0392b' : '#333')};
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: ${props =>
+      props.$destructive ? 'rgba(233, 20, 41, 0.08)' : 'rgba(0, 0, 0, 0.04)'};
+  }
+
+  svg {
+    flex-shrink: 0;
+    color: inherit;
+  }
 `;
 
 export const ChatSidebarToggle = styled.button`
@@ -376,64 +308,110 @@ export const ChatSidebarToggle = styled.button`
 export const ChatContainer = styled.div`
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 60px);
-  background-color: white;
+  flex: 1;
+  min-height: 0;
+  background-color: ${PAGE_BG};
   position: relative;
-  max-width: 1000px;
   width: 100%;
-  border-radius: 16px;
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
-  margin: 30px auto;
-  border: 1px solid #eaeaea;
   overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-  animation: expandIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: expandChat 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   
-  @keyframes expandIn {
+  @keyframes expandChat {
     0% {
       opacity: 0.9;
-      transform: translateY(20px) scale(0.98);
-      max-height: 90vh;
+      transform: scale(0.98);
     }
     100% {
       opacity: 1;
-      transform: translateY(0) scale(1);
-      max-height: calc(100vh - 60px);
+      transform: scale(1);
     }
-  }
-  
-  @media (max-width: 1200px) {
-    margin: 30px 20px;
-    max-width: calc(100% - 40px);
-  }
-  
-  @media (max-width: 768px) {
-    margin: 0;
-    max-width: 100%;
-    height: 100vh;
-    border-radius: 0;
-    box-shadow: none;
-    border: none;
-    animation: none;
   }
 `;
 
-export const ChatHeader = styled.div`
-  padding: 16px 24px;
-  border-bottom: 1px solid #eaeaea;
+export const AgentTopBar = styled.header<{ $compact?: boolean }>`
   display: flex;
   align-items: center;
-  background-color: white;
-  position: sticky;
-  top: 0;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  background: ${PAGE_BG};
+  border-bottom: ${props => (props.$compact ? 'none' : '1px solid rgba(0, 0, 0, 0.06)')};
   z-index: 10;
-  gap: 0;
-  
+  min-height: 52px;
+  flex-shrink: 0;
+
   @media (max-width: 768px) {
-    padding: 14px 16px;
-    flex-wrap: nowrap;
-    gap: 0;
+    padding: 10px 16px;
   }
+`;
+
+export const ChatHeaderLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+`;
+
+export const ChatHeaderDivider = styled.div`
+  width: 1px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+`;
+
+export const ChatPanelToggle = styled.button<{ $active?: boolean; $inSidebar?: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: ${props => (props.$inSidebar ? '58px' : '36px')};
+  height: ${props => (props.$inSidebar ? '36px' : '36px')};
+  border: 1px solid ${props => (props.$active ? 'rgba(0, 0, 0, 0.12)' : 'transparent')};
+  border-radius: ${props => (props.$inSidebar ? '10px' : '10px')};
+  background: ${props => (props.$active ? 'rgba(0, 0, 0, 0.04)' : 'transparent')};
+  color: #555;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+  svg {
+    width: ${props => (props.$inSidebar ? '28px' : '20px')};
+    height: ${props => (props.$inSidebar ? '20px' : '20px')};
+  }
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: #222;
+  }
+
+  @media (max-width: 768px) {
+    color: ${props => (props.$inSidebar ? '#ffffff' : '#555')};
+    border-color: ${props => (props.$inSidebar ? 'rgba(255, 255, 255, 0.25)' : 'transparent')};
+    background: ${props => (props.$inSidebar ? 'rgba(255, 255, 255, 0.12)' : 'transparent')};
+
+    &:hover {
+      background: ${props => (props.$inSidebar ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.06)')};
+      border-color: ${props => (props.$inSidebar ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 0, 0, 0.1)')};
+      color: ${props => (props.$inSidebar ? '#ffffff' : '#222')};
+    }
+  }
+`;
+
+export const ChatSidebarHeaderActions = styled.div<{ $collapsed?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  justify-content: ${props => (props.$collapsed ? 'center' : 'flex-end')};
+`;
+
+export const ChatSidebarHeaderLeft = styled.div`
+  display: none;
+`;
+
+export const ChatHeader = styled.div`
+  display: none;
 `;
 
 export const ChatHeaderIcon = styled.div`
@@ -458,16 +436,119 @@ export const ChatHeaderIcon = styled.div`
 `;
 
 export const ChatHeaderTitle = styled.div`
+  font-size: 15px;
   font-weight: 600;
-  font-size: 16px;
-  color: #333;
-  line-height: 1.2;
-  display: flex;
-  align-items: center;
+  color: #1a1a1a;
+  letter-spacing: -0.2px;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 12px;
   
   @media (max-width: 768px) {
-    font-size: 15px;
+    font-size: 14px;
   }
+`;
+
+export const ChatTitleMenuWrap = styled.div`
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  max-width: fit-content;
+`;
+
+export const ChatTitleMenuButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 6px 4px 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  color: #1a1a1a;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
+  }
+`;
+
+export const ChatTitleMenuText = styled.span`
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(480px, 50vw);
+  line-height: 1.3;
+
+  @media (max-width: 768px) {
+    font-size: 14px;
+    max-width: min(220px, 52vw);
+  }
+`;
+
+export const ChatTitleMenuChevron = styled.span`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  flex-shrink: 0;
+  color: #666;
+  margin-left: 4px;
+  border-left: 1px solid rgba(0, 0, 0, 0.08);
+`;
+
+export const ChatTitleDropdown = styled.div`
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  z-index: 120;
+`;
+
+export const ChatTitleDropdownOption = styled.button<{ $destructive?: boolean }>`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: ${props => (props.$destructive ? '#c0392b' : '#333')};
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: ${props =>
+      props.$destructive ? 'rgba(233, 20, 41, 0.08)' : 'rgba(0, 0, 0, 0.04)'};
+  }
+
+  svg {
+    flex-shrink: 0;
+    color: inherit;
+  }
+`;
+
+export const ChatTitleDropdownDivider = styled.div`
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(0, 0, 0, 0.08);
 `;
 
 export const ChatHeaderSubtitle = styled.div`
@@ -482,38 +563,40 @@ export const ChatHeaderSubtitle = styled.div`
 `;
 
 export const ChatHeaderControls = styled.div`
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
   
   @media (max-width: 768px) {
     gap: 8px;
-    margin-left: auto;
   }
 `;
 
 export const IconButton = styled.button`
-  background: none;
+  background: transparent;
   border: none;
-  color: #777;
+  color: #666;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: 10px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 
   &:hover {
+    background: rgba(29, 185, 84, 0.08);
     color: #1DB954;
-    background-color: rgba(29, 185, 84, 0.1);
+  }
+  
+  &:active {
+    transform: scale(0.95);
   }
   
   @media (max-width: 768px) {
-    padding: 6px;
+    padding: 8px;
     
-    /* Hide some buttons on mobile to reduce clutter */
     &.hide-mobile {
       display: none;
     }
@@ -522,59 +605,89 @@ export const IconButton = styled.button`
 
 export const ChatMessages = styled.div`
   flex: 1;
-  padding: 28px 30px;
+  min-height: 0;
   overflow-y: auto;
+  padding: 40px 32px 32px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  background-color: #fafafa;
+  align-items: center;
+  background-color: ${PAGE_BG};
   
-  /* Hide scrollbar but keep scrolling functionality */
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  scroll-behavior: smooth;
+  
+  -ms-overflow-style: none;
+  scrollbar-width: none;
   
   &::-webkit-scrollbar {
-    display: none;  /* Chrome, Safari, Opera */
+    display: none;
   }
   
-  /* Show scrollbar on hover only if "show-scrollbar" class is added */
   &.show-scrollbar::-webkit-scrollbar {
     display: block;
     width: 6px;
   }
   
-  &.show-scrollbar:hover::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.2);
+  &.show-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
   }
-  
-  &.show-scrollbar:not(:hover)::-webkit-scrollbar-thumb {
-    background: transparent;
-  }
-  
-  /* Smooth scrolling */
-  scroll-behavior: smooth;
   
   @media (max-width: 768px) {
-    padding: 24px 16px;
-    gap: 18px;
+    padding: 28px 16px 24px;
+  }
+`;
+
+export const ChatThreadColumn = styled.div`
+  ${chatThreadWidth}
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  flex: 1;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    max-width: none;
+    gap: 24px;
+  }
+`;
+
+export const AssistantMessageBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+`;
+
+export const MessageDivider = styled.div`
+  width: 100%;
+  height: 1px;
+  margin-top: 28px;
+  background: rgba(29, 185, 84, 0.22);
+
+  @media (max-width: 768px) {
+    margin-top: 20px;
   }
 `;
 
 export const MessageBubble = styled.div<{ isUser: boolean; isNew?: boolean }>`
-  max-width: 85%;
-  padding: 16px 20px;
-  border-radius: 22px;
-  background-color: ${props => props.isUser ? '#1DB954' : '#f1f1f1'};
-  color: ${props => props.isUser ? 'white' : '#333'};
+  max-width: ${props => props.isUser ? 'min(560px, 72%)' : '100%'};
+  width: ${props => props.isUser ? 'fit-content' : '100%'};
+  padding: ${props => props.isUser ? '12px 18px' : '6px 0'};
+  border-radius: ${props => props.isUser ? '22px' : '0'};
+  background: ${props => props.isUser 
+    ? 'linear-gradient(135deg, #1DB954 0%, #19a049 100%)' 
+    : 'transparent'};
+  color: ${props => props.isUser ? '#ffffff' : '#1a1a1a'};
   align-self: ${props => props.isUser ? 'flex-end' : 'flex-start'};
+  font-size: ${props => (props.isUser ? '16px' : '18px')};
+  line-height: ${props => (props.isUser ? '1.5' : '1.75')};
   word-wrap: break-word;
-  font-size: 16px;
-  line-height: 1.5;
-  box-shadow: ${props => props.isUser ? '0 1px 2px rgba(0, 0, 0, 0.1)' : 'none'};
-  border: ${props => props.isUser ? 'none' : '1px solid #e0e0e0'};
-  animation: ${props => props.isNew ? 'messageFadeIn 0.3s ease-out' : 'none'};
+  box-shadow: ${props => props.isUser 
+    ? '0 1px 4px rgba(29, 185, 84, 0.2)' 
+    : 'none'};
+  border: none;
+  animation: ${props => props.isNew ? 'messageSlideIn 0.3s cubic-bezier(0.22, 1, 0.36, 1)' : 'none'};
   
-  @keyframes messageFadeIn {
+  @keyframes messageSlideIn {
     from {
       opacity: 0;
       transform: translateY(10px);
@@ -585,24 +698,11 @@ export const MessageBubble = styled.div<{ isUser: boolean; isNew?: boolean }>`
     }
   }
   
-  /* Add a subtle indicator of who's speaking */
-  position: relative;
-  
-  &::before {
-    content: ${props => props.isUser ? '""' : '"🎵"'};
-    position: absolute;
-    top: -24px;
-    ${props => props.isUser ? 'right: 12px' : 'left: 12px'};
-    font-size: 12px;
-    color: #666;
-    opacity: ${props => props.isUser ? 0 : 0.8};
-  }
-  
   @media (max-width: 768px) {
-    max-width: 90%;
-    padding: 14px 18px;
-    font-size: 15px;
-    border-radius: 18px;
+    max-width: ${props => props.isUser ? 'min(360px, 88%)' : '100%'};
+    padding: ${props => props.isUser ? '10px 16px' : '4px 0'};
+    font-size: ${props => (props.isUser ? '16px' : '17px')};
+    border-radius: ${props => props.isUser ? '20px' : '0'};
   }
 `;
 
@@ -670,40 +770,29 @@ export const GlobalStyle = createGlobalStyle`
 `;
 
 export const AssistantTypingIndicator = styled.div<{ isProcessing?: boolean }>`
-  display: inline-block;
-  padding: ${props => props.isProcessing ? '14px 20px' : '12px 16px'};
-  border-radius: 18px;
-  background-color: ${props => props.isProcessing ? '#e8f7ee' : '#f1f1f1'};
+  display: inline-flex;
+  align-items: center;
+  padding: ${props => (props.isProcessing ? '10px 0' : '8px 0')};
+  background-color: transparent;
   align-self: flex-start;
-  font-size: 16px;
-  color: #666;
-  border: 1px solid ${props => props.isProcessing ? '#c8e6d7' : '#e0e0e0'};
-  ${props => props.isProcessing && `
-    margin-top: 10px;
-  `}
+  border: none;
+  box-shadow: none;
 `;
 
-export const DotContainer = styled.div`
+export const AgentTypingSpinner = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-`;
+  color: #1DB954;
+  animation: agentLogoSpin 1.1s linear infinite;
 
-export const Dot = styled.div<{ isProcessing?: boolean }>`
-  width: 8px;
-  height: 8px;
-  background-color: ${props => props.isProcessing ? '#238750' : '#888'};
-  border-radius: 50%;
-  opacity: 0.6;
-  animation: ${props => props.isProcessing ? 'processingPulse' : 'pulse'} 1.2s infinite;
-  
-  &:nth-child(2) {
-    animation-delay: 0.2s;
-  }
-  
-  &:nth-child(3) {
-    animation-delay: 0.4s;
+  @keyframes agentLogoSpin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 `;
 
@@ -737,79 +826,99 @@ export const AnimatedBar = styled.div<{ delay: number }>`
 export const ChatInput = styled.div`
   display: flex;
   flex-direction: column;
-  padding: 24px 28px;
-  border-top: 1px solid #eee;
-  background-color: white;
-  position: sticky;
-  bottom: 0;
+  align-items: center;
+  padding: 16px 32px 36px;
+  background: ${PAGE_BG};
+  flex-shrink: 0;
   z-index: 10;
   
   @media (max-width: 768px) {
-    padding: 16px;
+    padding: 12px 16px 24px;
   }
 `;
 
 export const InputRow = styled.div`
-  display: flex;
-  align-items: flex-end;
-  width: 100%;
-  max-width: 900px;
-  margin: 0 auto;
-  
-  @media (max-width: 768px) {
-    max-width: 100%;
-  }
+  display: none;
 `;
 
 export const HelperText = styled.div`
-  font-size: 12px !important;
-  color: #888 !important;
-  margin-top: 6px !important;
-  padding-left: 0px;
-  align-self: flex-start;
-  line-height: 1.35 !important;
+  display: none;
+`;
+
+// Action buttons for empty state
+export const CompactActionButtons = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  animation: fadeIn 0.5s ease-out 0.15s both;
   
   @media (max-width: 768px) {
-    font-size: 11px !important;
+    gap: 8px;
+  }
+`;
+
+export const CompactActionButton = styled.button`
+  background: #ffffff;
+  color: #5c5854;
+  border: 1px solid #e8e6e1;
+  border-radius: 999px;
+  padding: 10px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  font-size: 14px;
+  font-weight: 500;
+  
+  &:hover {
+    background: #f5f4f0;
+    border-color: #d4d0c8;
+  }
+  
+  svg {
+    font-size: 16px;
+    color: #8a8580;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 9px 14px;
+    font-size: 13px;
   }
 `;
 
 export const Textarea = styled.textarea`
   flex: 1;
-  padding: 18px 24px;
-  border: 1px solid #ddd;
-  border-radius: 24px;
-  margin-right: 14px;
+  width: 100%;
+  padding: 18px 20px 8px;
+  border: none;
+  background: transparent;
   font-size: 16px;
-  transition: all 0.2s ease;
   font-family: inherit;
   resize: none;
-  min-height: 60px;
-  max-height: 140px;
+  min-height: 72px;
+  max-height: 200px;
   overflow-y: auto;
-  line-height: 1.4;
+  line-height: 1.55;
+  color: #1a1a1a;
+  box-sizing: border-box;
   
-  /* Hide scrollbar but keep scrolling functionality */
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
-  
-  &::-webkit-scrollbar {
-    display: none;  /* Chrome, Safari, Opera */
+  &::placeholder {
+    color: #a8a4a0;
   }
   
   &:focus {
     outline: none;
-    border-color: #1DB954;
-    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.15);
   }
   
-  &::placeholder {
-    color: #999;
-    transition: opacity 0.2s ease;
-  }
+  -ms-overflow-style: none;
+  scrollbar-width: none;
   
-  &:focus::placeholder {
-    opacity: 0.7;
+  &::-webkit-scrollbar {
+    display: none;
   }
 
   &:disabled {
@@ -818,57 +927,14 @@ export const Textarea = styled.textarea`
   }
   
   @media (max-width: 768px) {
-    padding: 14px 18px;
+    padding: 16px 16px 6px;
     font-size: 16px;
-    margin-right: 10px;
-    min-height: 50px;
-    border-radius: 20px;
+    min-height: 48px;
   }
 `;
 
 export const SendButton = styled.button`
-  background-color: #1DB954;
-  color: white;
-  border: none;
-  border-radius: 24px;
-  padding: 18px 30px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  font-size: 16px;
-  font-weight: 500;
-  white-space: nowrap;
-  
-  &:hover {
-    background-color: #19a049;
-    transform: translateY(-1px);
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
-  }
-  
-  &:active {
-    transform: translateY(0);
-    box-shadow: none;
-  }
-  
-  &:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-  }
-  
-  svg {
-    margin-left: 8px;
-    font-size: 20px;
-  }
-  
-  @media (max-width: 768px) {
-    padding: 14px 24px;
-    font-size: 15px;
-    border-radius: 20px;
-  }
+  display: none;
 `;
 
 export const UserActions = styled.div`
@@ -913,84 +979,208 @@ export const MobileOverlay = styled.div<{ visible: boolean }>`
   }
 `;
 
+// Modern gradient animation
+const gradientShift = `
+  @keyframes gradientShift {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+`;
+
 export const CompactChatContainer = styled.div`
   display: flex;
   flex-direction: column;
-  width: 700px;
-  max-width: 90%;
-  margin: 0;
-  border-radius: 20px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
-  background-color: white;
-  overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-  animation: floatIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 10;
-  
-  &:focus-within {
-    box-shadow: 0 12px 48px rgba(29, 185, 84, 0.16);
-    transform: translate(-50%, -52%);
-  }
-  
-  @keyframes floatIn {
-    0% {
-      opacity: 0;
-      transform: translate(-50%, -40%) scale(0.98);
-    }
-    100% {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
-    }
-  }
+  align-items: stretch;
+  justify-content: center;
+  width: 100%;
+  max-width: ${CLAUDE_LANDING_MAX}px;
+  margin: 0 auto;
+  padding: 24px 0 48px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  position: relative;
+  background: transparent;
   
   @media (max-width: 768px) {
-    width: 95%;
-    max-width: 95%;
-    border-radius: 16px;
+    width: calc(100% - 32px);
+    max-width: none;
+    padding: 16px 0 32px;
   }
 `;
 
-export const CompactChatHeader = styled.div`
+export const ClaudeGreetingRow = styled.div`
   display: flex;
   align-items: center;
-  padding: 22px 26px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  background-color: #fcfcfc;
-  
+  gap: 14px;
+  width: 100%;
+  margin-bottom: 28px;
+  animation: fadeIn 0.4s ease-out both;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   @media (max-width: 768px) {
-    padding: 18px 20px;
+    gap: 12px;
+    margin-bottom: 24px;
   }
 `;
 
-export const CompactChatTitle = styled.div`
-  font-weight: 600;
-  font-size: 18px;
-  color: #333;
-  letter-spacing: -0.2px;
-  
-  @media (max-width: 768px) {
-    font-size: 16px;
-  }
+export const ClaudeGreetingIcon = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1DB954;
+  flex-shrink: 0;
+`;
+
+export const ClaudeGreetingText = styled.h1`
+  font-family: 'Libre Baskerville', Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-weight: 400;
+  color: #1a1a1a;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 `;
 
 export const CompactChatInput = styled.div`
+  width: 100%;
+  margin: 0 auto 24px;
+  animation: fadeIn 0.45s ease-out 0.05s both;
+
+  @media (max-width: 768px) {
+    margin: 0 auto 20px;
+  }
+`;
+
+export const InputRowWrapper = styled.div`
+  position: relative;
   display: flex;
   flex-direction: column;
-  padding: 20px 24px;
-  background-color: white;
-  border-top: 1px solid transparent;
-  transition: border-color 0.3s ease;
-  
-  &:focus-within {
-    border-top-color: rgba(29, 185, 84, 0.1);
-  }
-  
+  ${chatThreadWidth}
+  margin: 0 auto;
+
   @media (max-width: 768px) {
-    padding: 16px 18px;
+    width: 100%;
+    max-width: none;
+  }
+`;
+
+export const ClaudeInputCard = styled.div<{ $landing?: boolean }>`
+  width: 100%;
+  min-height: ${props => (props.$landing ? '200px' : '148px')};
+  display: flex;
+  flex-direction: column;
+  justify-content: ${props => (props.$landing ? 'space-between' : 'flex-start')};
+  background: #ffffff;
+  border: 1px solid #e8e6e1;
+  border-radius: 28px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:focus-within {
+    border-color: #d4d0c8;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.09);
+  }
+
+  @media (max-width: 768px) {
+    min-height: ${props => (props.$landing ? '176px' : '132px')};
+    border-radius: 24px;
+  }
+`;
+
+export const ClaudeTextarea = styled(Textarea)<{ $landing?: boolean }>`
+  flex: ${props => (props.$landing ? '1' : '0 0 auto')};
+  min-height: ${props => (props.$landing ? '128px' : '28px')};
+  padding: ${props => (props.$landing ? '22px 24px 12px' : '20px 24px 8px')};
+  font-size: ${props => (props.$landing ? '17px' : '18px')};
+  line-height: 1.55;
+
+  @media (max-width: 768px) {
+    min-height: ${props => (props.$landing ? '112px' : '28px')};
+    padding: ${props => (props.$landing ? '20px 20px 10px' : '18px 20px 6px')};
+    font-size: 17px;
+  }
+`;
+
+export const ClaudeInputToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 14px 18px;
+  flex-shrink: 0;
+  margin-top: auto;
+`;
+
+export const ClaudeToolbarGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`;
+
+export const ClaudeIconButton = styled.button`
+  background: transparent;
+  border: none;
+  color: #8a8580;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.05);
+    color: #5c5854;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+`;
+
+export const ClaudeSendButton = styled.button`
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
+  background: ${props => (props.disabled ? '#e8e6e1' : '#1DB954')};
+  color: ${props => (props.disabled ? '#a8a4a0' : '#ffffff')};
+
+  &:hover:not(:disabled) {
+    background: #19a049;
+    transform: scale(1.04);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+
+  @media (max-width: 768px) {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
   }
 `;
 
@@ -1077,53 +1267,131 @@ export const ChatSearchSongMeta = styled.div`
 `;
 
 export const SearchToggleButton = styled.button<{ isActive?: boolean }>`
-  background-color: ${props => props.isActive ? '#f1f1f1' : 'transparent'};
-  color: ${props => props.isActive ? '#e91429' : '#666'};
-  border: none;
-  border-radius: 50%;
-  width: 56px;
-  height: 56px;
-  margin-left: -8px;
-  margin-right: 12px;
+  display: none;
+`;
+
+/* —— Rename chat modal —— */
+export const RenameChatModalRoot = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 220;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
+`;
+
+export const RenameChatModalBackdrop = styled.button`
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-  
-  &:hover {
-    background-color: ${props => props.isActive ? '#ffebee' : 'rgba(0, 0, 0, 0.05)'};
-    color: ${props => props.isActive ? '#d32f2f' : '#333'};
+`;
+
+export const RenameChatModalPanel = styled.div`
+  position: relative;
+  z-index: 1;
+  width: min(560px, calc(100vw - 32px));
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.16);
+  padding: 28px 28px 24px;
+`;
+
+export const RenameChatModalHeading = styled.h2`
+  margin: 0 0 20px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #1a1a1a;
+`;
+
+export const RenameChatModalForm = styled.form`
+  display: flex;
+  flex-direction: column;
+`;
+
+export const RenameChatModalInput = styled.input`
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  min-height: 52px;
+  border: 1px solid #e5e2dc;
+  border-radius: 14px;
+  font-size: 16px;
+  line-height: 1.4;
+  color: #1a1a1a;
+  background: #fafaf9;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+
+  &::placeholder {
+    color: #a8a4a0;
   }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+
+  &:focus {
+    outline: none;
+    background: #ffffff;
+    border-color: #c9c5bf;
+    box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.06);
   }
-  
-  svg {
-    font-size: 28px;
-  }
-  
-  @media (max-width: 768px) {
-    width: 46px;
-    height: 46px;
-    margin-right: 8px;
-    
-    svg {
-      font-size: 24px;
-    }
+
+  &:-webkit-autofill,
+  &:-webkit-autofill:hover,
+  &:-webkit-autofill:focus {
+    -webkit-text-fill-color: #1a1a1a;
+    box-shadow: 0 0 0 1000px #fafaf9 inset;
   }
 `;
 
-export const InputRowWrapper = styled.div`
-  position: relative;
+export const RenameChatModalActions = styled.div`
   display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: 900px;
-  margin: 0 auto;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+`;
+
+export const RenameChatModalCancel = styled.button`
+  padding: 11px 20px;
+  min-width: 96px;
+  border: 1px solid #e5e2dc;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #333;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: #f7f6f3;
+    border-color: #d4d0c8;
+  }
+`;
+
+export const RenameChatModalSave = styled.button`
+  padding: 11px 22px;
+  min-width: 96px;
+  border: none;
+  border-radius: 12px;
+  background: #1a1a1a;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: #333333;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 `;
 
 /* —— Song search modal & reusable search UI —— */
@@ -1364,27 +1632,40 @@ export const SearchResultMeta = styled.div`
 /* User song pick bubble (chat) */
 export const UserSongPickBubble = styled.div<{ $isNew?: boolean }>`
   align-self: flex-end !important;
-  max-width: 88% !important;
+  max-width: min(560px, 72%) !important;
+  width: fit-content !important;
   display: flex !important;
   flex-direction: row !important;
   align-items: stretch !important;
-  gap: 12px !important;
-  padding: 12px 14px !important;
-  border-radius: 16px !important;
-  background: linear-gradient(135deg, #159847 0%, #1db954 100%) !important;
+  gap: 14px !important;
+  padding: 14px 16px !important;
+  border-radius: 22px !important;
+  background: linear-gradient(135deg, #1DB954 0%, #19a049 100%) !important;
   color: #fff !important;
-  box-shadow: 0 4px 14px rgba(25, 160, 73, 0.35) !important;
-  animation: ${p => (p.$isNew ? 'messageFadeIn 0.3s ease-out' : 'none')} !important;
+  box-shadow: 0 2px 8px rgba(29, 185, 84, 0.25) !important;
+  animation: ${p => (p.$isNew ? 'messageSlideIn 0.3s cubic-bezier(0.22, 1, 0.36, 1)' : 'none')} !important;
+  
+  @keyframes messageSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 
   @media (max-width: 768px) {
-    max-width: 92% !important;
+    max-width: 85% !important;
     padding: 10px 12px !important;
+    border-radius: 18px !important;
   }
 `;
 
 export const UserSongPickCover = styled.img`
-  width: 56px !important;
-  height: 56px !important;
+  width: 64px !important;
+  height: 64px !important;
   border-radius: 8px !important;
   object-fit: cover !important;
   flex-shrink: 0 !important;
@@ -1392,8 +1673,8 @@ export const UserSongPickCover = styled.img`
 `;
 
 export const UserSongPickCoverPlaceholder = styled.div`
-  width: 56px !important;
-  height: 56px !important;
+  width: 64px !important;
+  height: 64px !important;
   border-radius: 8px !important;
   flex-shrink: 0 !important;
   background: rgba(255, 255, 255, 0.2) !important;
@@ -1413,14 +1694,14 @@ export const UserSongPickText = styled.div`
 `;
 
 export const UserSongPickTitle = styled.div`
-  font-size: 15px !important;
+  font-size: 16px !important;
   font-weight: 700 !important;
   line-height: 1.25 !important;
   color: #fff !important;
 `;
 
 export const UserSongPickArtist = styled.div`
-  font-size: 13px !important;
+  font-size: 14px !important;
   opacity: 0.95 !important;
   line-height: 1.3 !important;
 `;

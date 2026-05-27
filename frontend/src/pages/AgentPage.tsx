@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 // Import icons
-import { MdAdd, MdClose, MdMenu } from 'react-icons/md';
+import { MdAdd, MdClose, MdMenu, MdSearch, MdArrowUpward } from 'react-icons/md';
 import { FiPlusCircle } from 'react-icons/fi';
+import { IconPanelSidebar } from '../components/icons/IconPanelSidebar';
 import { IconAgentOrbit } from '../components/icons/IconAgentOrbit';
-import { BsArrowsExpand, BsArrowsCollapse, BsChatDots } from 'react-icons/bs';
 
 // Import hooks
 import { useConversationManager, Message } from '../hooks/useConversationManager';
@@ -15,9 +15,12 @@ import { useVideoJobPolling } from '../hooks/useVideoJobPolling';
 // Import components
 import { ConversationSidebar } from '../components/agent/ConversationSidebar';
 import { ChatInterface } from '../components/agent/ChatInterface';
+import { ChatTitleMenu } from '../components/agent/ChatTitleMenu';
+import { RenameChatModal } from '../components/agent/RenameChatModal';
 import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 import { VideoSettingsModal } from '../components/agent/VideoSettingsModal';
 import { AppSidebar } from '../components/layout/AppSidebar';
+import { SongSearchModal } from '../components/agent/SongSearchModal';
 import {
   startVideoGeneration,
   useExistingVariant,
@@ -42,6 +45,18 @@ const formatDate = () => {
   });
 };
 
+const getTimeGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Morning';
+  if (hour >= 12 && hour < 17) return 'Afternoon';
+  return 'Evening';
+};
+
+const getFirstName = (name?: string) => {
+  if (!name?.trim()) return 'there';
+  return name.trim().split(/\s+/)[0].toLowerCase();
+};
+
 const AgentPage: React.FC = () => {
   // Navigation
   const navigate = useNavigate();
@@ -58,7 +73,7 @@ const AgentPage: React.FC = () => {
     setMessages,
     loadConversation,
     createNewConversation,
-    updateConversation,
+    renameConversation,
     updateConversationMessages,
     bumpConversationToTop,
     deleteConversation,
@@ -91,10 +106,14 @@ const AgentPage: React.FC = () => {
   const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [showScrollbars, setShowScrollbars] = useState<boolean>(false);
-  const [isCompactMode, setIsCompactMode] = useState<boolean>(false);
+  const [isCompactMode, setIsCompactMode] = useState<boolean>(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const [existingVariants, setExistingVariants] = useState<any[]>([]);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const compactTextareaRef = React.useRef<HTMLTextAreaElement>(null);
   const { userData } = useUser();
 
   // Set theme for styled components
@@ -230,12 +249,25 @@ const AgentPage: React.FC = () => {
     }
   }, []);
 
-  // Determine compact mode based on conversation state
+  // Determine compact mode - only exit when user has actually sent a message
   useEffect(() => {
-    if (messages.length > 1 || activeConversationId) {
+    // Check if there are any user messages
+    const hasUserMessages = messages.some(msg => msg.isUser);
+    
+    if (hasUserMessages || (activeConversationId && !activeConversationId.startsWith('temp-'))) {
       setIsCompactMode(false);
+    } else {
+      setIsCompactMode(true);
     }
-  }, [messages.length, activeConversationId]);
+  }, [messages, activeConversationId]);
+
+  useEffect(() => {
+    const textarea = compactTextareaRef.current;
+    if (!textarea || !isCompactMode) return;
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+  }, [input, isCompactMode]);
 
   // Handle sending a message
   const handleSend = useCallback(async () => {
@@ -443,8 +475,31 @@ const AgentPage: React.FC = () => {
 
   // Handle renaming a conversation
   const handleRenameConversation = useCallback((id: string, newTitle: string) => {
-    updateConversation(id, { title: newTitle });
-  }, [updateConversation]);
+    void renameConversation(id, newTitle);
+  }, [renameConversation]);
+
+  const handleRequestRename = useCallback((id: string, title: string) => {
+    setRenameTargetId(id);
+    setRenameDraft(title);
+  }, []);
+
+  const handleCloseRename = useCallback(() => {
+    setRenameTargetId(null);
+    setRenameDraft('');
+  }, []);
+
+  const handleSaveRename = useCallback(() => {
+    if (!renameTargetId) return;
+    const trimmed = renameDraft.trim();
+    if (!trimmed) return;
+    handleRenameConversation(renameTargetId, trimmed);
+    handleCloseRename();
+  }, [renameDraft, renameTargetId, handleRenameConversation, handleCloseRename]);
+
+  const activeConversationTitle =
+    activeConversationId && conversations.find(c => c.id === activeConversationId)?.title
+      ? conversations.find(c => c.id === activeConversationId)?.title
+      : 'New Chat';
 
   return (
     <Styles.AppLayout>
@@ -466,101 +521,127 @@ const AgentPage: React.FC = () => {
         conversations={conversations}
         activeConversationId={activeConversationId}
         isOpen={chatSidebarOpen}
+        onToggle={() => setChatSidebarOpen(!chatSidebarOpen)}
         onNewChat={handleNewChat}
         onLoadConversation={handleLoadConversation}
         onDeleteConversation={handleDeleteConversation}
-        onRenameConversation={handleRenameConversation}
+        onRequestRename={handleRequestRename}
         theme={theme}
       />
 
-      {/* Toggle for chat sidebar */}
-      <Styles.ChatSidebarToggle
-        onClick={() => setChatSidebarOpen(!chatSidebarOpen)}
-        theme={{ ...theme, sidebarOpen: true }}
-      >
-        {chatSidebarOpen ?
-          MdClose({ size: 20 }) :
-          BsChatDots({ size: 18 })
-        }
-      </Styles.ChatSidebarToggle>
-
       {/* Main chat area - now conditionally rendered based on compact mode */}
-      <Styles.MainContent sidebarOpen={sidebarOpen}>
+      <Styles.MainContent sidebarOpen={sidebarOpen} chatSidebarOpen={chatSidebarOpen}>
+        <Styles.AgentTopBar $compact={isCompactMode}>
+          <Styles.ChatHeaderLeft>
+            {windowWidth <= 768 && !chatSidebarOpen && (
+              <>
+                <Styles.ChatPanelToggle
+                  type="button"
+                  onClick={() => setChatSidebarOpen(true)}
+                  title="Open sidebar"
+                  aria-label="Open sidebar"
+                >
+                  <IconPanelSidebar width={24} height={18} />
+                </Styles.ChatPanelToggle>
+                {!isCompactMode && <Styles.ChatHeaderDivider />}
+              </>
+            )}
+            {!isCompactMode && activeConversationId && (
+              <ChatTitleMenu
+                title={activeConversationTitle || 'New Chat'}
+                onRename={() => handleRequestRename(activeConversationId, activeConversationTitle || 'New Chat')}
+                onDelete={() => void handleDeleteConversation(activeConversationId)}
+              />
+            )}
+            {!isCompactMode && !activeConversationId && (
+              <Styles.ChatHeaderTitle>New Chat</Styles.ChatHeaderTitle>
+            )}
+          </Styles.ChatHeaderLeft>
+
+          {!isCompactMode && (
+            <Styles.ChatHeaderControls>
+              <Styles.IconButton
+                onClick={handleNewChat}
+                title="New conversation"
+              >
+                {FiPlusCircle({ size: 18 })}
+              </Styles.IconButton>
+
+              <div style={{ marginLeft: '4px' }}>
+                <ProfileDropdown userData={userData} />
+              </div>
+            </Styles.ChatHeaderControls>
+          )}
+        </Styles.AgentTopBar>
+
         {isCompactMode ? (
           <Styles.CompactChatContainer>
-            <Styles.CompactChatHeader>
-              <Styles.CompactChatIcon>
-                <IconAgentOrbit size={24} />
-              </Styles.CompactChatIcon>
-              <Styles.CompactChatTitle>Lyric Video Assistant</Styles.CompactChatTitle>
-            </Styles.CompactChatHeader>
-            <ChatInterface
-              messages={messages}
-              input={input}
-              isLoading={isSendingMessage}
-              onInputChange={setInput}
-              onSend={handleSend}
-              onSongSelect={handleSongSelect}
-              hideMessages={true}
-            />
+            <Styles.ClaudeGreetingRow>
+              <Styles.ClaudeGreetingIcon>
+                <IconAgentOrbit size={36} />
+              </Styles.ClaudeGreetingIcon>
+              <Styles.ClaudeGreetingText>
+                {getTimeGreeting()}, {getFirstName(userData?.name)}
+              </Styles.ClaudeGreetingText>
+            </Styles.ClaudeGreetingRow>
+            
+            <Styles.CompactChatInput>
+              <Styles.ClaudeInputCard $landing>
+                <Styles.ClaudeTextarea
+                  $landing
+                  ref={compactTextareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="What lyric video are you creating today?"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (input.trim() && !isSendingMessage) {
+                        handleSend();
+                      }
+                    }
+                  }}
+                  disabled={isSendingMessage}
+                  rows={1}
+                />
+                <Styles.ClaudeInputToolbar>
+                  <Styles.ClaudeToolbarGroup>
+                    <Styles.ClaudeIconButton
+                      type="button"
+                      onClick={() => setSearchModalOpen(true)}
+                      title="Search for a song"
+                    >
+                      {MdSearch({ size: 20 })}
+                    </Styles.ClaudeIconButton>
+                  </Styles.ClaudeToolbarGroup>
+                  <Styles.ClaudeToolbarGroup>
+                    <Styles.ClaudeSendButton
+                      type="button"
+                      onClick={handleSend}
+                      disabled={isSendingMessage || !input.trim()}
+                      title="Send message"
+                    >
+                      {MdArrowUpward({ size: 20 })}
+                    </Styles.ClaudeSendButton>
+                  </Styles.ClaudeToolbarGroup>
+                </Styles.ClaudeInputToolbar>
+              </Styles.ClaudeInputCard>
+            </Styles.CompactChatInput>
+            
+            <Styles.CompactActionButtons>
+              <Styles.CompactActionButton
+                onClick={handleNewChat}
+                title="New Chat"
+              >
+                {FiPlusCircle({ size: 16 })}
+                <span>New chat</span>
+              </Styles.CompactActionButton>
+              
+              <ProfileDropdown userData={userData} />
+            </Styles.CompactActionButtons>
           </Styles.CompactChatContainer>
         ) : (
           <Styles.ChatContainer>
-            <Styles.ChatHeader>
-              {windowWidth <= 768 && !sidebarOpen && (
-                <Styles.IconButton
-                  onClick={() => setSidebarOpen(true)}
-                  style={{ marginRight: '8px' }}
-                  title="Open menu"
-                >
-                  {MdMenu({ size: 20 })}
-                </Styles.IconButton>
-              )}
-              <Styles.ChatHeaderIcon>
-                <IconAgentOrbit size={18} />
-              </Styles.ChatHeaderIcon>
-              <div style={{ display: 'flex', flexDirection: 'column', flex: '0 0 auto', marginRight: 'auto' }}>
-                <Styles.ChatHeaderTitle>AI Music Agent</Styles.ChatHeaderTitle>
-                <Styles.ChatHeaderSubtitle>{currentDate}</Styles.ChatHeaderSubtitle>
-              </div>
-              <Styles.ChatHeaderControls>
-                {/* Button to toggle conversation list - SHOW on mobile with better styling */}
-                <Styles.IconButton
-                  onClick={() => setChatSidebarOpen(!chatSidebarOpen)}
-                  title="Conversation History"
-                  style={windowWidth <= 768 ? { padding: '8px' } : {}}
-                >
-                  {BsChatDots({ size: windowWidth <= 768 ? 18 : 16 })}
-                </Styles.IconButton>
-
-                {/* Button to toggle scrollbars - hide on mobile */}
-                <Styles.IconButton
-                  className={windowWidth <= 768 ? "hide-mobile" : ""}
-                  onClick={toggleScrollbars}
-                  title={showScrollbars ? "Hide scrollbars" : "Show scrollbars"}
-                >
-                  {showScrollbars ?
-                    BsArrowsCollapse({ size: 16 }) :
-                    BsArrowsExpand({ size: 16 })
-                  }
-                </Styles.IconButton>
-
-                {/* Button for new conversation - bigger on mobile */}
-                <Styles.IconButton
-                  onClick={handleNewChat}
-                  title="New conversation"
-                  style={windowWidth <= 768 ? { padding: '8px' } : {}}
-                >
-                  {FiPlusCircle({ size: windowWidth <= 768 ? 18 : 16 })}
-                </Styles.IconButton>
-
-                {/* ProfileDropdown - always show */}
-                <div style={{ marginLeft: windowWidth <= 768 ? '8px' : '10px' }}>
-                  <ProfileDropdown userData={userData} />
-                </div>
-              </Styles.ChatHeaderControls>
-            </Styles.ChatHeader>
-
             <ChatInterface
               messages={messages}
               input={input}
@@ -605,6 +686,20 @@ const AgentPage: React.FC = () => {
             console.error("Failed to generate with custom settings", e);
           }
         }}
+      />
+      
+      <SongSearchModal
+        open={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        onSelect={handleSongSelect}
+      />
+
+      <RenameChatModal
+        open={renameTargetId !== null}
+        title={renameDraft}
+        onTitleChange={setRenameDraft}
+        onClose={handleCloseRename}
+        onSave={handleSaveRename}
       />
     </Styles.AppLayout>
   );

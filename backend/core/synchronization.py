@@ -19,7 +19,7 @@ from difflib import SequenceMatcher
 
 # Import configuration
 try:
-    from .config import SynchronizationConfig, get_default_config
+    from .config import SynchronizationConfig, get_default_config, build_sync_config
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -79,13 +79,62 @@ class SyncedLyric:
 class AdvancedLyricSynchronizer:
     """Advanced synchronization using multiple audio analysis techniques"""
     
-    def __init__(self, audio_path: str, config: Optional[SynchronizationConfig] = None, detected_language: Optional[str] = None):
+    def __init__(self, audio_path: str, config: Optional[SynchronizationConfig] = None, detected_language: Optional[str] = None, spotify_genres: Optional[List[str]] = None):
         self.audio_path = audio_path
         self.audio_features = None
         self.config = config if config else (get_default_config() if CONFIG_AVAILABLE else None)
         self.sample_rate = self.config.AUDIO_SAMPLE_RATE if self.config else 22050
         self.y = None
         self.detected_language = detected_language  # Store detected language from Spotify/metadata
+        self.spotify_genres = spotify_genres or []
+
+    def _apply_sync_config(self, lyrics_lines: Optional[List[str]] = None) -> None:
+        """Re-tune timing parameters based on tempo, lyric density, and genre."""
+        if not CONFIG_AVAILABLE:
+            return
+        tempo = self.audio_features.tempo if self.audio_features else None
+        audio_duration = len(self.y) / self.sample_rate if self.y is not None else None
+        num_lyrics = len([l for l in (lyrics_lines or []) if l and l.strip()])
+        self.config = build_sync_config(
+            tempo=tempo,
+            num_lyrics=num_lyrics,
+            audio_duration=audio_duration,
+            spotify_genres=self.spotify_genres,
+        )
+
+    @staticmethod
+    def _word_to_dict(word_obj) -> Dict:
+        if isinstance(word_obj, dict):
+            return {
+                "word": word_obj.get("word", word_obj.get("text", "")).strip(),
+                "start": word_obj.get("start", 0),
+                "end": word_obj.get("end", word_obj.get("start", 0) + 0.2),
+            }
+        return {
+            "word": (word_obj.word if hasattr(word_obj, "word") else "").strip(),
+            "start": word_obj.start if hasattr(word_obj, "start") else 0,
+            "end": word_obj.end if hasattr(word_obj, "end") else 0,
+        }
+
+    def _timing_bounds(self) -> Tuple[float, float, float]:
+        """Return (min_line_duration, max_line_duration, min_gap)."""
+        if self.config:
+            return (
+                self.config.MIN_LINE_DURATION,
+                self.config.MAX_LINE_DURATION,
+                self.config.MIN_GAP_BETWEEN_LINES,
+            )
+        return 1.5, 6.0, 0.1
+
+    def _ideal_duration_range(self) -> Tuple[float, float]:
+        if self.config and hasattr(self.config, "IDEAL_LINE_MIN"):
+            return self.config.IDEAL_LINE_MIN, self.config.IDEAL_LINE_MAX
+        return 1.5, 6.0
+
+    def _is_fast_sync(self) -> bool:
+        if not self.config:
+            return False
+        return self.config.MIN_LINE_DURATION <= 0.6
         
     def analyze_audio(self) -> Optional[AudioFeatures]:
         """Perform comprehensive audio analysis"""
@@ -195,6 +244,7 @@ class AdvancedLyricSynchronizer:
     def synchronize_lyrics(self, lyrics_lines: List[str]) -> List[SyncedLyric]:
         """Main synchronization method that tries multiple approaches"""
         print("Starting advanced lyrics synchronization...")
+        self._apply_sync_config(lyrics_lines)
         
         # SPECIAL CASE: If no lyrics provided (Genius failed), use Groq transcription only
         if lyrics_lines is None or len(lyrics_lines) == 0:
@@ -320,7 +370,20 @@ class AdvancedLyricSynchronizer:
                     print(f"Failed to write to debug file: {e}")
             
             
-            # Match lyrics to word sequences using existing algorithm
+            # TRANSCRIPTION-FIRST: Check corpus alignment before committing to lyrics matching.
+            # If the score is low the audio is a different version of the song and
+            # force-mapping external lyrics onto the transcript would produce bad sync.
+            ALIGNMENT_THRESHOLD = 0.35
+            alignment_score = self._compute_corpus_alignment_score(lyrics_lines, words)
+            if alignment_score < ALIGNMENT_THRESHOLD:
+                print(
+                    f"⚠️  Low corpus alignment ({alignment_score:.3f} < {ALIGNMENT_THRESHOLD}): "
+                    f"external lyrics don't match this audio version. "
+                    f"Switching to transcript-as-lyrics mode for accurate sync."
+                )
+                return self._build_synced_from_groq_segments(words, detected_lang)
+
+            # Alignment is sufficient – match lyrics to word sequences using existing algorithm
             synced_lyrics = self._match_lyrics_to_words(lyrics_lines, words, detected_lang)
             
             if synced_lyrics:
@@ -419,7 +482,112 @@ class AdvancedLyricSynchronizer:
             print(f"Error in Groq-only mode: {e}")
             traceback.print_exc()
             return None
-    
+
+    # ── Transcription-first helpers ──────────────────────────────────────────
+
+    def _compute_corpus_alignment_score(self, lyrics_lines: List[str], words: List) -> float:
+        """
+        Measure how well external lyrics (Musixmatch/Genius) align with what Groq
+        actually heard in the audio.  Returns a 0-1 similarity ratio.
+
+        A low score (<0.35) means the audio is a different version of the song
+        and force-mapping external lyrics onto the transcript would produce bad sync.
+        """
+        if not lyrics_lines or not words:
+            return 0.0
+
+        transcript_parts: List[str] = []
+        for w in words:
+            if isinstance(w, dict):
+                transcript_parts.append(w.get("word", w.get("text", "")))
+            elif hasattr(w, "word"):
+                transcript_parts.append(w.word)
+
+        transcript_text = re.sub(r"[^\w\s]", "", " ".join(transcript_parts).lower())
+        lyrics_text = re.sub(r"[^\w\s]", "", " ".join(lyrics_lines).lower())
+
+        if not transcript_text or not lyrics_text:
+            return 0.0
+
+        score = SequenceMatcher(None, lyrics_text, transcript_text).ratio()
+        print(f"Corpus alignment score: {score:.3f} (external lyrics vs transcript)")
+        return score
+
+    def _build_synced_from_groq_segments(
+        self, words: List, detected_language: str
+    ) -> Optional[List[SyncedLyric]]:
+        """
+        Build SyncedLyric lines directly from Groq word timestamps without using
+        any external lyrics.  Words are grouped into display lines by natural pauses
+        (≥ PAUSE_THRESHOLD seconds) or when MAX_WORDS_PER_LINE is reached.
+
+        Used when corpus alignment is too low to trust external lyrics.
+        """
+        if not words:
+            return None
+
+        min_dur, max_dur, min_gap = self._timing_bounds()
+        fast = self._is_fast_sync()
+        PAUSE_THRESHOLD = 0.35 if fast else 0.6
+        MAX_WORDS_PER_LINE = 6 if fast else 10
+
+        synced_lyrics: List[SyncedLyric] = []
+        current_line_words: List = []
+
+        def _flush(line_words: List) -> None:
+            if not line_words:
+                return
+            matched_words = [self._word_to_dict(w) for w in line_words]
+            first = matched_words[0]
+            last = matched_words[-1]
+            s = first["start"]
+            e = last["end"]
+            text = " ".join(w["word"] for w in matched_words if w["word"]).strip()
+            if text:
+                duration = max(min_dur, min(e - s, max_dur))
+                synced_lyrics.append(
+                    SyncedLyric(
+                        text=text,
+                        start_time=s,
+                        end_time=s + duration,
+                        duration=duration,
+                        confidence=0.95,
+                        method="transcript_first",
+                        words=matched_words,
+                    )
+                )
+
+        for i, word in enumerate(words):
+            current_line_words.append(word)
+
+            should_break = len(current_line_words) >= MAX_WORDS_PER_LINE
+
+            if not should_break and i + 1 < len(words):
+                next_word = words[i + 1]
+                if isinstance(word, dict) and isinstance(next_word, dict):
+                    gap = next_word.get("start", 0) - word.get("end", 0)
+                elif hasattr(word, "end") and hasattr(next_word, "start"):
+                    gap = next_word.start - word.end
+                else:
+                    gap = 0.0
+                if gap >= PAUSE_THRESHOLD:
+                    should_break = True
+
+            if should_break:
+                _flush(current_line_words)
+                current_line_words = []
+
+        _flush(current_line_words)
+
+        if not synced_lyrics:
+            return None
+
+        print(
+            f"Transcript-first: built {len(synced_lyrics)} lines from {len(words)} words "
+            f"(lang={detected_language})"
+        )
+        return synced_lyrics
+
     def _synchronize_with_local_whisper(self, lyrics_lines: List[str]) -> Optional[List[SyncedLyric]]:
         """Synchronize perfectly using whisper-timestamped for word-level bounding boxes"""
         try:
@@ -760,100 +928,55 @@ class AdvancedLyricSynchronizer:
                 
                 word_idx = end_idx + 1
             else:
-                # No match found - use forced mapping to prioritize Musixmatch words with Groq timings
-                print(f"  Line {line_num}: No match found, forcing Musixmatch words onto Groq timings")
-                
-                N = len(line_words)
-                if word_idx < len(words):
-                    end_idx = min(word_idx + N - 1, len(words) - 1)
-                    
-                    matched_words = []
-                    
-                    for k in range(N):
-                        # Map Musixmatch word to the corresponding Groq word slot (or the last available one)
-                        groq_k = min(word_idx + k, end_idx)
-                        w = words[groq_k]
-                        
-                        if isinstance(w, dict):
-                            m_start = w.get('start', 0)
-                            m_end = w.get('end', m_start + 0.5)
-                        else:
-                            m_start = w.start if hasattr(w, 'start') else 0
-                            m_end = w.end if hasattr(w, 'end') else m_start + 0.5
-                            
-                        # Use the Musixmatch word but keep the Groq timing
-                        matched_words.append({
-                            "word": line_words[k],
-                            "start": m_start,
-                            "end": m_end
-                        })
-                        
-                    start_time = matched_words[0]['start']
-                    end_time = matched_words[-1]['end']
-                    
-                    # HARDCODED FIX: Apply Pink Floyd "Breathe" specific corrections
-                    if line in PINK_FLOYD_BREATHE_FIXES:
-                        old_start = start_time
-                        start_time = PINK_FLOYD_BREATHE_FIXES[line]
-                        print(f"  🎵 PINK FLOYD FIX (forced): '{line[:30]}...' adjusted from {old_start:.2f}s to {start_time:.2f}s")
-                        
-                        # CRITICAL: DON'T shift matched_words - keep original Groq word timings for karaoke
-                        if matched_words and len(matched_words) > 0:
-                            matched_words[0]['start'] = start_time
-                            
-                            # CRITICAL: Give first word a minimum duration
-                            if matched_words[0]['end'] <= start_time:
-                                if len(matched_words) > 1:
-                                    matched_words[0]['end'] = matched_words[1]['start']
-                                else:
-                                    matched_words[0]['end'] = start_time + 0.4
-                        
-                        # Recalculate end_time based on last word
-                        if matched_words:
-                            end_time = matched_words[-1]['end']
-                        duration = end_time - start_time
-                    
-                    if end_time <= start_time:
-                        end_time = start_time + 2.0
-                        
-                    duration = end_time - start_time
-                    MAX_DURATION = 12.0
-                    
-                    if duration > MAX_DURATION:
-                        print(f"  WARNING: Forced mapping line {line_num} has excessive duration ({duration:.2f}s), capping at {MAX_DURATION}s")
-                        end_time = start_time + MAX_DURATION
-                        duration = MAX_DURATION
-                        
-                    # Use perfect confidence if this was a Pink Floyd fix, otherwise use default
-                    fix_confidence = 1.0 if line in PINK_FLOYD_BREATHE_FIXES else 0.3
-                    
+                # HARDCODED FIX: Apply Pink Floyd timing even when there is no transcript match.
+                if line in PINK_FLOYD_BREATHE_FIXES:
+                    start_time = PINK_FLOYD_BREATHE_FIXES[line]
+                    estimated_duration = max(2.0, min(len(line) * 0.05, 5.0))
                     synced_lyrics.append(SyncedLyric(
                         text=line,
                         start_time=start_time,
-                        end_time=end_time,
-                        duration=duration,
-                        confidence=fix_confidence,
-                        method="forced_musixmatch_mapping",
-                        words=matched_words
+                        end_time=start_time + estimated_duration,
+                        duration=estimated_duration,
+                        confidence=1.0,
+                        method="hardcoded_fix",
+                        words=[]
                     ))
-                    
-                    # Advance by exactly the number of words we mapped, so we don't skip over audio
-                    word_idx = end_idx + 1
+                    print(f"  Line {line_num}: 🎵 Pink Floyd fix at {start_time:.2f}s (no transcript match)")
+                    continue  # word_idx NOT advanced
+
+                # No match found – use time-based estimation WITHOUT advancing word_idx.
+                # Keeping the cursor in place lets subsequent lines still find their correct
+                # word-sequence, preventing cascade failures where all later lines inherit
+                # wrong timestamps from this unmatched line.
+                print(
+                    f"  Line {line_num}: No match found – time-based estimation "
+                    f"(word cursor held at {word_idx} to prevent cascade failure)"
+                )
+                if synced_lyrics:
+                    last_end = synced_lyrics[-1].end_time
+                    _, _, min_gap = self._timing_bounds()
+                    min_dur, max_dur, _ = self._timing_bounds()
+                    estimated_duration = self.config.calculate_line_duration(line, min_dur) if self.config else max(min_dur, min(len(line) * 0.04, max_dur))
+                    synced_lyrics.append(SyncedLyric(
+                        text=line,
+                        start_time=last_end + min_gap,
+                        end_time=last_end + min_gap + estimated_duration,
+                        duration=estimated_duration,
+                        confidence=0.2,
+                        method="unmatched_estimated",
+                        words=[]
+                    ))
                 else:
-                    # We ran out of Groq words entirely, use standard estimation based on previous line
-                    print(f"  Line {line_num}: Ran out of transcribed words, using standard estimation")
-                    if synced_lyrics:
-                        last_end = synced_lyrics[-1].end_time
-                        estimated_duration = max(2.0, min(len(line) * 0.05, 5.0))
-                        
-                        synced_lyrics.append(SyncedLyric(
-                            text=line,
-                            start_time=last_end + 0.5,
-                            end_time=last_end + 0.5 + estimated_duration,
-                            duration=estimated_duration,
-                            confidence=0.1,
-                            method="estimated_end"
-                        ))
+                    synced_lyrics.append(SyncedLyric(
+                        text=line,
+                        start_time=2.0,
+                        end_time=4.0,
+                        duration=2.0,
+                        confidence=0.1,
+                        method="unmatched_default",
+                        words=[]
+                    ))
+                # word_idx NOT advanced intentionally
         
         # POST-PROCESSING: Validate and fix any remaining timing issues
         synced_lyrics = self._post_process_timing(synced_lyrics)
@@ -874,8 +997,9 @@ class AdvancedLyricSynchronizer:
         # First pass: identify problematic sections
         problem_start_idx = None
         consecutive_large_gaps = 0
-        MAX_DURATION = 12.0
-        MIN_GAP = 0.1
+        min_dur, max_dur, min_gap = self._timing_bounds()
+        ideal_min, ideal_max = self._ideal_duration_range()
+        MAX_DURATION = max(max_dur * 2, 12.0)
         MAX_GAP = 240.0
         
         # Detect cascading failures (many consecutive large gaps)
@@ -903,8 +1027,9 @@ class AdvancedLyricSynchronizer:
             print(f"  POST-PROCESS: Redistributing {len(failed_lines)} lines starting from {last_good_end:.2f}s")
             
             for i, lyric in enumerate(failed_lines):
-                estimated_duration = max(2.0, min(len(lyric.text) * 0.04, 5.0))
-                new_start = last_good_end + 0.5
+                min_dur, max_dur, min_gap = self._timing_bounds()
+                estimated_duration = self.config.calculate_line_duration(lyric.text, min_dur) if self.config else max(min_dur, min(len(lyric.text) * 0.04, max_dur))
+                new_start = last_good_end + min_gap
                 new_end = new_start + estimated_duration
                 
                 processed.append(SyncedLyric(
@@ -959,14 +1084,17 @@ class AdvancedLyricSynchronizer:
                 # If lines overlap, fix it
                 elif gap < 0:
                     overlap = -gap
+                    # In fast sections allow tight back-to-back lines; only nudge slightly
+                    nudge = min_gap if self._is_fast_sync() else min_gap + 0.05
                     print(f"  POST-PROCESS: Fixing {overlap:.2f}s overlap between lines {i} and {i+1}")
                     lyric = SyncedLyric(
                         text=lyric.text,
-                        start_time=prev_lyric.end_time + MIN_GAP,
-                        end_time=prev_lyric.end_time + MIN_GAP + lyric.duration,
+                        start_time=prev_lyric.end_time + nudge,
+                        end_time=prev_lyric.end_time + nudge + lyric.duration,
                         duration=lyric.duration,
                         confidence=lyric.confidence,
-                        method=lyric.method
+                        method=lyric.method,
+                        words=lyric.words,
                     )
             
             processed.append(lyric)
@@ -1045,30 +1173,30 @@ class AdvancedLyricSynchronizer:
                 # Bonus for word count match
                 length_bonus = 1.0 - abs(len(target_words) - len(sequence)) / max(len(target_words), len(sequence))
                 
-                # Duration penalty: prefer shorter matches when similarity is similar
-                # Ideal duration is 2-6 seconds per line
-                if duration < 2.0:
-                    duration_penalty = 0.9  # Slightly penalize very short
-                elif duration <= 6.0:
-                    duration_penalty = 1.0  # Perfect range
-                elif duration <= 10.0:
-                    duration_penalty = 0.95  # Slightly penalize longer
+                # Duration penalty: prefer matches within the ideal range for this song
+                ideal_min, ideal_max = self._ideal_duration_range()
+                if duration < ideal_min:
+                    duration_penalty = 1.0 if self._is_fast_sync() else 0.9
+                elif duration <= ideal_max:
+                    duration_penalty = 1.0
+                elif duration <= ideal_max * 1.5:
+                    duration_penalty = 0.95
                 else:
-                    duration_penalty = 0.85  # Penalize very long
+                    duration_penalty = 0.85
                 
                 # Proximity bonus: prefer matches closer to previous line
                 if previous_end_time > 0:
                     time_gap = start_time - previous_end_time
                     if time_gap < 0:
-                        proximity_bonus = 0.8  # Penalize overlaps
-                    elif time_gap <= 2.0:
-                        proximity_bonus = 1.0  # Perfect gap
+                        proximity_bonus = 0.85 if self._is_fast_sync() else 0.8
+                    elif time_gap <= (0.5 if self._is_fast_sync() else 2.0):
+                        proximity_bonus = 1.0
                     elif time_gap <= 5.0:
-                        proximity_bonus = 0.95  # Good gap
+                        proximity_bonus = 0.95
                     elif time_gap <= 10.0:
-                        proximity_bonus = 0.85  # Acceptable gap
+                        proximity_bonus = 0.85
                     else:
-                        proximity_bonus = 0.7  # Large gap penalty
+                        proximity_bonus = 0.7
                 else:
                     proximity_bonus = 1.0
                 
@@ -1402,26 +1530,24 @@ class AdvancedLyricSynchronizer:
             available_time = duration - intro_time - 5
         
         print(f"Improved sync: intro={intro_time:.2f}s, available={available_time:.2f}s")
-        
+
+        min_dur, max_dur, min_gap = self._timing_bounds()
+
         # Calculate timing
         time_per_line = available_time / len(non_empty_lines)
-        time_per_line = max(1.5, min(time_per_line, 4.0))
+        time_per_line = max(min_dur, min(time_per_line, max_dur))
         
-        print(f"DEBUG: Distributing {len(non_empty_lines)} lines over {available_time:.2f}s (~{time_per_line:.2f}s per line)")
+        print(f"DEBUG: Distributing {len(non_empty_lines)} lines over {available_time:.2f}s (~{time_per_line:.2f}s per line, min={min_dur}s)")
         
         synced_lyrics = []
         current_time = intro_time
         
         for i, line in enumerate(non_empty_lines, 1):
-            # Adjust duration based on line characteristics
-            line_length_factor = len(line) / 30
-            duration = max(1.5, min(time_per_line * line_length_factor, 5.0))
-            
-            # Shorter lines get less time
-            if len(line) < 5:
-                duration = max(1.0, duration * 0.6)
-            elif len(line) > 50:
-                duration = min(6.0, duration * 1.2)
+            if self.config:
+                duration = self.config.calculate_line_duration(line, time_per_line)
+            else:
+                line_length_factor = len(line) / 30
+                duration = max(min_dur, min(time_per_line * line_length_factor, max_dur))
             
             print(f"DEBUG: Line {i}: '{line[:40]}...' → {current_time:.2f}s-{current_time + duration:.2f}s (duration: {duration:.2f}s)")
             
@@ -1434,21 +1560,27 @@ class AdvancedLyricSynchronizer:
                 method="improved_basic"
             ))
             
-            # Dynamic gap based on line duration
-            gap = 0.1 + (0.1 * min(1.0, duration / 3.0))
+            gap = self.config.calculate_gap_duration(duration) if self.config else min_gap
             current_time += duration + gap
         
-        # Fix overlaps
+        # Fix overlaps – use minimal gap in fast mode
+        overlap_pad = min_gap if self._is_fast_sync() else min_gap + 0.05
         for i in range(1, len(synced_lyrics)):
             if synced_lyrics[i].start_time < synced_lyrics[i-1].end_time:
                 overlap = synced_lyrics[i-1].end_time - synced_lyrics[i].start_time
-                synced_lyrics[i].start_time += overlap + 0.1
-                synced_lyrics[i].end_time += overlap + 0.1
+                synced_lyrics[i].start_time += overlap + overlap_pad
+                synced_lyrics[i].end_time += overlap + overlap_pad
         
         return synced_lyrics
 
 
-def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str] = None, lyrics_source: str = None, detected_language: str = None) -> List[Dict]:
+def synchronize_lyrics_advanced(
+    audio_path: str,
+    lyrics_lines: List[str] = None,
+    lyrics_source: str = None,
+    detected_language: str = None,
+    spotify_genres: List[str] = None,
+) -> List[Dict]:
     """
     Main function to synchronize lyrics using advanced methods.
     Returns list of dicts compatible with existing code.
@@ -1458,13 +1590,19 @@ def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str] = None,
         lyrics_lines: List of lyric lines (None for Groq-only mode)
         lyrics_source: Name of lyrics service ("Musixmatch", "Genius", etc.)
         detected_language: ISO 639-1 language code detected from Spotify metadata (e.g., 'es', 'en', 'fr')
+        spotify_genres: Artist genres from Spotify (used to pick fast-sync preset for rap/trap)
     
     If lyrics_lines is None, uses Groq transcription as lyrics (Groq-only mode).
     """
-    synchronizer = AdvancedLyricSynchronizer(audio_path, detected_language=detected_language)
+    synchronizer = AdvancedLyricSynchronizer(
+        audio_path,
+        detected_language=detected_language,
+        spotify_genres=spotify_genres,
+    )
     
     # Analyze audio features
     synchronizer.analyze_audio()
+    synchronizer._apply_sync_config(lyrics_lines)
     
     # Synchronize lyrics (handles None for Groq-only mode)
     synced_lyrics = synchronizer.synchronize_lyrics(lyrics_lines)

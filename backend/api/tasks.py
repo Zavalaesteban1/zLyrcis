@@ -284,7 +284,8 @@ def generate_lyric_video(job_id):
                     audio_path, 
                     filtered_lyrics_lines, 
                     lyrics_source=lyrics_source,
-                    detected_language=detected_language
+                    detected_language=detected_language,
+                    spotify_genres=song_info.get('genres'),
                 )
             
             # If advanced sync not available, try Deepgram
@@ -296,7 +297,11 @@ def generate_lyric_video(job_id):
             if not synced_lyrics:
                 if filtered_lyrics_lines:
                     print("Using basic fallback synchronization method")
-                    synced_lyrics = create_basic_synchronization(filtered_lyrics_lines, audio_duration)
+                    synced_lyrics = create_basic_synchronization(
+                        filtered_lyrics_lines,
+                        audio_duration,
+                        spotify_genres=song_info.get('genres'),
+                    )
                 else:
                     raise ValueError("No lyrics found and transcription failed")
             
@@ -442,6 +447,15 @@ def get_spotify_track_info(track_id):
     # Get track details
     track = sp.track(track_id)
     
+    # Fetch artist genres for sync preset selection
+    genres = []
+    try:
+        artist_id = track['artists'][0]['id']
+        artist = sp.artist(artist_id)
+        genres = artist.get('genres', [])
+    except Exception as e:
+        print(f"Could not fetch artist genres: {e}")
+    
     # Extract relevant information (no language detection from markets)
     song_info = {
         'title': track['name'],
@@ -449,7 +463,8 @@ def get_spotify_track_info(track_id):
         'duration_ms': track['duration_ms'],
         'album': track['album']['name'],
         'release_date': track['album']['release_date'],
-        'image_url': track['album']['images'][0]['url'] if track['album']['images'] else None
+        'image_url': track['album']['images'][0]['url'] if track['album']['images'] else None,
+        'genres': genres,
     }
     
     return song_info
@@ -1188,67 +1203,62 @@ def synchronize_with_deepgram(audio_path, lyrics_lines):
         return None
 
 
-def create_basic_synchronization(lyrics_lines, audio_duration):
+def create_basic_synchronization(lyrics_lines, audio_duration, spotify_genres=None):
     """Create basic timing for lyrics when Deepgram is not available"""
+    from core.config import build_sync_config
+
     # Skip empty lines
     non_empty_lines = [line for line in lyrics_lines if line.strip()]
     
     if not non_empty_lines:
         return []
+
+    config = build_sync_config(
+        tempo=None,
+        num_lyrics=len(non_empty_lines),
+        audio_duration=audio_duration,
+        spotify_genres=spotify_genres,
+    )
+    min_dur = config.MIN_LINE_DURATION
+    max_dur = config.MAX_LINE_DURATION
     
     # Improved intro time detection - typically songs start vocals after 10-20% of audio
-    # For very short songs, use less intro time; for long songs, cap at 30 seconds
-    if audio_duration < 120:  # Short song (less than 2 minutes)
-        intro_time = min(15, audio_duration * 0.10)  # 10% with 15 second max
-    elif audio_duration < 240:  # Medium song (2-4 minutes)
-        intro_time = min(20, audio_duration * 0.12)  # 12% with 20 second max
-    else:  # Long song (over 4 minutes)
-        intro_time = min(30, audio_duration * 0.15)  # 15% with 30 second max
+    if audio_duration < config.SHORT_SONG_THRESHOLD:
+        intro_time = min(15, audio_duration * config.INTRO_TIME_SHORT_SONG)
+    elif audio_duration < config.LONG_SONG_THRESHOLD:
+        intro_time = min(20, audio_duration * config.INTRO_TIME_MEDIUM_SONG)
+    else:
+        intro_time = min(config.MAX_INTRO_TIME, audio_duration * config.INTRO_TIME_LONG_SONG)
     
-    print(f"Estimated intro time: {intro_time} seconds")
+    print(f"Estimated intro time: {intro_time} seconds (min line duration: {min_dur}s)")
     
-    # Calculate time per line, adjusting for song length
-    available_time = audio_duration - intro_time - 5  # Reserve 5 seconds at the end
+    available_time = audio_duration - intro_time - 5
     time_per_line = available_time / len(non_empty_lines)
+    time_per_line = max(min_dur, min(time_per_line, max_dur))
     
-    # Cap line duration within reasonable limits
-    time_per_line = max(1.5, min(time_per_line, 4.0))
-    
-    # Create timing data with adjusted durations based on line length
     synced_lyrics = []
     current_time = intro_time
     
     for line in non_empty_lines:
-        # Adjust duration based on line length and complexity
-        line_length_factor = len(line) / 30  # Normalize to 30 chars as baseline
-        duration = max(1.5, min(time_per_line * line_length_factor, 5.0))
-        
-        # For very short lines (likely solo words or exclamations), reduce duration
-        if len(line) < 5:
-            duration = max(1.0, duration * 0.6)
-        
-        # For very long lines, increase duration but cap at reasonable limit
-        if len(line) > 50:
-            duration = min(6.0, duration * 1.2)
+        duration = config.calculate_line_duration(line, time_per_line)
         
         synced_lyrics.append({
             "text": line,
             "start_time": current_time,
             "end_time": current_time + duration,
-            "duration": duration
+            "duration": duration,
+            "words": [],
         })
         
-        # Add small gap between lines, shorter for shorter lines
-        gap = 0.1 + (0.1 * min(1.0, duration / 3.0))
+        gap = config.calculate_gap_duration(duration)
         current_time += duration + gap
     
-    # Final pass - ensure no overlap between lines
+    overlap_pad = config.MIN_GAP_BETWEEN_LINES
     for i in range(1, len(synced_lyrics)):
         if synced_lyrics[i]["start_time"] < synced_lyrics[i-1]["end_time"]:
-            # Fix overlap by shifting current line
             overlap = synced_lyrics[i-1]["end_time"] - synced_lyrics[i]["start_time"]
-            synced_lyrics[i]["start_time"] += overlap + 0.1  # Add small extra gap
-            synced_lyrics[i]["end_time"] += overlap + 0.1
+            synced_lyrics[i]["start_time"] += overlap + overlap_pad
+            synced_lyrics[i]["end_time"] += overlap + overlap_pad
     
     return synced_lyrics
 

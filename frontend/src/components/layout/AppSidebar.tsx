@@ -17,7 +17,7 @@ import {
 } from '../../styles/AppLayoutStyles';
 
 /** Icon pixel size passed to react-icons (also enforced via CSS on svg). */
-const NAV_ICON_SIZE = 32;
+const NAV_ICON_SIZE = 22;
 
 export interface AppSidebarProps {
   isOpen: boolean;

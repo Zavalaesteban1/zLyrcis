@@ -65,6 +65,12 @@ class SynchronizationConfig:
         self.ENABLE_ONSET_DETECTION = os.getenv('SYNC_ENABLE_ONSET_DETECTION', 'true').lower() == 'true'
         self.ENABLE_VOCAL_ACTIVITY_DETECTION = os.getenv('SYNC_ENABLE_VAD', 'true').lower() == 'true'
         self.ENABLE_SPECTRAL_ANALYSIS = os.getenv('SYNC_ENABLE_SPECTRAL', 'true').lower() == 'true'
+
+        # Fast-tempo / dense-lyrics matching (used by word-sequence matcher)
+        self.IDEAL_LINE_MIN = float(os.getenv('SYNC_IDEAL_LINE_MIN', '1.5'))
+        self.IDEAL_LINE_MAX = float(os.getenv('SYNC_IDEAL_LINE_MAX', '6.0'))
+        self.FAST_TEMPO_BPM = float(os.getenv('SYNC_FAST_TEMPO_BPM', '125.0'))
+        self.FAST_LYRICS_PER_MINUTE = float(os.getenv('SYNC_FAST_LYRICS_PER_MIN', '18.0'))
     
     def get_intro_time_ratio(self, audio_duration: float) -> float:
         """Get appropriate intro time ratio based on song length"""
@@ -156,10 +162,14 @@ GENRE_PRESETS = {
         'VOCAL_ENERGY_THRESHOLD': 0.20,
         'INTRO_TIME_SHORT_SONG': 0.05,
         'INTRO_TIME_MEDIUM_SONG': 0.08,
-        'MIN_LINE_DURATION': 0.8,
+        'MIN_LINE_DURATION': 0.4,
         'MAX_LINE_DURATION': 3.0,
+        'MIN_GAP_BETWEEN_LINES': 0.03,
+        'MAX_GAP_BETWEEN_LINES': 0.15,
         'SHORT_LINE_DURATION_FACTOR': 0.4,
         'BASELINE_CHARS_PER_LINE': 40,
+        'IDEAL_LINE_MIN': 0.3,
+        'IDEAL_LINE_MAX': 2.5,
     },
     'ballad': {
         'VOCAL_ENERGY_THRESHOLD': 0.30,
@@ -188,6 +198,77 @@ def get_config_for_genre(genre: str) -> SynchronizationConfig:
         config.update_from_dict(preset)
         print(f"Applied {genre} genre preset")
     
+    return config
+
+
+RAP_GENRE_KEYWORDS = {
+    'hip hop', 'hip-hop', 'rap', 'trap', 'drill', 'grime',
+    'gangsta rap', 'southern hip hop', 'cloud rap',
+}
+
+
+def _lyrics_density_per_minute(num_lyrics: int, audio_duration: float) -> float:
+    if not num_lyrics or not audio_duration or audio_duration <= 0:
+        return 0.0
+    return num_lyrics / (audio_duration / 60.0)
+
+
+def infer_sync_preset(
+    tempo: float = None,
+    num_lyrics: int = 0,
+    audio_duration: float = None,
+    spotify_genres: list = None,
+) -> str:
+    """
+    Pick the best sync preset based on tempo, lyric density, and Spotify genres.
+    Returns a key from GENRE_PRESETS ('rap', 'pop', etc.) or 'default'.
+    """
+    if spotify_genres:
+        normalized = {g.lower() for g in spotify_genres}
+        if normalized & RAP_GENRE_KEYWORDS:
+            return 'rap'
+
+    density = _lyrics_density_per_minute(num_lyrics, audio_duration)
+    fast_bpm = float(os.getenv('SYNC_FAST_TEMPO_BPM', '125.0'))
+    fast_density = float(os.getenv('SYNC_FAST_LYRICS_PER_MIN', '18.0'))
+
+    if tempo is not None and tempo >= fast_bpm:
+        return 'rap'
+    if density >= fast_density:
+        return 'rap'
+
+    return 'default'
+
+
+def build_sync_config(
+    tempo: float = None,
+    num_lyrics: int = 0,
+    audio_duration: float = None,
+    spotify_genres: list = None,
+) -> SynchronizationConfig:
+    """Build a SynchronizationConfig tuned for the detected song characteristics."""
+    preset = infer_sync_preset(tempo, num_lyrics, audio_duration, spotify_genres)
+    if preset == 'default':
+        config = SynchronizationConfig()
+        if tempo is not None and tempo >= float(os.getenv('SYNC_FAST_TEMPO_BPM', '125.0')):
+            config.IDEAL_LINE_MIN = 0.5
+            config.IDEAL_LINE_MAX = 3.0
+            config.MIN_GAP_BETWEEN_LINES = min(config.MIN_GAP_BETWEEN_LINES, 0.05)
+        return config
+
+    config = get_config_for_genre(preset)
+    reasons = []
+    if tempo is not None and tempo >= float(os.getenv('SYNC_FAST_TEMPO_BPM', '125.0')):
+        reasons.append(f"tempo={tempo:.0f} BPM")
+    density = _lyrics_density_per_minute(num_lyrics, audio_duration)
+    if density >= float(os.getenv('SYNC_FAST_LYRICS_PER_MIN', '18.0')):
+        reasons.append(f"density={density:.1f} lines/min")
+    if spotify_genres:
+        rap_hits = [g for g in spotify_genres if g.lower() in RAP_GENRE_KEYWORDS]
+        if rap_hits:
+            reasons.append(f"genre={rap_hits[0]}")
+    if reasons:
+        print(f"Fast sync preset ({preset}): {', '.join(reasons)}")
     return config
 
 

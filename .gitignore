@@ -78,7 +78,7 @@ frontend/.env.production.local
 .idea/
 .vscode/
 .cursor/
-.superdesing/
+.superdesign/
 .windsurfrules
 CLAUDE.md
 default_ui_darkmode.css

@@ -13,6 +13,7 @@ import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 import { AppSidebar } from '../components/layout/AppSidebar';
 import { AppLayout } from '../styles/AppLayoutStyles';
 import { APP_SIDEBAR_WIDTH } from '../constants/layout';
+import { ROUTES } from '../constants/routes';
 
 // Global style for consistent styling across pages
 const GlobalStyle = createGlobalStyle`
@@ -575,7 +576,7 @@ const HomePage: React.FC = () => {
 
       <MainContent>
         <PageHeader>
-          <PageTitle>Dashboard</PageTitle>
+          <PageTitle>Learning</PageTitle>
 
           <UserActions>
             <ProfileDropdown userData={userData} />
@@ -591,7 +592,7 @@ const HomePage: React.FC = () => {
                 : 'Create beautiful lyric videos from your favorite Spotify tracks with just a few clicks.'}
               {getLearningProgress() > 0 && ` Your learning progress is at ${getLearningProgress()}%.`}
             </WelcomeText>
-            <ActionButton to="/agent">Create New Video</ActionButton>
+            <ActionButton to={ROUTES.agent}>Create New Video</ActionButton>
           </WelcomeCard>
           
           <DashboardGrid>
@@ -617,7 +618,7 @@ const HomePage: React.FC = () => {
                     {MdMusicNote({ size: 48 })}
                   </EmptyStateIcon>
                   <EmptyStateText>No recent activity yet</EmptyStateText>
-                  <ActionButton to="/agent" style={{ backgroundColor: '#1DB954', color: 'white' }}>
+                  <ActionButton to={ROUTES.agent} style={{ backgroundColor: '#1DB954', color: 'white' }}>
                     Create Your First Video
                   </ActionButton>
                 </EmptyState>
@@ -652,17 +653,17 @@ const HomePage: React.FC = () => {
             <QuickActionsCard>
               <QuickActionsTitle>Quick Actions</QuickActionsTitle>
               <QuickActionsList>
-                <QuickActionButton to="/agent">
+                <QuickActionButton to={ROUTES.agent}>
                   <QuickActionIcon>
                     <IconAgentOrbit size={24} />
                   </QuickActionIcon>
                   <QuickActionText>AI Agent</QuickActionText>
                 </QuickActionButton>
-                <QuickActionButton to="/songs">
+                <QuickActionButton to={ROUTES.songs}>
                   <QuickActionIcon>{BsMusicNoteList({ size: 24 })}</QuickActionIcon>
                   <QuickActionText>My Songs</QuickActionText>
                 </QuickActionButton>
-                <QuickActionButton to="/profile">
+                <QuickActionButton to={ROUTES.profile}>
                   <QuickActionIcon>{CgProfile({ size: 24 })}</QuickActionIcon>
                   <QuickActionText>Edit Profile</QuickActionText>
                 </QuickActionButton>

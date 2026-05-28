@@ -114,6 +114,22 @@ export const NavItem = styled(NavLink)`
     height: 32px !important;
   }
 
+  &:hover .icon-agent-headphone-spark {
+    animation: headphonePulse 1.5s ease-in-out infinite;
+    transform-origin: 12px 3.7px;
+  }
+
+  @keyframes headphonePulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.12);
+      opacity: 0.75;
+    }
+  }
+
   &:hover {
     background-color: rgba(255, 255, 255, 0.22);
     color: #ffffff;

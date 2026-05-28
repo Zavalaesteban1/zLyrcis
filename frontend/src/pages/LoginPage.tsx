@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login, googleLogin, LoginCredentials } from '../services/api';
+import { ROUTES } from '../constants/routes';
 import { MdMusicNote, MdVideoLibrary, MdLyrics, MdClose } from 'react-icons/md';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
@@ -41,7 +42,7 @@ const LoginPage: React.FC = () => {
     
     try {
       await login(credentials);
-      navigate('/');
+      navigate(ROUTES.agent);
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || 'Login failed. Please try again.';
       setError(errorMessage);
@@ -65,7 +66,7 @@ const LoginPage: React.FC = () => {
       console.log('Google login successful:', decoded);
       
       await googleLogin({ token_id: credential });
-      navigate('/');
+      navigate(ROUTES.agent);
     } catch (err: any) {
       console.error('Google login error:', err);
       const errorMessage = err.response?.data?.error || 'Google login failed. Please try again.';

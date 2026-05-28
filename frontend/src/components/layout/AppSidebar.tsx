@@ -1,9 +1,11 @@
 import React from 'react';
 import { CgProfile } from 'react-icons/cg';
-import { IoHomeOutline, IoSettingsOutline } from 'react-icons/io5';
+import { IoSettingsOutline } from 'react-icons/io5';
 import { MdClose, MdMenu, MdMusicNote } from 'react-icons/md';
 import { AppLogo } from '../common/AppLogo';
 import { IconAgentOrbit } from '../icons/IconAgentOrbit';
+import { IconAgentHeadphone } from '../icons/IconAgentHeadphone';
+import { ROUTES } from '../../constants/routes';
 import {
   Sidebar,
   Logo,
@@ -29,7 +31,7 @@ export interface AppSidebarProps {
 }
 
 /**
- * Global app navigation rail (Home, Profile, Songs, Agent).
+ * Global app navigation rail (Agent, Songs, Profile, Learning).
  * Uses react-router NavLink for active route highlighting.
  */
 export const AppSidebar: React.FC<AppSidebarProps> = ({
@@ -48,28 +50,30 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         </Logo>
 
         <NavMenu>
-          <NavItem to="/" end data-tooltip="Home">
-            <NavIcon>{IoHomeOutline({ size: NAV_ICON_SIZE })}</NavIcon>
-            <NavText>Home</NavText>
-          </NavItem>
-          <NavItem to="/profile" data-tooltip="Profile">
-            <NavIcon>{CgProfile({ size: NAV_ICON_SIZE })}</NavIcon>
-            <NavText>Profile</NavText>
-          </NavItem>
-          <NavItem to="/songs" data-tooltip="My Songs">
-            <NavIcon>{MdMusicNote({ size: NAV_ICON_SIZE })}</NavIcon>
-            <NavText>My Songs</NavText>
-          </NavItem>
-          <NavItem to="/agent" data-tooltip="AI Agent">
+          <NavItem to={ROUTES.agent} end data-tooltip="AI Agent">
             <NavIcon>
               <IconAgentOrbit size={NAV_ICON_SIZE} />
             </NavIcon>
             <NavText>Agent</NavText>
           </NavItem>
+          <NavItem to={ROUTES.songs} data-tooltip="My Songs">
+            <NavIcon>{MdMusicNote({ size: NAV_ICON_SIZE })}</NavIcon>
+            <NavText>My Songs</NavText>
+          </NavItem>
+          <NavItem to={ROUTES.profile} data-tooltip="Profile">
+            <NavIcon>{CgProfile({ size: NAV_ICON_SIZE })}</NavIcon>
+            <NavText>Profile</NavText>
+          </NavItem>
+          <NavItem to={ROUTES.dashboard} data-tooltip="Learning">
+            <NavIcon>
+              <IconAgentHeadphone size={NAV_ICON_SIZE} />
+            </NavIcon>
+            <NavText>Learning</NavText>
+          </NavItem>
         </NavMenu>
 
         <NavFooter>
-          <NavItem to="/edit-profile" data-tooltip="Settings">
+          <NavItem to={ROUTES.editProfile} data-tooltip="Settings">
             <NavIcon>{IoSettingsOutline({ size: NAV_ICON_SIZE })}</NavIcon>
             <NavText>Settings</NavText>
           </NavItem>

@@ -8,6 +8,7 @@ import SongsPage from './pages/SongsPage';
 import AgentPage from './pages/AgentPage';
 import { isAuthenticated, getCurrentUser } from './services/api';
 import { UserProvider } from './contexts/UserContext';
+import { ROUTES } from './constants/routes';
 import './app.css';
 
 // Protected route component with UserProvider
@@ -21,7 +22,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ element }) => {
       {element}
     </UserProvider>
   ) : (
-    <Navigate to="/login" />
+    <Navigate to={ROUTES.login} />
   );
 };
 
@@ -81,16 +82,19 @@ function App() {
         ) : (
           <Routes>
             {/* Public routes */}
-            <Route path="/login" element={<TransitionRoute element={<LoginPage />} />} />
-            <Route path="/signup" element={<TransitionRoute element={<SignupPage />} />} />
+            <Route path={ROUTES.login} element={<TransitionRoute element={<LoginPage />} />} />
+            <Route path={ROUTES.signup} element={<TransitionRoute element={<SignupPage />} />} />
             
             {/* Protected routes */}
-            <Route path="/" element={<ProtectedRoute element={<TransitionRoute element={<HomePage />} />} />} />
-            <Route path="/profile" element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
-            <Route path="/songs" element={<ProtectedRoute element={<TransitionRoute element={<SongsPage />} />} />} />
-            <Route path="/agent" element={<ProtectedRoute element={<TransitionRoute element={<AgentPage />} />} />} />
-            <Route path="/edit-profile" element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
-            <Route path="/change-password" element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
+            <Route path={ROUTES.agent} element={<ProtectedRoute element={<TransitionRoute element={<AgentPage />} />} />} />
+            <Route path={ROUTES.dashboard} element={<ProtectedRoute element={<TransitionRoute element={<HomePage />} />} />} />
+            <Route path={ROUTES.profile} element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
+            <Route path={ROUTES.songs} element={<ProtectedRoute element={<TransitionRoute element={<SongsPage />} />} />} />
+            <Route path={ROUTES.editProfile} element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
+            <Route path={ROUTES.changePassword} element={<ProtectedRoute element={<TransitionRoute element={<ProfilePage />} />} />} />
+            {/* Old path — redirect to dashboard */}
+            <Route path="/agent" element={<Navigate to={ROUTES.dashboard} replace />} />
+            <Route path="/home" element={<Navigate to={ROUTES.dashboard} replace />} />
           </Routes>
         )}
       </div>

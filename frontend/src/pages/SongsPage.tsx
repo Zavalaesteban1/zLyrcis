@@ -20,6 +20,7 @@ import { ProfileDropdown } from '../components/profile/ProfileDropdown';
 import { AppSidebar } from '../components/layout/AppSidebar';
 import { AppLayout } from '../styles/AppLayoutStyles';
 import { APP_SIDEBAR_WIDTH } from '../constants/layout';
+import { ROUTES } from '../constants/routes';
 
 // Add global style to hide all scrollbars
 const GlobalStyle = createGlobalStyle`
@@ -459,7 +460,7 @@ const SongsPage: React.FC = () => {
                     {MdMusicNote({ size: 48 })}
                   </EmptyStateIcon>
                   <EmptyStateText>You don't have any songs yet.</EmptyStateText>
-                  <Button as={Link} to="/agent">
+                  <Button as={Link} to={ROUTES.agent}>
                     {MdAdd({ size: 18 })} Create Your First Video
                   </Button>
                 </EmptyState>

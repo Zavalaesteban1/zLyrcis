@@ -5,6 +5,7 @@ import { MdKeyboardArrowDown } from 'react-icons/md';
 import { FiLogOut } from 'react-icons/fi';
 import { CgProfile } from 'react-icons/cg';
 import { logout } from '../../services/api';
+import { ROUTES } from '../../constants/routes';
 
 interface ProfileDropdownProps {
   userData: {
@@ -242,17 +243,17 @@ export const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userData }) =>
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
+      navigate(ROUTES.login);
     } catch (error) {
       console.error('Error logging out:', error);
       // Force logout even if API call fails
       localStorage.removeItem('auth_token');
-      navigate('/login');
+      navigate(ROUTES.login);
     }
   };
 
   const handleProfileClick = () => {
-    navigate('/profile');
+    navigate(ROUTES.profile);
     setIsOpen(false);
   };
 

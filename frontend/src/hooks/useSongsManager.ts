@@ -75,6 +75,10 @@ export const useSongsManager = (userId: number | null): UseSongsManagerReturn =>
         };
       });
 
+      formattedSongs.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
       setSongs(formattedSongs);
     } catch (err) {
       console.error('Error fetching songs:', err);

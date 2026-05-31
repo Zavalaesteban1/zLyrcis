@@ -1,8 +1,29 @@
 import React from 'react';
 import styled from 'styled-components';
 import { Song } from '../../hooks/useSongsManager';
-import { MdPlayArrow, MdPause, MdDownload, MdDelete, MdCheckCircle } from 'react-icons/md';
+import { MdPlayArrow, MdPause, MdDelete, MdCheckCircle } from 'react-icons/md';
 import { BsCheckSquareFill } from 'react-icons/bs';
+
+const ROW_COUNT = 3;
+
+const splitSongsIntoRows = (songs: Song[], rowCount: number): Song[][] => {
+  if (songs.length === 0) return [];
+
+  const rows: Song[][] = [];
+  const base = Math.floor(songs.length / rowCount);
+  const remainder = songs.length % rowCount;
+
+  let index = 0;
+  for (let r = 0; r < rowCount; r++) {
+    const count = base + (r < remainder ? 1 : 0);
+    if (count > 0) {
+      rows.push(songs.slice(index, index + count));
+      index += count;
+    }
+  }
+
+  return rows;
+};
 
 const GallerySection = styled.div`
   margin-bottom: 40px;
@@ -33,37 +54,47 @@ const SongCount = styled.span`
   font-weight: 400;
 `;
 
-const ScrollContainer = styled.div`
+const RowsWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: 10px 0 30px;
+
+  @media (max-width: 768px) {
+    gap: 28px;
+  }
+`;
+
+const SongRow = styled.div`
   display: flex;
   overflow-x: auto;
   overflow-y: hidden;
   gap: 24px;
-  padding: 10px 30px 30px;
+  padding: 0 30px;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  
-  /* Hide scrollbar for Chrome, Safari and Opera */
+
   &::-webkit-scrollbar {
     height: 8px;
   }
-  
+
   &::-webkit-scrollbar-track {
     background: #f0f0f0;
     border-radius: 4px;
   }
-  
+
   &::-webkit-scrollbar-thumb {
     background: #1DB954;
     border-radius: 4px;
   }
-  
+
   &::-webkit-scrollbar-thumb:hover {
     background: #169c46;
   }
-  
+
   @media (max-width: 768px) {
-    padding: 10px 20px 30px;
     gap: 20px;
+    padding: 0 20px;
   }
 `;
 
@@ -73,11 +104,11 @@ const SongCard = styled.div`
   width: 280px;
   cursor: pointer;
   transition: transform 0.3s ease;
-  
+
   &:hover {
     transform: translateY(-8px);
   }
-  
+
   @media (max-width: 768px) {
     width: 200px;
   }
@@ -261,9 +292,82 @@ interface HorizontalSongGalleryProps {
   playingSongId: string | null;
   onToggleLearned: (song: Song) => void;
   onPlay: (songId: string) => void;
-  onDownload: (song: Song) => void;
   onDelete: (song: Song) => void;
 }
+
+interface GallerySongCardProps {
+  song: Song;
+  playingSongId: string | null;
+  onToggleLearned: (song: Song) => void;
+  onPlay: (songId: string) => void;
+  onDelete: (song: Song) => void;
+}
+
+const GallerySongCard: React.FC<GallerySongCardProps> = ({
+  song,
+  playingSongId,
+  onToggleLearned,
+  onPlay,
+  onDelete,
+}) => (
+  <SongCard>
+    <CardImageWrapper>
+      <LearnedCheckbox
+        checked={song.learned}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleLearned(song);
+        }}
+      >
+        {song.learned ? BsCheckSquareFill({ size: 14 }) : null}
+      </LearnedCheckbox>
+
+      {song.learned && (
+        <LearnedBadge title="Learned">
+          {MdCheckCircle({ size: 16 })}
+        </LearnedBadge>
+      )}
+
+      {song.albumCoverUrl ? (
+        <AlbumImage src={song.albumCoverUrl} alt={song.song_title} />
+      ) : (
+        <AlbumPlaceholder color={generatePlaceholderColor(song.song_title)}>
+          {song.song_title.charAt(0).toUpperCase()}
+        </AlbumPlaceholder>
+      )}
+
+      <HoverOverlay>
+        <ActionButtons>
+          <PlayButton
+            isPlaying={playingSongId === song.id}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlay(song.id);
+            }}
+            title={playingSongId === song.id ? 'Pause' : 'Play'}
+          >
+            {playingSongId === song.id ? MdPause({ size: 24 }) : MdPlayArrow({ size: 24 })}
+          </PlayButton>
+
+          <ActionButton
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(song);
+            }}
+            title="Delete"
+          >
+            {MdDelete({ size: 18 })}
+          </ActionButton>
+        </ActionButtons>
+      </HoverOverlay>
+    </CardImageWrapper>
+
+    <SongInfo>
+      <SongTitle>{song.song_title}</SongTitle>
+      <SongArtist>{song.artist}</SongArtist>
+    </SongInfo>
+  </SongCard>
+);
 
 export const HorizontalSongGallery: React.FC<HorizontalSongGalleryProps> = ({
   title,
@@ -271,10 +375,11 @@ export const HorizontalSongGallery: React.FC<HorizontalSongGalleryProps> = ({
   playingSongId,
   onToggleLearned,
   onPlay,
-  onDownload,
   onDelete
 }) => {
   if (songs.length === 0) return null;
+
+  const songRows = splitSongsIntoRows(songs, ROW_COUNT);
 
   return (
     <GallerySection>
@@ -283,78 +388,23 @@ export const HorizontalSongGallery: React.FC<HorizontalSongGalleryProps> = ({
           {title} <SongCount>({songs.length})</SongCount>
         </SectionTitle>
       </SectionHeader>
-      
-      <ScrollContainer>
-        {songs.map((song) => (
-          <SongCard key={song.id}>
-            <CardImageWrapper>
-              <LearnedCheckbox 
-                checked={song.learned} 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleLearned(song);
-                }}
-              >
-                {song.learned ? BsCheckSquareFill({ size: 14 }) : null}
-              </LearnedCheckbox>
-              
-              {song.learned && (
-                <LearnedBadge title="Learned">
-                  {MdCheckCircle({ size: 16 })}
-                </LearnedBadge>
-              )}
-              
-              {song.albumCoverUrl ? (
-                <AlbumImage src={song.albumCoverUrl} alt={song.song_title} />
-              ) : (
-                <AlbumPlaceholder color={generatePlaceholderColor(song.song_title)}>
-                  {song.song_title.charAt(0).toUpperCase()}
-                </AlbumPlaceholder>
-              )}
-              
-              <HoverOverlay>
-                <ActionButtons>
-                  <ActionButton 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDownload(song);
-                    }}
-                    title="Download"
-                  >
-                    {MdDownload({ size: 18 })}
-                  </ActionButton>
-                  
-                  <PlayButton 
-                    isPlaying={playingSongId === song.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPlay(song.id);
-                    }}
-                    title={playingSongId === song.id ? 'Pause' : 'Play'}
-                  >
-                    {playingSongId === song.id ? MdPause({ size: 24 }) : MdPlayArrow({ size: 24 })}
-                  </PlayButton>
-                  
-                  <ActionButton 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(song);
-                    }}
-                    title="Delete"
-                  >
-                    {MdDelete({ size: 18 })}
-                  </ActionButton>
-                </ActionButtons>
-              </HoverOverlay>
-            </CardImageWrapper>
-            
-            <SongInfo>
-              <SongTitle>{song.song_title}</SongTitle>
-              <SongArtist>{song.artist}</SongArtist>
-            </SongInfo>
-          </SongCard>
+
+      <RowsWrapper>
+        {songRows.map((rowSongs, rowIndex) => (
+          <SongRow key={`row-${rowIndex}`}>
+            {rowSongs.map((song) => (
+              <GallerySongCard
+                key={song.id}
+                song={song}
+                playingSongId={playingSongId}
+                onToggleLearned={onToggleLearned}
+                onPlay={onPlay}
+                onDelete={onDelete}
+              />
+            ))}
+          </SongRow>
         ))}
-      </ScrollContainer>
+      </RowsWrapper>
     </GallerySection>
   );
 };

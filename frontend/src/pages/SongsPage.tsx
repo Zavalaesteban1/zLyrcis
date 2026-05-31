@@ -317,32 +317,6 @@ const SongsPage: React.FC = () => {
     }
   };
 
-  // Handle download
-  const handleDownload = (song: Song) => {
-    if (!song.video_file) {
-      setNotification({
-        message: `Error: No video file available for "${song.song_title}"`,
-        type: 'error'
-      });
-      return;
-    }
-    
-    const link = document.createElement('a');
-    link.href = song.video_file;
-    link.download = `${song.song_title} - ${song.artist}.mp4`;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    setNotification({
-      message: `Downloading "${song.song_title}"...`,
-      type: 'success'
-    });
-    
-    setTimeout(() => setNotification(null), 3000);
-  };
-
   // Handle delete
   const handleDeleteClick = (song: Song) => {
     setSongToDelete(song);
@@ -473,7 +447,6 @@ const SongsPage: React.FC = () => {
                       playingSongId={playingSongId}
                       onToggleLearned={toggleLearnedStatus}
                       onPlay={handlePlayPause}
-                      onDownload={handleDownload}
                       onDelete={handleDeleteClick}
                     />
                   )}
@@ -485,7 +458,6 @@ const SongsPage: React.FC = () => {
                       playingSongId={playingSongId}
                       onToggleLearned={toggleLearnedStatus}
                       onPlay={handlePlayPause}
-                      onDownload={handleDownload}
                       onDelete={handleDeleteClick}
                     />
                   )}
@@ -497,7 +469,6 @@ const SongsPage: React.FC = () => {
                       playingSongId={playingSongId}
                       onToggleLearned={toggleLearnedStatus}
                       onPlay={handlePlayPause}
-                      onDownload={handleDownload}
                       onDelete={handleDeleteClick}
                     />
                   )}

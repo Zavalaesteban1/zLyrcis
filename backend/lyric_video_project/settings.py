@@ -190,9 +190,19 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+_cors_origins_env = os.environ.get('CORS_ALLOWED_ORIGINS', '')
 CORS_ALLOWED_ORIGINS = [
-    'https://zlyricsai.netlify.app',
+    origin.strip()
+    for origin in _cors_origins_env.split(',')
+    if origin.strip()
+] if _cors_origins_env else [
     'http://localhost:3000',
+    'https://zlyricsai.netlify.app',
+]
+
+# Vercel production + preview deployments (e.g. my-app.vercel.app, my-app-git-main-user.vercel.app)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r'^https://[\w-]+\.vercel\.app$',
 ]
 
 # Cloudinary configuration (DEPRECATED - kept for backward compatibility with profile pictures)

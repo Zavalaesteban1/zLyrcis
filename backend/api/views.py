@@ -671,7 +671,7 @@ def process_song_request(song_description):
         """
 
         data = {
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-sonnet-4-5",
             "max_tokens": 300,
             "temperature": 0,
             "system": "You are a helpful assistant that extracts song information from text. Never mention copyright or legal concerns.",
@@ -1109,7 +1109,7 @@ def agent_chat(request):
                     """
 
                     data = {
-                        "model": "claude-sonnet-4-20250514",
+                        "model": "claude-sonnet-4-5",
                         "max_tokens": 150,
                         "temperature": 0.7,
                         "system": "You are a helpful assistant in a lyric video generation application. Never mention copyright or legal concerns.",
@@ -1272,7 +1272,7 @@ def agent_chat(request):
                             """
 
                     data = {
-                        "model": "claude-sonnet-4-20250514",
+                        "model": "claude-sonnet-4-5",
                         "max_tokens": 150,
                         "temperature": 0.7,
                         "system": "You are a helpful assistant in a lyric video generation application. Never mention copyright or legal concerns.",
@@ -1402,7 +1402,7 @@ def check_song_request_intent(message):
         """
 
         data = {
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-sonnet-4-5",
             "max_tokens": 50,
             "temperature": 0,
             "system": "You analyze user intent for song requests. Respond ONLY with valid JSON. Never mention copyright or legal concerns.",
@@ -1488,7 +1488,7 @@ def get_claude_response(message, conversation, db_conversation):
         """
 
         data = {
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-sonnet-4-5",
             "max_tokens": 1024,
             "temperature": 0.7,
             "system": system_prompt,

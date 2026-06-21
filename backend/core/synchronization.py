@@ -195,37 +195,41 @@ class AdvancedLyricSynchronizer:
     def synchronize_lyrics(self, lyrics_lines: List[str]) -> List[SyncedLyric]:
         """Main synchronization method that tries multiple approaches"""
         print("Starting advanced lyrics synchronization...")
-        
+
         # SPECIAL CASE: If no lyrics provided (Genius failed), use Groq transcription only
         if lyrics_lines is None or len(lyrics_lines) == 0:
             print("⚠️  No Genius lyrics - using Groq transcription as lyrics (Groq-only mode)")
             return self._synchronize_groq_only()
-        
+
         # Method 1: Groq API (Fastest - 3-5 seconds on GPU)
         groq_result = self._synchronize_with_groq(lyrics_lines)
         if groq_result and len(groq_result) > len(lyrics_lines) * 0.7:
             print("Using Groq API (Whisper large-v3 on GPU)")
             return groq_result
-        
-        # Method 2: Local Whisper Word-Level Sync (Slowest but works offline)
+
+        # Method 2: Local Whisper Word-Level Sync (works offline)
         whisper_result = self._synchronize_with_local_whisper(lyrics_lines)
         if whisper_result and len(whisper_result) > len(lyrics_lines) * 0.7:
             print("Using Local Whisper word-level synchronization")
             return whisper_result
+
+        # Groq and Whisper both failed — now worth paying for librosa audio analysis
+        print("Fast methods failed — running librosa audio analysis as fallback")
+        self.analyze_audio()
 
         # Method 3: Try enhanced Deepgram with audio features (fallback)
         deepgram_result = self._synchronize_with_enhanced_deepgram(lyrics_lines)
         if deepgram_result and len(deepgram_result) > len(lyrics_lines) * 0.7:
             print("Using enhanced Deepgram synchronization")
             return deepgram_result
-        
+
         # Method 4: Try audio analysis-based synchronization
         if self.audio_features:
             audio_result = self._synchronize_with_audio_analysis(lyrics_lines)
             if audio_result:
                 print("Using audio analysis-based synchronization")
                 return audio_result
-        
+
         # Method 5: Fallback to improved basic synchronization
         print("Using improved basic synchronization")
         return self._create_improved_basic_synchronization(lyrics_lines)
@@ -977,17 +981,25 @@ class AdvancedLyricSynchronizer:
         """Find the best matching word sequence with time duration and proximity constraints"""
         if not target_words or start_idx >= len(transcribed_words):
             return None
-        
+
+        # Time-based pre-skip: advance past words that clearly ended before our search window.
+        # This replaces the old brute-force 500-word scan with a targeted O(k) skip.
+        if previous_end_time > 0:
+            while start_idx < len(transcribed_words) - 1:
+                if self._word_start(transcribed_words[start_idx]) >= previous_end_time - 2.0:
+                    break
+                start_idx += 1
+
         best_match = None
         best_score = 0.0
-        search_window = min(500, len(transcribed_words) - start_idx)  # Dramatically expanded to support long instrumentals
-        
+        search_window = min(100, len(transcribed_words) - start_idx)
+
         # Maximum duration for a single lyric line (in seconds)
         MAX_LINE_DURATION = 15.0
-        
-        # CRITICAL: Maximum time distance from previous line (expanded to support long intros/solos)
-        MAX_TIME_DISTANCE = 240.0  # Search up to 4 minutes ahead
-        
+
+        # 60 s covers any real instrumental break without scanning the whole song
+        MAX_TIME_DISTANCE = 60.0
+
         for i in range(start_idx, start_idx + search_window):
             # Get start time of potential match
             start_word = transcribed_words[i]
@@ -995,27 +1007,26 @@ class AdvancedLyricSynchronizer:
                 start_time = start_word.get('start', 0)
             else:
                 start_time = start_word.start if hasattr(start_word, 'start') else 0
-            
-            # CRITICAL: Skip if this word is too far from the previous line
+
+            # Stop if this word is too far from the previous line
             if previous_end_time > 0 and (start_time - previous_end_time) > MAX_TIME_DISTANCE:
-                # Stop searching - we've gone too far
                 break
-            
+
             for j in range(i + 1, min(i + len(target_words) * 3, len(transcribed_words))):
-                # CRITICAL: Check time duration FIRST before doing expensive string matching
+                # Check time duration FIRST before doing expensive string matching
                 end_word = transcribed_words[j]
-                
+
                 # Extract timestamps
                 if isinstance(end_word, dict):
                     end_time = end_word.get('end', start_time + 2.0)
                 else:
                     end_time = end_word.end if hasattr(end_word, 'end') else start_time + 2.0
-                
+
                 duration = end_time - start_time
-                
-                # Skip if duration exceeds maximum
+
+                # Break (not continue) — j only grows, so duration can only increase
                 if duration > MAX_LINE_DURATION:
-                    continue
+                    break
                 
                 # Extract sequence of transcribed words
                 sequence = []
@@ -1447,6 +1458,391 @@ class AdvancedLyricSynchronizer:
         
         return synced_lyrics
 
+    def _word_start(self, word_obj) -> float:
+        if isinstance(word_obj, dict):
+            return float(word_obj.get('start', 0))
+        return float(word_obj.start if hasattr(word_obj, 'start') else 0)
+
+    def _word_end(self, word_obj) -> float:
+        if isinstance(word_obj, dict):
+            start = float(word_obj.get('start', 0))
+            return float(word_obj.get('end', start + 0.5))
+        start = float(word_obj.start if hasattr(word_obj, 'start') else 0)
+        return float(word_obj.end if hasattr(word_obj, 'end') else start + 0.5)
+
+    def _sync_debug_enabled(self) -> bool:
+        return os.environ.get("LYRIC_SYNC_DEBUG", "").lower() in ("1", "true", "yes") or os.environ.get("DEBUG") == "True"
+
+    def _write_sync_debug_log(self, content: str) -> None:
+        if not self._sync_debug_enabled():
+            return
+        try:
+            with open("debug.log", "a", encoding="utf-8") as f:
+                f.write(content + "\n")
+        except Exception as e:
+            print(f"Failed to write sync debug log: {e}")
+
+    def _print_groq_words_debug(self, words: List[Dict]) -> None:
+        """Log what Groq heard — full dump when LYRIC_SYNC_DEBUG=1."""
+        sep = "=" * 80
+        transcribed_text = " ".join(w["word"] for w in words)
+        lines = [
+            f"\n{sep}",
+            f"GROQ LRC REFINE — RAW TRANSCRIPTION ({len(words)} words)",
+            sep,
+            "Full text:",
+            transcribed_text,
+            sep,
+        ]
+
+        if self._sync_debug_enabled():
+            lines.append(f"WORD TIMESTAMPS — ALL {len(words)} WORDS")
+            lines.append(sep)
+            for i, w in enumerate(words, 1):
+                lines.append(
+                    f"Word {i:4d}: '{w['word']:20s}' → {w['start']:7.2f}s - {w['end']:7.2f}s"
+                )
+        else:
+            preview = words[:15]
+            lines.append("WORD TIMESTAMPS — first 15 (set LYRIC_SYNC_DEBUG=1 for full dump)")
+            lines.append(sep)
+            for i, w in enumerate(preview, 1):
+                lines.append(
+                    f"Word {i:4d}: '{w['word']:20s}' → {w['start']:7.2f}s - {w['end']:7.2f}s"
+                )
+            if len(words) > 15:
+                lines.append(f"... +{len(words) - 15} more words (enable LYRIC_SYNC_DEBUG=1)")
+
+        lines.append(f"{sep}\n")
+        output = "\n".join(lines)
+        print(output)
+        self._write_sync_debug_log(output)
+
+    def _print_lrc_refine_result_debug(self, lrc_lines: List[Dict], refined: List[Dict]) -> None:
+        """Log each line: LRC window vs refined timing, method, and word stamps."""
+        sep = "=" * 80
+        lines = [
+            f"\n{sep}",
+            f"LRC + GROQ REFINE RESULT — {len(refined)} lines",
+            sep,
+        ]
+
+        for i, (raw, out) in enumerate(zip(lrc_lines, refined), 1):
+            lrc_start = float(raw["start_time"])
+            lrc_end = float(raw["end_time"])
+            out_start = float(out["start_time"])
+            out_end = float(out["end_time"])
+            method = out.get("method", "?")
+            conf = out.get("confidence", 0)
+
+            lines.append(
+                f"Line {i:3d} [{out_start:7.2f}s - {out_end:7.2f}s]  "
+                f"({method}, conf={conf:.2f})  LRC was [{lrc_start:.2f}s-{lrc_end:.2f}s]"
+            )
+            lines.append(f"       {out['text']}")
+
+            word_preview = out.get("words") or []
+            if word_preview:
+                parts = [
+                    f"{w['word']}({w['start']:.2f}s-{w['end']:.2f}s)"
+                    for w in word_preview[:8]
+                ]
+                preview = " | ".join(parts)
+                if len(word_preview) > 8:
+                    preview += f" ... +{len(word_preview) - 8} more"
+                lines.append(f"       Words: {preview}")
+
+        lines.append(f"{sep}\n")
+        output = "\n".join(lines)
+        print(output)
+        self._write_sync_debug_log(output)
+
+    def _fetch_groq_words(self) -> Optional[List[Dict]]:
+        """Transcribe audio with Groq/Whisper and return word-level timestamps."""
+        if not GROQ_AVAILABLE:
+            print("Groq not available — skipping LRC refinement")
+            return None
+
+        api_key = os.environ.get("GROQ_API_KEY")
+        if not api_key:
+            print("No GROQ_API_KEY — skipping LRC refinement")
+            return None
+
+        try:
+            client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+            transcription_params = {
+                "model": "whisper-large-v3",
+                "file": None,
+                "response_format": "verbose_json",
+                "timestamp_granularities": ["word"],
+            }
+            if self.detected_language:
+                transcription_params["language"] = self.detected_language
+
+            with open(self.audio_path, "rb") as audio_file:
+                transcription_params["file"] = audio_file
+                transcription = client.audio.transcriptions.create(**transcription_params)
+
+            words = []
+            if hasattr(transcription, 'words') and transcription.words:
+                for word_obj in transcription.words:
+                    words.append({
+                        "word": word_obj.word.strip(),
+                        "start": word_obj.start,
+                        "end": word_obj.end,
+                    })
+
+            if not words:
+                print("Groq returned no words — keeping LRC timings")
+                return None
+
+            print(f"Groq returned {len(words)} words for LRC refinement")
+            self._print_groq_words_debug(words)
+            return words
+        except Exception as e:
+            print(f"Groq transcription failed during LRC refinement: {e}")
+            traceback.print_exc()
+            return None
+
+    def _map_lyric_tokens_to_groq_timings(self, line_words: List[str], groq_sequence: List[Dict]) -> List[Dict]:
+        """Force official lyric tokens onto Groq timing slots (text never comes from Groq)."""
+        matched_words = []
+        matcher = SequenceMatcher(
+            None,
+            [w.lower() for w in line_words],
+            [w['word'].lower() for w in groq_sequence],
+        )
+
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag in ('equal', 'replace'):
+                musix_w = line_words[i1:i2]
+                groq_w = groq_sequence[j1:j2]
+                for m_idx, word_text in enumerate(musix_w):
+                    g_idx = min(m_idx, len(groq_w) - 1)
+                    if g_idx >= 0:
+                        slot = groq_w[g_idx]
+                        matched_words.append({
+                            "word": word_text,
+                            "start": slot["start"],
+                            "end": slot["end"],
+                        })
+                    else:
+                        last_time = matched_words[-1]["end"] if matched_words else 0
+                        matched_words.append({
+                            "word": word_text,
+                            "start": last_time,
+                            "end": last_time + 0.2,
+                        })
+            elif tag == 'delete':
+                musix_w = line_words[i1:i2]
+                if matched_words:
+                    last_time = matched_words[-1]["end"]
+                elif j2 < len(groq_sequence):
+                    last_time = max(0, groq_sequence[j2]["start"] - (len(musix_w) * 0.2))
+                else:
+                    last_time = 0
+                for word_text in musix_w:
+                    matched_words.append({
+                        "word": word_text,
+                        "start": last_time,
+                        "end": last_time + 0.2,
+                    })
+                    last_time += 0.2
+
+        return matched_words
+
+    def _find_best_word_sequence_in_lrc_window(
+        self,
+        target_words: List[str],
+        transcribed_words: List,
+        lrc_start: float,
+        lrc_end: float,
+        search_from_idx: int,
+    ) -> Optional[Tuple[int, int, float]]:
+        """Match a lyric line to Groq words near the LRC timestamp window."""
+        if not target_words or search_from_idx >= len(transcribed_words):
+            return None
+
+        window_start = search_from_idx
+        while window_start < len(transcribed_words) and self._word_start(transcribed_words[window_start]) < lrc_start - 2.0:
+            window_start += 1
+
+        window_end = window_start
+        while window_end < len(transcribed_words) and self._word_start(transcribed_words[window_end]) <= lrc_end + 1.5:
+            window_end += 1
+
+        if window_start >= window_end:
+            return None
+
+        best_match = None
+        best_score = 0.0
+        max_line_duration = min(15.0, max(4.0, (lrc_end - lrc_start) + 2.0))
+
+        for i in range(window_start, window_end):
+            start_time = self._word_start(transcribed_words[i])
+
+            for j in range(i, min(i + len(target_words) * 4, window_end)):
+                end_time = self._word_end(transcribed_words[j])
+                duration = end_time - start_time
+                if duration > max_line_duration:
+                    continue
+
+                sequence = []
+                for k in range(i, j + 1):
+                    word_obj = transcribed_words[k]
+                    word_text = word_obj.get('word', '') if isinstance(word_obj, dict) else getattr(word_obj, 'word', '')
+                    word = re.sub(r'[^\w\s]', '', word_text.lower())
+                    if word:
+                        sequence.append(word)
+
+                if not sequence:
+                    continue
+
+                target_text = ' '.join(target_words)
+                sequence_text = ' '.join(sequence)
+                similarity = SequenceMatcher(None, target_text, sequence_text).ratio()
+                length_bonus = 1.0 - abs(len(target_words) - len(sequence)) / max(len(target_words), len(sequence))
+
+                lrc_delta = abs(start_time - lrc_start)
+                if lrc_delta <= 0.5:
+                    lrc_bonus = 1.0
+                elif lrc_delta <= 1.5:
+                    lrc_bonus = 0.92
+                elif lrc_delta <= 3.0:
+                    lrc_bonus = 0.8
+                else:
+                    lrc_bonus = 0.55
+
+                score = (similarity * 0.75 + length_bonus * 0.25) * lrc_bonus
+                if score > best_score and score > 0.42:
+                    best_score = score
+                    best_match = (i, j, score)
+
+        return best_match
+
+    def _fallback_lrc_line_words(self, text: str, lrc_start: float, lrc_end: float, next_lrc_start: Optional[float]) -> Tuple[float, float, List[Dict]]:
+        """When Groq can't match, keep LRC start but shorten karaoke window so highlights don't drag."""
+        tokens = text.split()
+        if not tokens:
+            return lrc_start, lrc_end, []
+
+        gap = (next_lrc_start - lrc_start) if next_lrc_start else (lrc_end - lrc_start)
+        vocal_dur = min(max(1.5, len(tokens) * 0.22), gap * 0.7, 10.0)
+        end_time = lrc_start + vocal_dur
+        if next_lrc_start:
+            end_time = min(end_time, next_lrc_start - 0.05)
+
+        slot = vocal_dur / len(tokens)
+        words = []
+        for idx, token in enumerate(tokens):
+            words.append({
+                "word": token,
+                "start": lrc_start + idx * slot,
+                "end": lrc_start + (idx + 1) * slot if idx < len(tokens) - 1 else end_time,
+            })
+
+        return lrc_start, end_time, words
+
+    def refine_lrc_lines(self, lrc_lines: List[Dict], groq_words: Optional[List[Dict]] = None) -> List[Dict]:
+        """
+        Refine Musixmatch LRC with Groq word timings.
+
+        LRC text and line order are always preserved. Groq only adjusts when/where
+        words are highlighted and trims lines that stay on screen too long.
+        """
+        if groq_words is None:
+            groq_words = self._fetch_groq_words()
+        if not groq_words:
+            return lrc_lines
+
+        refined = []
+        groq_idx = 0
+        matched_count = 0
+
+        for i, line in enumerate(lrc_lines):
+            text = line["text"]
+            lrc_start = float(line["start_time"])
+            lrc_end = float(line["end_time"])
+            next_lrc_start = float(lrc_lines[i + 1]["start_time"]) if i + 1 < len(lrc_lines) else None
+
+            line_tokens = self._normalize_and_tokenize(text)
+            if not line_tokens:
+                refined.append(line)
+                continue
+
+            while groq_idx < len(groq_words) and self._word_start(groq_words[groq_idx]) < lrc_start - 2.5:
+                groq_idx += 1
+
+            best_match = self._find_best_word_sequence_in_lrc_window(
+                line_tokens, groq_words, lrc_start, lrc_end, groq_idx
+            )
+
+            if best_match:
+                start_idx, end_idx, confidence = best_match
+                groq_sequence = [
+                    {
+                        "word": groq_words[k]["word"],
+                        "start": groq_words[k]["start"],
+                        "end": groq_words[k]["end"],
+                    }
+                    for k in range(start_idx, end_idx + 1)
+                ]
+                matched_words = self._map_lyric_tokens_to_groq_timings(line_tokens, groq_sequence)
+
+                if matched_words:
+                    start_time = matched_words[0]["start"]
+                    vocal_end = matched_words[-1]["end"]
+                    end_time = vocal_end + 0.25
+                    if next_lrc_start:
+                        end_time = min(end_time, next_lrc_start - 0.05)
+                    end_time = max(end_time, start_time + 0.5)
+
+                    refined.append({
+                        "text": text,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "duration": end_time - start_time,
+                        "confidence": confidence,
+                        "method": "lrc_groq_refined",
+                        "words": matched_words,
+                    })
+                    groq_idx = end_idx + 1
+                    matched_count += 1
+                    continue
+
+            start_time, end_time, matched_words = self._fallback_lrc_line_words(
+                text, lrc_start, lrc_end, next_lrc_start
+            )
+            refined.append({
+                "text": text,
+                "start_time": start_time,
+                "end_time": end_time,
+                "duration": end_time - start_time,
+                "confidence": 0.4,
+                "method": "lrc_fallback",
+                "words": matched_words,
+            })
+
+        print(f"LRC+Groq refine: {matched_count}/{len(lrc_lines)} lines matched to audio")
+        self._print_lrc_refine_result_debug(lrc_lines, refined)
+        return refined
+
+
+def refine_lrc_with_groq(audio_path: str, lrc_lines: List[Dict], detected_language: str = None) -> Optional[List[Dict]]:
+    """
+    Refine Musixmatch LRC timings using Groq. Always keeps LRC lyric text.
+    Returns None if Groq is unavailable so the caller can keep raw LRC.
+    """
+    if not lrc_lines:
+        return None
+
+    synchronizer = AdvancedLyricSynchronizer(audio_path, detected_language=detected_language)
+    groq_words = synchronizer._fetch_groq_words()
+    if not groq_words:
+        return None
+
+    return synchronizer.refine_lrc_lines(lrc_lines, groq_words=groq_words)
+
 
 def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str] = None, lyrics_source: str = None, detected_language: str = None) -> List[Dict]:
     """
@@ -1462,11 +1858,9 @@ def synchronize_lyrics_advanced(audio_path: str, lyrics_lines: List[str] = None,
     If lyrics_lines is None, uses Groq transcription as lyrics (Groq-only mode).
     """
     synchronizer = AdvancedLyricSynchronizer(audio_path, detected_language=detected_language)
-    
-    # Analyze audio features
-    synchronizer.analyze_audio()
-    
-    # Synchronize lyrics (handles None for Groq-only mode)
+
+    # analyze_audio() is now called lazily inside synchronize_lyrics() only when
+    # the fast methods (Groq, local Whisper) both fail — saves 10-20s per request.
     synced_lyrics = synchronizer.synchronize_lyrics(lyrics_lines)
     
     # Convert to format expected by existing code

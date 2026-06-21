@@ -18,10 +18,11 @@ from difflib import SequenceMatcher
 
 # Import advanced synchronization from core module
 try:
-    from core.synchronization import synchronize_lyrics_advanced
+    from core.synchronization import synchronize_lyrics_advanced, refine_lrc_with_groq
     ADVANCED_SYNC_AVAILABLE = True
 except ImportError:
     ADVANCED_SYNC_AVAILABLE = False
+    refine_lrc_with_groq = None
     print("Advanced synchronization not available")
 
 # Import Telegram audio download
@@ -214,91 +215,108 @@ def generate_lyric_video(job_id):
         job.artist = song_info['artist']
         job.save()
         
-        # 2. Get lyrics - Try Musixmatch first (better coverage), then Genius
-        lyrics = get_lyrics_from_musixmatch(spotify_track_id, song_info['title'], song_info['artist'])
-        lyrics_source = None  # Track which service provided lyrics
-        
-        if lyrics:
-            lyrics_source = "Musixmatch"
-        else:
-            print("Musixmatch failed, trying Genius API...")
-            lyrics = get_lyrics(song_info['title'], song_info['artist'])
-            if lyrics:
-                lyrics_source = "Genius"
+        # 2. Musixmatch LRC subtitles when available — line-level sync, no Groq overlay
+        duration_s = song_info['duration_ms'] / 1000
+        pre_synced = get_synced_lyrics_from_musixmatch(
+            spotify_track_id, song_info['title'], song_info['artist'],
+            duration_s=duration_s
+        )
+
+        # Derive plain lines from synced data (used for SRT patching later)
+        filtered_lyrics_lines = [s['text'] for s in pre_synced] if pre_synced else None
+        detected_language = detect_language_from_lyrics(filtered_lyrics_lines) if filtered_lyrics_lines else None
+        lyrics_source = pre_synced[0]['method'] if pre_synced else None
+
+        if not pre_synced:
+            # Musixmatch has no synced data — fetch plain lyrics then sync with Groq/Whisper
+            plain_lyrics = get_lyrics_from_musixmatch(spotify_track_id, song_info['title'], song_info['artist'])
+
+            if plain_lyrics:
+                lyrics_source = "Musixmatch"
             else:
-                # Try simplified title (removing parts in parentheses)
-                simplified_title = re.sub(r'\(.*?\)', '', song_info['title']).strip()
-                if simplified_title != song_info['title']:
-                    lyrics = get_lyrics(simplified_title, song_info['artist'])
-                    if lyrics:
-                        lyrics_source = "Genius"
-                
-        if not lyrics:
-            print("⚠️  Lyrics not found - will use Groq transcription instead")
-            filtered_lyrics_lines = None  # Signal to use Groq-only mode
-            detected_language = None
-        else:
-            # Process lyrics into clean lines - AGGRESSIVELY CLEAN THEM
-            lyrics_lines = clean_lyrics(lyrics)
-            
-            # Double-check filtering - remove any metadata that might have slipped through
-            filtered_lyrics_lines = remove_metadata_from_lyrics(lyrics_lines)
-            
-            # DETECT LANGUAGE FROM ACTUAL LYRICS TEXT
-            detected_language = detect_language_from_lyrics(filtered_lyrics_lines)
-            print(f"✓ Language detected from lyrics: {detected_language}")
-        
+                print("Musixmatch failed, trying Genius API...")
+                plain_lyrics = get_lyrics(song_info['title'], song_info['artist'])
+                if plain_lyrics:
+                    lyrics_source = "Genius"
+                else:
+                    simplified_title = re.sub(r'\(.*?\)', '', song_info['title']).strip()
+                    if simplified_title != song_info['title']:
+                        plain_lyrics = get_lyrics(simplified_title, song_info['artist'])
+                        if plain_lyrics:
+                            lyrics_source = "Genius"
+
+            if not plain_lyrics:
+                print("⚠️  Lyrics not found - will use Groq transcription instead")
+                filtered_lyrics_lines = None
+                detected_language = None
+            else:
+                lyrics_lines = clean_lyrics(plain_lyrics)
+                filtered_lyrics_lines = remove_metadata_from_lyrics(lyrics_lines)
+                detected_language = detect_language_from_lyrics(filtered_lyrics_lines)
+                print(f"✓ Language detected from lyrics: {detected_language}")
+
         # Create a temporary directory for processing
         with tempfile.TemporaryDirectory() as temp_dir:
             # CRITICAL FIX: Find and patch any SRT files that might be created by external systems
             # This must happen early in the process
-            if filtered_lyrics_lines:  # Only patch if we have Genius lyrics
+            if filtered_lyrics_lines:
                 patch_temp_directory_srt_files(temp_dir, filtered_lyrics_lines)
-            
-            # 3. Get audio file (from Cloudinary cache, Telegram download, or local files)
+
+            # 3. Get audio file (from R2, Telegram download, or local files)
             audio_path = os.path.join(temp_dir, 'audio.mp3')
-            
-            # Try to get audio (Cloudinary → Telegram → local fallback)
+
             audio_found = get_audio(song_info['title'], song_info['artist'], audio_path, job.spotify_url)
-            
-            # If no local audio, download from Spotify
+
             if not audio_found:
                 download_audio(spotify_track_id, audio_path)
-            
-            # Check that audio exists
+
             if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
                 raise ValueError("Failed to get audio for this song")
-            
-            # Get audio duration
+
             audio_duration = get_audio_duration(audio_path)
             print(f"Audio duration: {audio_duration} seconds")
-            
-            # 4. Synchronize lyrics with audio using advanced methods
-            synced_lyrics = None
-            
-            # Try advanced synchronization first (includes multiple methods)
-            if ADVANCED_SYNC_AVAILABLE:
-                print("Using advanced synchronization system")
-                # Use language detected from lyrics text
-                synced_lyrics = synchronize_lyrics_advanced(
-                    audio_path, 
-                    filtered_lyrics_lines, 
-                    lyrics_source=lyrics_source,
-                    detected_language=detected_language
-                )
-            
-            # If advanced sync not available, try Deepgram
-            if not synced_lyrics and DEEPGRAM_AVAILABLE:
-                print("Falling back to Deepgram synchronization")
-                synced_lyrics = synchronize_with_deepgram(audio_path, filtered_lyrics_lines)
-            
-            # Final fallback to basic timing
-            if not synced_lyrics:
-                if filtered_lyrics_lines:
-                    print("Using basic fallback synchronization method")
-                    synced_lyrics = create_basic_synchronization(filtered_lyrics_lines, audio_duration)
+
+            # 4. Synchronize lyrics with audio
+            if pre_synced:
+                synced_lyrics = pre_synced
+                if (
+                    lyrics_source == 'musixmatch_subtitle'
+                    and ADVANCED_SYNC_AVAILABLE
+                    and refine_lrc_with_groq
+                    and os.environ.get("GROQ_API_KEY")
+                ):
+                    refined = refine_lrc_with_groq(
+                        audio_path, pre_synced, detected_language=detected_language
+                    )
+                    if refined:
+                        synced_lyrics = refined
+                        print(f"✓ LRC + Groq: {len(refined)} lines (LRC text, Groq word timing)")
+                    else:
+                        print(f"✓ Using Musixmatch LRC only ({lyrics_source}) — Groq refine skipped")
                 else:
-                    raise ValueError("No lyrics found and transcription failed")
+                    print(f"✓ Using Musixmatch LRC line sync ({lyrics_source})")
+            else:
+                synced_lyrics = None
+
+                if ADVANCED_SYNC_AVAILABLE:
+                    print("Using advanced synchronization system")
+                    synced_lyrics = synchronize_lyrics_advanced(
+                        audio_path,
+                        filtered_lyrics_lines,
+                        lyrics_source=lyrics_source,
+                        detected_language=detected_language
+                    )
+
+                if not synced_lyrics and DEEPGRAM_AVAILABLE:
+                    print("Falling back to Deepgram synchronization")
+                    synced_lyrics = synchronize_with_deepgram(audio_path, filtered_lyrics_lines)
+
+                if not synced_lyrics:
+                    if filtered_lyrics_lines:
+                        print("Using basic fallback synchronization method")
+                        synced_lyrics = create_basic_synchronization(filtered_lyrics_lines, audio_duration)
+                    else:
+                        raise ValueError("No lyrics found and transcription failed")
             
             # CRITICAL FIX: One more check for SRT files before video generation
             if filtered_lyrics_lines:  # Only patch if we have Genius lyrics
@@ -653,6 +671,308 @@ def get_lyrics_from_musixmatch(spotify_track_id, title, artist):
         return None
 
 
+RICHSYNC_MIN_WORD_DURATION = 0.08
+RICHSYNC_MIN_KARAOKE_CS = 8
+RICHSYNC_GAP_BEFORE_NEXT = 0.08
+
+
+def _richsync_line_needs_extension(ts, te, next_ts, word_count):
+    """Detect Musixmatch lines whose te is truncated while the next line starts much later."""
+    line_dur = te - ts
+    min_expected = max(0.8, word_count * 0.15)
+
+    if next_ts is None:
+        return line_dur < min_expected
+
+    gap_to_next = next_ts - te
+    return gap_to_next > 0.5 and line_dur < min_expected
+
+
+def _scale_richsync_words(line, old_te):
+    """Stretch word timestamps proportionally when a line's end time was extended."""
+    ts = line['start_time']
+    te = line['end_time']
+    old_dur = old_te - ts
+    new_dur = te - ts
+    if old_dur <= 0 or new_dur <= old_dur * 1.05:
+        return
+
+    scale = new_dur / old_dur
+    for word in line.get('words') or []:
+        word['start'] = ts + (word['start'] - ts) * scale
+        word['end'] = ts + (word['end'] - ts) * scale
+
+
+def _normalize_richsync_word_timings(line):
+    """
+    Fix compressed word timings inside a line.
+
+    Musixmatch richsync sometimes returns te only a few tenths of a second after ts
+    while the vocal continues until the next line. After extending te, word offsets
+    may still be unusably short for karaoke.
+    """
+    words = line.get('words') or []
+    if not words:
+        return
+
+    ts = line['start_time']
+    te = line['end_time']
+    line_dur = te - ts
+    if line_dur <= 0:
+        return
+
+    durations = [max(0.0, w['end'] - w['start']) for w in words]
+    avg_dur = sum(durations) / len(durations)
+    word_span = words[-1]['end'] - words[0]['start']
+    tiny_words = sum(1 for d in durations if d < 0.04)
+
+    compressed = (
+        avg_dur < 0.06
+        or word_span < line_dur * 0.35
+        or tiny_words > len(words) * 0.5
+    )
+
+    if compressed:
+        slot = line_dur / len(words)
+        for idx, word in enumerate(words):
+            word['start'] = ts + idx * slot
+            word['end'] = ts + (idx + 1) * slot if idx < len(words) - 1 else te
+        return
+
+    for word in words:
+        if word['end'] - word['start'] < RICHSYNC_MIN_WORD_DURATION:
+            word['end'] = word['start'] + RICHSYNC_MIN_WORD_DURATION
+        if word['end'] > te:
+            word['end'] = te
+
+
+def _fix_richsync_timings(synced, audio_duration=None):
+    """
+    Extend truncated line end times to the next line's start (like LRC parsing does)
+    and normalize word-level karaoke timings.
+    """
+    if not synced:
+        return synced
+
+    fixed_count = 0
+    for idx, line in enumerate(synced):
+        ts = line['start_time']
+        te = line['end_time']
+        next_ts = synced[idx + 1]['start_time'] if idx + 1 < len(synced) else None
+        word_count = len(line.get('words') or []) or len(line['text'].split())
+
+        if _richsync_line_needs_extension(ts, te, next_ts, word_count):
+            old_te = te
+            if next_ts is not None:
+                line['end_time'] = max(ts + 0.5, next_ts - RICHSYNC_GAP_BEFORE_NEXT)
+            elif audio_duration:
+                line['end_time'] = max(te, min(audio_duration, ts + 4.0))
+            else:
+                line['end_time'] = max(te, ts + max(2.0, word_count * 0.25))
+
+            line['duration'] = line['end_time'] - ts
+            _scale_richsync_words(line, old_te)
+            fixed_count += 1
+
+        _normalize_richsync_word_timings(line)
+
+    if fixed_count:
+        print(
+            f"[richsync] Fixed {fixed_count}/{len(synced)} lines with truncated end times"
+        )
+
+    return synced
+
+
+def _parse_richsync_body(richsync_body, audio_duration=None):
+    """
+    Parse a Musixmatch richsync JSON string into a synced-lyrics list.
+
+    Each entry in the JSON array looks like:
+        {"ts": 0.09, "te": 2.05, "l": [{"c": "word", "o": 0.011}, ...], "x": "full line"}
+
+    Returns a list of dicts compatible with create_animated_lyric_video:
+        text, start_time, end_time, duration, confidence, method, words
+    """
+    lines_data = json.loads(richsync_body)
+    synced = []
+    for line_obj in lines_data:
+        ts = float(line_obj.get('ts', 0))
+        te = float(line_obj.get('te', ts + 2.0))
+        text = line_obj.get('x', '').strip()
+        if not text:
+            continue
+
+        # Build word-level timing from token offsets (skip pure-space tokens)
+        chars = line_obj.get('l', [])
+        tokens = [(c['c'], float(c['o'])) for c in chars if c['c'].strip()]
+        words = []
+        for j, (token_text, offset) in enumerate(tokens):
+            word_start = ts + offset
+            word_end = ts + tokens[j + 1][1] if j + 1 < len(tokens) else te
+            words.append({'word': token_text, 'start': word_start, 'end': word_end})
+
+        synced.append({
+            'text': text,
+            'start_time': ts,
+            'end_time': te,
+            'duration': max(0.1, te - ts),
+            'confidence': 1.0,
+            'method': 'musixmatch_richsync',
+            'words': words,
+        })
+
+    synced = _fix_richsync_timings(synced, audio_duration=audio_duration)
+
+    # Debug: print full parsed output
+    sep = '=' * 80
+    output_lines = [
+        f"\n{sep}",
+        f"MUSIXMATCH RICHSYNC PARSED — {len(synced)} lines",
+        sep,
+    ]
+    for i, s in enumerate(synced, 1):
+        word_preview = ' | '.join(
+            f"{w['word']}({w['start']:.2f}s-{w['end']:.2f}s)" for w in s['words'][:6]
+        )
+        if len(s['words']) > 6:
+            word_preview += f" ... +{len(s['words']) - 6} more"
+        output_lines.append(
+            f"Line {i:3d} [{s['start_time']:7.2f}s - {s['end_time']:7.2f}s]  "
+            f"{s['text']}"
+        )
+        if word_preview:
+            output_lines.append(f"       Words: {word_preview}")
+    output_lines.append(f"{sep}\n")
+    print('\n'.join(output_lines))
+
+    return synced
+
+
+def _parse_lrc_subtitle(subtitle_body, audio_duration=None):
+    """
+    Parse a Musixmatch LRC-format subtitle string into a synced-lyrics list.
+
+    Each LRC line looks like:  [MM:SS.CS] line text
+
+    End time for each line is the start time of the next non-empty line.
+    """
+    items = []
+    for line in subtitle_body.split('\n'):
+        m = re.match(r'\[(\d{2}):(\d{2})\.(\d{2})\]\s*(.*)', line.strip())
+        if m:
+            mm, ss, cs, text = m.groups()
+            t = int(mm) * 60 + int(ss) + int(cs) / 100
+            items.append({'time': t, 'text': text.strip()})
+
+    synced = []
+    for i, item in enumerate(items):
+        if not item['text']:
+            continue
+        start = item['time']
+        next_time = next(
+            (items[k]['time'] for k in range(i + 1, len(items)) if items[k]['text']),
+            None
+        )
+        if next_time:
+            end = next_time
+        elif audio_duration:
+            end = max(start + 1.0, audio_duration - 0.5)
+        else:
+            end = start + 4.0
+        synced.append({
+            'text': item['text'],
+            'start_time': start,
+            'end_time': end,
+            'duration': max(0.1, end - start),
+            'confidence': 1.0,
+            'method': 'musixmatch_subtitle',
+            'words': [],
+        })
+
+    # Debug: print full parsed output
+    sep = '=' * 80
+    output_lines = [
+        f"\n{sep}",
+        f"MUSIXMATCH SUBTITLE (LRC) PARSED — {len(synced)} lines",
+        sep,
+    ]
+    for i, s in enumerate(synced, 1):
+        output_lines.append(
+            f"Line {i:3d} [{s['start_time']:7.2f}s - {s['end_time']:7.2f}s]  {s['text']}"
+        )
+    output_lines.append(f"{sep}\n")
+    print('\n'.join(output_lines))
+
+    return synced
+
+
+def get_synced_lyrics_from_musixmatch(spotify_track_id, title, artist, duration_s=None):
+    """
+    Fetch Musixmatch LRC (line-level) synced lyrics for a Spotify track.
+
+    Uses track.subtitle.get only. Rich sync is intentionally skipped — line-level
+    LRC is more reliable for on-screen display; Groq handles tracks with no LRC.
+
+    Returns a list of synced-lyric dicts ready for create_animated_lyric_video,
+    or None when no LRC is available (caller falls back to plain lyrics + Groq).
+    """
+    api_key = os.environ.get("MUSIXMATCH_API_KEY")
+    if not api_key:
+        print("Musixmatch API key not found, skipping synced lyrics")
+        return None
+
+    sep = '=' * 80
+    print(f"\n{sep}")
+    print(f"MUSIXMATCH LRC SYNC REQUEST")
+    print(f"  Track : '{title}' by '{artist}'")
+    print(f"  Spotify ID : {spotify_track_id}")
+    print(f"  Duration   : {duration_s:.1f}s" if duration_s else "  Duration   : unknown")
+    print(sep)
+
+    base_params = {"track_spotify_id": spotify_track_id, "apikey": api_key}
+
+    try:
+        params = dict(base_params)
+        params["subtitle_format"] = "lrc"
+        if duration_s:
+            params["f_subtitle_length"] = int(duration_s)
+            params["f_subtitle_length_max_deviation"] = 3
+
+        print(f"[subtitle] GET track.subtitle.get  params: {params}")
+        resp = requests.get(
+            "https://api.musixmatch.com/ws/1.1/track.subtitle.get",
+            params=params, timeout=15
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        status_code = data["message"]["header"]["status_code"]
+        print(f"[subtitle] status_code={status_code}")
+
+        if status_code == 200:
+            subtitle = data["message"]["body"]["subtitle"]
+            subtitle_body = subtitle["subtitle_body"]
+            print(f"[subtitle] language={subtitle.get('subtitle_language')}  "
+                  f"length={subtitle.get('subtitle_length')}s")
+            print(f"[subtitle] raw body (first 300 chars): {subtitle_body[:300]}")
+            synced = _parse_lrc_subtitle(subtitle_body, audio_duration=duration_s)
+            if synced:
+                print(f"✓ Musixmatch LRC: {len(synced)} lines (line-level sync, no Groq overlay)")
+                return synced
+            print("[subtitle] parsed result was empty")
+        elif status_code == 401:
+            print("✗ Musixmatch: Authentication failed - check your API key")
+            return None
+        else:
+            print(f"[subtitle] not available (status {status_code})")
+    except Exception as e:
+        print(f"[subtitle] error: {e}")
+        traceback.print_exc()
+
+    print(f"✗ Musixmatch: no LRC for '{title}' — will use plain lyrics + Groq\n")
+    return None
+
+
 def preprocess_genius_lyrics(lyrics):
     """
     Preprocess Genius lyrics to remove explanations, annotations, and other non-lyric content
@@ -828,14 +1148,16 @@ def get_audio(song_title, artist, output_path, spotify_url=None):
             
             for file_obj in audio_files:
                 filename = file_obj['Key']
-                normalized_filename = normalize_string(filename)
-                
+                # Strip extension before any comparison so 'M&M.mp3' → 'M&M'
+                filename_stem = filename.rsplit('.', 1)[0] if '.' in filename else filename
+                normalized_filename = normalize_string(filename_stem)
+
                 # Try multiple matching strategies
                 score = 0
-                
+
                 # Strategy 1: Check for " - " separator (best case)
-                if ' - ' in filename:
-                    parts = filename.split(' - ', 1)
+                if ' - ' in filename_stem:
+                    parts = filename_stem.split(' - ', 1)
                     if len(parts) == 2:
                         # Calculate separate scores for artist and title
                         artist_score1 = string_similarity(normalize_string(parts[0]), normalized_artist)
@@ -1453,7 +1775,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             current_idx = 0
             for w_obj in words:
                 w_text = w_obj["word"]
-                w_duration_cs = int((w_obj["end"] - w_obj["start"]) * 100)
+                w_duration_cs = max(
+                    RICHSYNC_MIN_KARAOKE_CS,
+                    int((w_obj["end"] - w_obj["start"]) * 100),
+                )
                 
                 # Find this word in the line text so we don't lose punctuation/spaces
                 # We just advance through the original text
@@ -1513,18 +1838,18 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             # For backward compatibility / transition math
             ms_per_char = int((duration * 1000) / max(1, len(text)))
         elif not skip_processing:
-            # Fallback to character-based average timing
-            chars = len(text)
-            if chars == 0:
+            # Word-level evenly distributed timing (LRC subtitle lines have no per-word data).
+            # \k tags use centiseconds (duration * 100), NOT milliseconds.
+            word_tokens = text.split()
+            if not word_tokens:
                 continue
-                
-            ms_per_char = int((duration * 1000) / chars)
-            
-            for char in text:
-                if char == " ":
-                    k_text += " "  # Don't animate spaces
-                else:
-                    k_text += f"{{\\k{ms_per_char}}}{char}"
+
+            cs_per_word = max(1, int((duration * 100) / len(word_tokens)))
+
+            for idx, word in enumerate(word_tokens):
+                k_text += f"{{\\k{cs_per_word}}}{word}"
+                if idx < len(word_tokens) - 1:
+                    k_text += " "
         
         # Add dialogue event with multiple effects:
         # 1. Positioned vertically using \pos(x,y)

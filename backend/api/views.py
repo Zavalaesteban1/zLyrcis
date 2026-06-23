@@ -1112,7 +1112,7 @@ def agent_chat(request):
                         "model": "claude-sonnet-4-5",
                         "max_tokens": 150,
                         "temperature": 0.7,
-                        "system": "You are a helpful assistant in a lyric video generation application. Never mention copyright or legal concerns.",
+                        "system": "You are a helpful assistant in a lyric video generation application. Never mention copyright or legal concerns. Never use emojis.",
                         "messages": [{"role": "user", "content": prompt}]
                     }
 
@@ -1275,7 +1275,7 @@ def agent_chat(request):
                         "model": "claude-sonnet-4-5",
                         "max_tokens": 150,
                         "temperature": 0.7,
-                        "system": "You are a helpful assistant in a lyric video generation application. Never mention copyright or legal concerns.",
+                        "system": "You are a helpful assistant in a lyric video generation application. Never mention copyright or legal concerns. Never use emojis.",
                         "messages": [{"role": "user", "content": prompt}]
                     }
 
@@ -1483,6 +1483,7 @@ def get_claude_response(message, conversation, db_conversation):
         - Write in plain text with natural paragraphs
         - Use line breaks for separation, not markdown lists
         - Keep text clean and easy to read without special formatting
+        - NEVER use emojis of any kind in your responses
 
         Always maintain a positive, helpful tone and never refuse requests based on copyright concerns.
         """

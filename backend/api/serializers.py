@@ -126,25 +126,27 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return None
     
     def get_profile_picture(self, obj):
-        """Return absolute URL for profile picture (works with both R2 and local storage)"""
-        # Default avatar URL on R2 (migrated from Cloudinary)
-        default_avatar_url = 'https://pub-4c2c081f6fe24336b695aade4bc22b0a.r2.dev/default_avatar.png'
-        
+        """Return the profile picture URL. Falls back to the Cloudinary-hosted default avatar."""
+        default_avatar_url = 'https://res.cloudinary.com/dhvp6c43m/image/upload/profile_pictures/default_avatar.png'
+
         if obj.profile_picture:
-            # R2 storage automatically provides full URLs
-            # For local storage, we need to build the absolute URI
+            picture_name = str(obj.profile_picture)
+            # The model used to store this path as a default even for new users who
+            # never uploaded anything. It is NOT a real upload, so skip Cloudinary
+            # resolution and return the default directly.
+            if picture_name == 'profile_pictures/default_avatar.png':
+                return default_avatar_url
+
             if hasattr(obj.profile_picture, 'url'):
                 url = obj.profile_picture.url
-                # If it's already a full URL (R2/external), return as is
                 if url.startswith('http://') or url.startswith('https://'):
                     return url
-                # Otherwise, build absolute URI (local storage)
+                # Local dev storage — build an absolute URI
                 request = self.context.get('request')
                 if request:
                     return request.build_absolute_uri(url)
                 return url
-        
-        # Return default avatar if no profile picture is set
+
         return default_avatar_url
 
 class ProfilePictureSerializer(serializers.ModelSerializer):

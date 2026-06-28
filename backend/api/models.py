@@ -44,7 +44,7 @@ class VideoJob(models.Model):
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True, default='profile_pictures/default_avatar.png')
+    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True, default=None)
     role = models.CharField(max_length=50, default='Standard User')
     
     def __str__(self):

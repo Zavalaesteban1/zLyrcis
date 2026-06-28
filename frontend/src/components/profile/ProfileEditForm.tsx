@@ -273,8 +273,9 @@ export const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
           <ProfileImageContainer>
             <ProfilePicture>
               <ProfileImage
-                src={filePreview || profileData.profile_picture || "https://via.placeholder.com/100x100?text=Profile"}
+                src={filePreview || profileData.profile_picture || "https://res.cloudinary.com/dhvp6c43m/image/upload/profile_pictures/default_avatar.png"}
                 alt={profileData.name}
+                onError={(e) => { (e.target as HTMLImageElement).src = "https://res.cloudinary.com/dhvp6c43m/image/upload/profile_pictures/default_avatar.png"; }}
               />
               <ProfileImageOverlay onClick={handleUploadClick}>
                 <UploadIcon>{BsCamera({ size: 24 })}</UploadIcon>

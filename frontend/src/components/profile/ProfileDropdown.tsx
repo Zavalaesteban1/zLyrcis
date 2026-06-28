@@ -267,8 +267,9 @@ export const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userData }) =>
     <DropdownContainer ref={dropdownRef}>
       <ProfileTrigger onClick={toggleDropdown} $isOpen={isOpen}>
         <ProfileImage
-          src={userData.profile_picture || "https://via.placeholder.com/40x40?text=User"}
+          src={userData.profile_picture || "https://res.cloudinary.com/dhvp6c43m/image/upload/profile_pictures/default_avatar.png"}
           alt={userData.name}
+          onError={(e) => { (e.target as HTMLImageElement).src = "https://res.cloudinary.com/dhvp6c43m/image/upload/profile_pictures/default_avatar.png"; }}
           style={{ 
             opacity: isOpen ? 0.8 : 1,
             transform: isOpen ? 'scale(0.95)' : 'scale(1)'
@@ -284,8 +285,9 @@ export const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userData }) =>
           <SectionLabel>Currently in</SectionLabel>
           <ProfileCard $selected>
             <ProfileCardImage
-              src={userData.profile_picture || "https://via.placeholder.com/48x48?text=User"}
+              src={userData.profile_picture || "https://res.cloudinary.com/dhvp6c43m/image/upload/profile_pictures/default_avatar.png"}
               alt={userData.name}
+              onError={(e) => { (e.target as HTMLImageElement).src = "https://res.cloudinary.com/dhvp6c43m/image/upload/profile_pictures/default_avatar.png"; }}
             />
             <ProfileCardInfo>
               <ProfileCardName>{userData.name.charAt(0).toUpperCase()}</ProfileCardName>
